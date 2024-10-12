@@ -1,12 +1,13 @@
 from dash.dependencies import Input, Output
 from app import app
-from utils import fetch_json_data, fetch_video_stream
+from utils import fetch_json_data
+from dash import html
 from collections import deque
 import plotly.graph_objs as go
 
-depth_data = deque(maxlen=50)  # For depth graph
+depth_data = deque(maxlen=50)
 
-# Update battery, thrusters, sensors, lights, depth data
+# Update dashboard data from backend
 @app.callback(
     [Output('battery-display', 'children'),
      Output('thruster-table', 'children'),
@@ -16,7 +17,11 @@ depth_data = deque(maxlen=50)  # For depth graph
     [Input('json-interval', 'n_intervals')]
 )
 def update_json_data(n_intervals):
+    print(f"Update triggered at interval: {n_intervals}")
     data = fetch_json_data()
+
+    # Log the fetched data to ensure it is correctly received
+    print(f"Fetched data: {data}")
 
     # Battery display
     battery_display = f"Battery: {data.get('battery', 0)} %"
@@ -26,21 +31,15 @@ def update_json_data(n_intervals):
     thruster_table = html.Table([
         html.Thead(html.Tr([html.Th("Thruster"), html.Th("Power (W)"), html.Th("Temperature (°C)")]))
     ] + [
-        html.Tr([html.Td(k), html.Td(v['power']), html.Td(v['temp'])]) for k, v in thrusters.items()
+        html.Tr([html.Td(k), html.Td(f"Power: {v['power']}W"), html.Td(f"Temp: {v['temp']}°C")]) for k, v in thrusters.items()
     ])
 
     # 9DOF sensor data
     sensors = data.get('9dof', {})
     sensor_table = html.Table([
-        html.Tr([html.Th("Acceleration"), html.Td(f"x: {sensors['acceleration']['x']}"),
-                                   html.Td(f"y: {sensors['acceleration']['y']}"),
-                                   html.Td(f"z: {sensors['acceleration']['z']}")]),
-        html.Tr([html.Th("Gyroscope"), html.Td(f"x: {sensors['gyroscope']['x']}"),
-                                 html.Td(f"y: {sensors['gyroscope']['y']}"),
-                                 html.Td(f"z: {sensors['gyroscope']['z']}")]),
-        html.Tr([html.Th("Magnetometer"), html.Td(f"x: {sensors['magnetometer']['x']}"),
-                                     html.Td(f"y: {sensors['magnetometer']['y']}"),
-                                     html.Td(f"z: {sensors['magnetometer']['z']}")]),
+        html.Tr([html.Td("Acceleration"), html.Td(f"x: {sensors['acceleration']['x']}"), html.Td(f"y: {sensors['acceleration']['y']}"), html.Td(f"z: {sensors['acceleration']['z']}")]),
+        html.Tr([html.Td("Gyroscope"), html.Td(f"x: {sensors['gyroscope']['x']}"), html.Td(f"y: {sensors['gyroscope']['y']}"), html.Td(f"z: {sensors['gyroscope']['z']}")]),
+        html.Tr([html.Td("Magnetometer"), html.Td(f"x: {sensors['magnetometer']['x']}"), html.Td(f"y: {sensors['magnetometer']['y']}"), html.Td(f"z: {sensors['magnetometer']['z']}")])
     ])
 
     # Lights display
@@ -56,15 +55,3 @@ def update_json_data(n_intervals):
     }
 
     return battery_display, thruster_table, sensor_table, lights_display, depth_graph
-
-
-# Update video stream
-@app.callback(
-    Output('video-stream', 'src'),
-    [Input('video-interval', 'n_intervals')]
-)
-def update_video_stream(n_intervals):
-    video_base64 = fetch_video_stream()
-    if video_base64:
-        return f'data:image/jpeg;base64,{video_base64}'
-    return ""
