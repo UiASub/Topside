@@ -172,11 +172,11 @@ def update_sensors(n):
 
 # Function to run the video stream app
 def run_video_app():
-    app_video.run(debug=True, port=8050)
+    app_video.run(debug=False, port=8050)
 
 # Function to run the sensor data app
 def run_sensor_app():
-    app_sensor.run(debug=True, port=8051)
+    app_sensor.run(debug=False, port=8051)
 
 if __name__ == '__main__':
     # Start both apps in separate threads
