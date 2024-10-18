@@ -81,6 +81,8 @@ def fetch_video_stream():
         data, _ = udp_socket.recvfrom(8192)
         np_data = np.frombuffer(data, dtype=np.uint8)
         frame = cv2.imdecode(np_data, cv2.IMREAD_COLOR)
+        if frame is None:
+            print("Failed to decode video stream frame.")
 
         _, buffer = cv2.imencode('.jpg', frame)
         video_base64 = base64.b64encode(buffer).decode('utf-8')
