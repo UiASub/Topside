@@ -2,9 +2,6 @@ import socket
 import json
 import struct
 import gzip
-import cv2
-import numpy as np
-import base64
 
 # Backend server details
 HOST = '127.0.0.1'

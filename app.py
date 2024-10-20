@@ -1,46 +1,63 @@
+import threading
 import dash
-import dash_bootstrap_components as dbc
 from dash import dcc, html
-from components.battery import battery_component
-from components.thrusters import thrusters_component
-from components.sensors import sensors_component
-from components.lights import lights_component
-from components.depth import depth_component
-from video_window import open_video_stream
-from utils import fetch_json_data
-import time
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output
+from collections import deque
+from lib.sensor_handling import *
+from lib.video_stream import *
+from lib.utils import *
+from GUI.sensor import *
+from GUI.video import *
 
-# Initialize the Dash app with a dark theme (Cyborg)
+
+# Backend server details
+HOST = '127.0.0.1'
+TCP_PORT = 65432  # Port for JSON data
+UDP_PORT = 65433  # Port for video stream
+UDP_BUFFER_SIZE = 2**16
+
+# Store depth data over time
+depth_data = deque(maxlen=50)
+
+# Initialize Dash apps
 external_stylesheets = [dbc.themes.CYBORG]
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
-# Test backend connection by fetching JSON data immediately
-data = fetch_json_data()
-if data:
-    print("Connected to backend and received JSON data.")
-else:
-    print("Failed to connect to backend for JSON data.")
+# Define the video stream app
+app_video = init_video_app()
+# Callback to update the video stream
+app_video.callback(
+    Output('video-stream', 'src'),
+    [Input('interval-video', 'n_intervals')]
+)(update_video)
 
-# Open video stream without threading for now
-open_video_stream()
+# Function to run the video stream app
+def run_video_app():
+    app_video.run(debug=False, port=8050)
 
-# Layout for the app
-app.layout = dbc.Container([
-    html.H1("ROV Control Panel", className="text-center"),
 
-    # Display the connection status
-    html.Div(id='connection-status', children='Connecting to ROV...', style={'margin-top': '10px'}),
+# Define the sensor data app
+app_sensor = init_sensor_app()
+# Callback to update sensor data
+app_sensor.callback(
+    [Output('battery-display', 'children'),
+     Output('thruster-table', 'children'),
+     Output('sensor-table', 'children'),
+     Output('depth-graph', 'figure')],
+    [Input('interval-sensor', 'n_intervals')]
+)(update_sensors)
 
-    # Other components for displaying data
-    battery_component(),
-    thrusters_component(),
-    sensors_component(),
-    lights_component(),
-    depth_component(),
-
-    # Intervals for periodic updates
-    dcc.Interval(id='json-interval', interval=2000, n_intervals=0, disabled=False),
-], fluid=True)
+# Function to run the sensor data app
+def run_sensor_app():
+    app_sensor.run(debug=False, port=8051)
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    # Start both apps in separate threads
+    video_thread = threading.Thread(target=run_video_app)
+    sensor_thread = threading.Thread(target=run_sensor_app)
+
+    video_thread.start()
+    sensor_thread.start()
+
+    video_thread.join()
+    sensor_thread.join()
