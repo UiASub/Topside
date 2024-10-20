@@ -17,6 +17,7 @@ from collections import deque
 HOST = '127.0.0.1'
 TCP_PORT = 65432  # Port for JSON data
 UDP_PORT = 65433  # Port for video stream
+UDP_BUFFER_SIZE = 2**16
 
 # Store depth data over time
 depth_data = deque(maxlen=50)
@@ -34,7 +35,7 @@ app_video.layout = html.Div([
             dbc.Col(html.H3("Live Video Stream", className='mb-3'), width=12),
             dbc.Col(html.Img(id='video-stream', style={'width': '640px', 'height': '480px'}), width=12)
         ]),
-        dcc.Interval(id='interval-video', interval=1000, n_intervals=0)
+        dcc.Interval(id='interval-video', interval=50, n_intervals=0)
     ], fluid=True)
 ])
 
@@ -78,7 +79,7 @@ def fetch_video_stream():
         udp_socket.settimeout(None)
         udp_socket.bind(('0.0.0.0', UDP_PORT))
 
-        data, _ = udp_socket.recvfrom(8192)
+        data, _ = udp_socket.recvfrom(UDP_BUFFER_SIZE)
         np_data = np.frombuffer(data, dtype=np.uint8)
         frame = cv2.imdecode(np_data, cv2.IMREAD_COLOR)
         if frame is None:
