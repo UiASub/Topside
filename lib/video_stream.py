@@ -2,7 +2,7 @@ import socket
 import base64
 import cv2
 import numpy as np
-
+from lib.eventlogger import log_error
 
 # Backend server details
 HOST = '127.0.0.1'
@@ -23,6 +23,7 @@ def fetch_video_stream(app_video, udp_port=UDP_PORT, udp_buffer_size=UDP_BUFFER_
         frame = cv2.imdecode(np_data, cv2.IMREAD_COLOR)
         if frame is None:
             print("Failed to decode video stream frame.")
+            log_error("Failed to decode video stream frame.")
 
         _, buffer = cv2.imencode('.jpg', frame)
         video_base64 = base64.b64encode(buffer).decode('utf-8')
@@ -31,6 +32,7 @@ def fetch_video_stream(app_video, udp_port=UDP_PORT, udp_buffer_size=UDP_BUFFER_
 
     except Exception as e:
         print(f"Error receiving video stream: {e}")
+        log_error("Error receiving video stream.")
         return None
 
 

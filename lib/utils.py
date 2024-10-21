@@ -2,6 +2,7 @@ import socket
 import json
 import struct
 import gzip
+from lib.eventlogger import log_info, log_error, log_warning
 
 # Backend server details
 HOST = '127.0.0.1'
@@ -28,6 +29,7 @@ def fetch_json_data():
         data_length = tcp_socket.recv(4)
         if not data_length:
             print("No data received.")
+            log_warning("No data received from backend")
             return {}
 
         # Unpack the length of the compressed data
@@ -44,10 +46,12 @@ def fetch_json_data():
 
         tcp_socket.close()
         print("JSON data received successfully")
+        log_info("JSON data received successfully")
         return data
 
     except Exception as e:
         print(f"Error receiving JSON data: {e}")
+        log_error(f"Error receiving JSON data: {e}")
         return {}
 '''
 # Fetch video stream from backend (with added logging)
