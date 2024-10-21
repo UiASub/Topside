@@ -63,6 +63,6 @@ def init_sensor_app() -> dash.Dash:
         depth_component(),
 
         # Intervals for periodic updates
-        dcc.Interval(id='json-interval', interval=2000, n_intervals=0, disabled=False),
+        dcc.Interval(id='interval-sensor', interval=2000, n_intervals=0, disabled=False),
     ], fluid=True)
     return app_sensor

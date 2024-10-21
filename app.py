@@ -9,6 +9,7 @@ from lib.video_stream import *
 from lib.utils import *
 from GUI.sensor import *
 from GUI.video import *
+from multiprocessing import Process
 
 
 # Backend server details
@@ -33,7 +34,7 @@ app_video.callback(
 
 # Function to run the video stream app
 def run_video_app():
-    app_video.run(debug=False, port=8050)
+    app_video.run(debug=False, port=8050, use_reloader=False)
 
 
 # Define the sensor data app
@@ -49,15 +50,15 @@ app_sensor.callback(
 
 # Function to run the sensor data app
 def run_sensor_app():
-    app_sensor.run(debug=False, port=8051)
+    app_sensor.run(debug=True, port=8051, use_reloader=False)
 
 if __name__ == '__main__':
     # Start both apps in separate threads
-    video_thread = threading.Thread(target=run_video_app)
-    sensor_thread = threading.Thread(target=run_sensor_app)
+    video_process = Process(target=run_video_app)
+    sensor_process = Process(target=run_sensor_app)
 
-    video_thread.start()
-    sensor_thread.start()
+    video_process.start()
+    sensor_process.start()
 
-    video_thread.join()
-    sensor_thread.join()
+    video_process.join()
+    sensor_process.join()
