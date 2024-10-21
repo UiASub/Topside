@@ -46,7 +46,10 @@ git rebase main
 ```bash
 git merge <branch_name>
 ```
-
+After a succsefull merge push the changes
+```bash
+git push
+```
 \
 \
 
