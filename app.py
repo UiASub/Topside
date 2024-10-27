@@ -1,15 +1,14 @@
-import threading
-import dash
-from dash import dcc, html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 from collections import deque
 from lib.sensor_handling import *
 from lib.video_stream import *
 from lib.utils import *
+from lib.eventlogger import *
 from GUI.sensor import *
 from GUI.video import *
 from multiprocessing import Process
+import traceback
 
 
 # Backend server details
@@ -17,6 +16,10 @@ HOST = '127.0.0.1'
 TCP_PORT = 65432  # Port for JSON data
 UDP_PORT = 65433  # Port for video stream
 UDP_BUFFER_SIZE = 2**16
+
+# Initialize logger
+logger = Logger()
+logger.log_info("Logger initialized.")
 
 # Store depth data over time
 depth_data = deque(maxlen=50)
@@ -52,13 +55,23 @@ app_sensor.callback(
 def run_sensor_app():
     app_sensor.run(debug=True, port=8051, use_reloader=False)
 
+def start_process(process, process_name):
+    try:
+        process.start()
+        logger.log_info(f"{process_name} started.")
+    except Exception as e:
+        logger.log_error(f"Failed to start {process_name}. Exception: {e}")
+        traceback.print_exc()  # Optional: Prints full traceback for debugging purposes
+
 if __name__ == '__main__':
-    # Start both apps in separate threads
+    # Initialize processes
     video_process = Process(target=run_video_app)
     sensor_process = Process(target=run_sensor_app)
 
-    video_process.start()
-    sensor_process.start()
+    # Start processes with logging
+    start_process(video_process, "Video app")
+    start_process(sensor_process, "Sensor app")
 
+    # Wait for both processes to complete
     video_process.join()
     sensor_process.join()
