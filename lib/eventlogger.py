@@ -2,9 +2,10 @@ import logging
 from datetime import datetime
 
 MAX_IMPORTANT_LOGS = 10 # Maximum number of important logs to store for GUI display
+LOG_FILE = f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 
 class Logger:
-    def __init__(self, log_file='event_log.txt', flush_on_start=True, max_important_logs=MAX_IMPORTANT_LOGS):
+    def __init__(self, log_file=LOG_FILE, flush_on_start=True, max_important_logs=MAX_IMPORTANT_LOGS):
         self.log_file = log_file
         self.max_important_logs = max_important_logs
         self.error_logs_list = []  # List to store important logs for GUI display
