@@ -4,7 +4,7 @@ from collections import deque
 from lib.sensor_handling import *
 from lib.video_stream import *
 from lib.utils import *
-from lib.eventlogger import *
+from lib.eventlogger import logger
 from GUI.sensor import *
 from GUI.video import *
 from multiprocessing import Process
@@ -18,7 +18,6 @@ UDP_PORT = 65433  # Port for video stream
 UDP_BUFFER_SIZE = 2**16
 
 # Initialize logger
-logger = Logger()
 logger.log_info("Logger initialized.")
 
 # Store depth data over time

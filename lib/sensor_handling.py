@@ -3,10 +3,9 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
 from collections import deque
 from lib.utils import fetch_json_data
+from lib.eventlogger import logger
 
 def update_sensors(n):
-    global logger # Use global logger instance
-    
     # Fetch data from the JSON server
     try:
         data = fetch_json_data()

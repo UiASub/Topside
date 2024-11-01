@@ -74,9 +74,10 @@ class Logger:
         """Returns a list of important logs for GUI display."""
         return self.error_logs_list
 
+logger = Logger()
+
 # Example usage for testing
 if __name__ == "__main__":
-    logger = Logger()
     logger.log_info("Application started")
     logger.log_warning("Low battery warning")
     logger.log_error("Connection to backend failed")
