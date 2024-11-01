@@ -8,7 +8,9 @@ class Logger:
     def __init__(self, log_file=LOG_FILE, flush_on_start=True, max_important_logs=MAX_IMPORTANT_LOGS):
         self.log_file = log_file
         self.max_important_logs = max_important_logs
-        self.error_logs_list = []  # List to store important logs for GUI display
+        self.info_logs_list = []
+        self.warn_logs_list = []
+        self.error_logs_list = []
         
         # Clear the log file on startup if required
         if flush_on_start:
