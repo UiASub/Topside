@@ -1,5 +1,5 @@
 #egendefinerte til dette prosjektet
-event_log.txt
+logs/*
 
 
 # Byte-compiled / optimized / DLL files
