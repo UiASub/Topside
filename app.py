@@ -9,7 +9,7 @@ from GUI.sensor import *
 from GUI.video import *
 from multiprocessing import Process
 import traceback
-
+import signal
 
 # Backend server details
 HOST = '127.0.0.1'
@@ -53,6 +53,7 @@ app_sensor.callback(
 # Function to run the sensor data app
 def run_sensor_app():
     app_sensor.run(debug=True, port=8051, use_reloader=False)
+    
 
 def start_process(process, process_name):
     try:
@@ -61,16 +62,33 @@ def start_process(process, process_name):
     except Exception as e:
         logger.log_error(f"Failed to start {process_name}. Exception: {e}")
         traceback.print_exc()  # Optional: Prints full traceback for debugging purposes
+        
+def handle_shutdown(signum, frame):
+    logger.log_info("Shutdown signal received. Terminating processes...")
+    if video_process.is_alive():
+        video_process.terminate()
+        logger.log_info("Video app terminated.")
+    if sensor_process.is_alive():
+        sensor_process.terminate()
+        logger.log_info("Sensor app terminated.")
+    exit(0)  # Exits the main program after cleanup
 
 if __name__ == '__main__':
     # Initialize processes
     video_process = Process(target=run_video_app)
     sensor_process = Process(target=run_sensor_app)
+    
+    # Register the signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, handle_shutdown)
 
     # Start processes with logging
     start_process(video_process, "Video app")
     start_process(sensor_process, "Sensor app")
 
     # Wait for both processes to complete
-    video_process.join()
-    sensor_process.join()
+    try:
+        video_process.join()
+        sensor_process.join()
+    except KeyboardInterrupt:
+        # This part may not run as SIGINT is already handled by the signal handler
+        handle_shutdown(None, None)

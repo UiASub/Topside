@@ -16,7 +16,7 @@ class Logger:
         self.error_logs_list = []
         
         # Create the log file if it doesn't exist
-        if not os.file.isfile(self.log_file):
+        if not os.path.isfile(self.log_file):
             with open(self.log_file, 'w') as f:
                 f.write('')
 
