@@ -5,7 +5,7 @@ import os
 MAX_IMPORTANT_LOGS = 10 # Maximum number of important logs to store for GUI display
 LOG_FILE = f"logs/log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 
-os.makedirs('path/to/directory', exist_ok=True)
+os.makedirs('logs', exist_ok=True)
 
 class Logger:
     def __init__(self, log_file=LOG_FILE, flush_on_start=True, max_important_logs=MAX_IMPORTANT_LOGS):
