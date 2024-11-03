@@ -6,6 +6,7 @@ import json
 import time
 import gzip
 from threading import Thread
+import random
 
 # Configuration
 DEBUG_SERVER = True # Run local server for testing providing video and sensor data
