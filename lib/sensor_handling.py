@@ -1,7 +1,8 @@
+from collections import deque
+
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
-from collections import deque
 from lib.utils import fetch_json_data
 from lib.eventlogger import logger
 
