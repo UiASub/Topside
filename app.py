@@ -11,6 +11,9 @@ from multiprocessing import Process
 import traceback
 import signal
 
+# Backend server details
+DEBUG_SERVER = True # Run local server for testing providing video and sensor data
+
 # Initialize logger
 logger.log_info("Logger initialized.")
 
@@ -32,9 +35,9 @@ app_video.callback(
 def run_video_app():
     app_video.run(debug=False, port=8050, use_reloader=False)
 
-
 # Define the sensor data app
 app_sensor = init_sensor_app()
+
 # Callback to update sensor data
 app_sensor.callback(
     [Output('battery-display', 'children'),
@@ -47,6 +50,11 @@ app_sensor.callback(
 # Function to run the sensor data app
 def run_sensor_app():
     app_sensor.run(debug=True, port=8051, use_reloader=False)
+    
+# Function to run the debug server if DEBUG_SERVER is True
+def run_debug_server():
+    from debug_server.server import initiate_server  # Import the server app here
+    initiate_server()
     
 
 def start_process(process, process_name):
@@ -65,6 +73,9 @@ def handle_shutdown(signum, frame):
     if sensor_process.is_alive():
         sensor_process.terminate()
         logger.log_info("Sensor app terminated.")
+    if debug_server_process and debug_server_process.is_alive():
+        debug_server_process.terminate()
+        logger.log_info("Debug server terminated.")
     exit(0)  # Exits the main program after cleanup
 
 if __name__ == '__main__':
@@ -72,17 +83,26 @@ if __name__ == '__main__':
     video_process = Process(target=run_video_app)
     sensor_process = Process(target=run_sensor_app)
     
+    # Only initialize debug server process if DEBUG_SERVER is True
+    debug_server_process = None
+    if DEBUG_SERVER:
+        debug_server_process = Process(target=run_debug_server)
+    
     # Register the signal handler for graceful shutdown
     signal.signal(signal.SIGINT, handle_shutdown)
 
     # Start processes with logging
     start_process(video_process, "Video app")
     start_process(sensor_process, "Sensor app")
+    if DEBUG_SERVER:
+        start_process(debug_server_process, "Debug server")
 
     # Wait for both processes to complete
     try:
         video_process.join()
         sensor_process.join()
+        if DEBUG_SERVER:
+            debug_server_process.join()
     except KeyboardInterrupt:
         # This part may not run as SIGINT is already handled by the signal handler
         handle_shutdown(None, None)
