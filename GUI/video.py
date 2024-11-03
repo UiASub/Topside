@@ -12,12 +12,6 @@ def init_video_app() -> dash.Dash:
     # Layout for the video stream app with an underwater ROV theme
     app_video.layout = html.Div([
         dbc.Container([
-            html.H1("ROV Control Center", className='text-center mb-3', style={
-                "color": "#00bfff",  # Aqua color for a more thematic effect
-                "font-family": "SF Pro, Arial, sans-serif",
-                "text-shadow": "2px 2px 4px #000",  # Subtle shadow for a glowing effect
-                "font-size": "2.5rem"
-            }),
             dbc.Row([
                 dbc.Col(html.Div([
                     html.H4("Telemetry Data", className='text-center mb-3', style={
