@@ -3,7 +3,7 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 
 def init_video_app() -> dash.Dash:
-    external_stylesheets = [dbc.themes.CYBORG]
+    external_stylesheets = [dbc.themes.SLATE]
     app_video = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
     # Layout for the video stream app

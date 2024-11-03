@@ -21,7 +21,7 @@ logger.log_info("Logger initialized.")
 depth_data = deque(maxlen=50)
 
 # Initialize Dash apps
-external_stylesheets = [dbc.themes.CYBORG]
+external_stylesheets = [dbc.themes.SLATE]
 
 # Define the video stream app
 app_video = init_video_app()
@@ -50,12 +50,12 @@ app_sensor.callback(
 # Function to run the sensor data app
 def run_sensor_app():
     app_sensor.run(debug=True, port=8051, use_reloader=False)
-    
+
 # Function to run the debug server if DEBUG_SERVER is True
 def run_debug_server():
     from debug_server.server import initiate_server  # Import the server app here
     initiate_server()
-    
+
 
 def start_process(process, process_name):
     try:
@@ -64,7 +64,7 @@ def start_process(process, process_name):
     except Exception as e:
         logger.log_error(f"Failed to start {process_name}. Exception: {e}")
         traceback.print_exc()  # Optional: Prints full traceback for debugging purposes
-        
+
 def handle_shutdown(signum, frame):
     logger.log_info("Shutdown signal received. Terminating processes...")
     if video_process.is_alive():
@@ -82,12 +82,12 @@ if __name__ == '__main__':
     # Initialize processes
     video_process = Process(target=run_video_app)
     sensor_process = Process(target=run_sensor_app)
-    
+
     # Only initialize debug server process if DEBUG_SERVER is True
     debug_server_process = None
     if DEBUG_SERVER:
         debug_server_process = Process(target=run_debug_server)
-    
+
     # Register the signal handler for graceful shutdown
     signal.signal(signal.SIGINT, handle_shutdown)
 
