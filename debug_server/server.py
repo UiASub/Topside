@@ -12,7 +12,7 @@ DEBUG_SERVER = True # Run local server for testing providing video and sensor da
 HOST = '127.0.0.1'  # Server IP
 TCP_PORT = 65432  # TCP port for JSON data
 UDP_PORT = 65433  # UDP port for video stream
-JSON_FILE_PATH = 'data.json'  # Path to JSON data
+JSON_FILE_PATH = 'debug_server/data.json'  # Path to JSON data
 
 def generate_random_json(data):
     #Randomize thruster power and temperature values
