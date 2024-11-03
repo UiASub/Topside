@@ -8,15 +8,15 @@ LOG_FILE = f"logs/log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 os.makedirs('logs', exist_ok=True)
 
 class Logger:
-    def __init__(self, log_file=LOG_FILE, flush_on_start=True, max_important_logs=MAX_IMPORTANT_LOGS):
+    def __init__(self, log_file=LOG_FILE, max_important_logs=MAX_IMPORTANT_LOGS):
         self.log_file = log_file
         self.max_important_logs = max_important_logs
         self.info_logs_list = []
         self.warn_logs_list = []
         self.error_logs_list = []
         
-        # Clear the log file on startup if required
-        if flush_on_start:
+        # Create the log file if it doesn't exist
+        if not os.file.isfile(self.log_file):
             with open(self.log_file, 'w') as f:
                 f.write('')
 
