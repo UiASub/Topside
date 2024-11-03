@@ -33,6 +33,7 @@ app_video.callback(
 
 # Function to run the video stream app
 def run_video_app():
+    print("Video window:")
     app_video.run(debug=False, port=8050, use_reloader=False)
 
 # Define the sensor data app
@@ -49,6 +50,7 @@ app_sensor.callback(
 
 # Function to run the sensor data app
 def run_sensor_app():
+    print("Sensor window:")
     app_sensor.run(debug=True, port=8051, use_reloader=False)
 
 # Function to run the debug server if DEBUG_SERVER is True
