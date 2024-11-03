@@ -11,12 +11,6 @@ from multiprocessing import Process
 import traceback
 import signal
 
-# Backend server details
-HOST = '127.0.0.1'
-TCP_PORT = 65432  # Port for JSON data
-UDP_PORT = 65433  # Port for video stream
-UDP_BUFFER_SIZE = 2**16
-
 # Initialize logger
 logger.log_info("Logger initialized.")
 
