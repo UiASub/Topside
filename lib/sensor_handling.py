@@ -1,5 +1,4 @@
 from collections import deque
-
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
