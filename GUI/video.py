@@ -1,78 +1,69 @@
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
-from lib.utils import fetch_json_data  # Import the data fetching function from the appropriate module
+from lib.utils import fetch_json_data
 import plotly.graph_objs as go
 import pandas as pd
 
+
 def init_video_app() -> dash.Dash:
-    external_stylesheets = [dbc.themes.CYBORG]  # Using a dark theme that fits an underwater control panel
+    external_stylesheets = [dbc.themes.CYBORG]
     app_video = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
-    # Layout for the video stream app with an underwater ROV theme
+    # Layout for the full-screen video stream app with a toggleable telemetry overlay
     app_video.layout = html.Div([
-        dbc.Container([
-            dbc.Row([
-                dbc.Col(html.Div([
-                    html.H4("Telemetry Data", className='text-center mb-3', style={
-                        "color": "#87ceeb",  # Light blue color
-                        "font-family": "SF Pro, Arial, sans-serif",
-                        "text-shadow": "1px 1px 3px #000",
-                        "font-size": "1.5rem"
-                    }),
-                    html.Div([
-                        html.I(className="bi bi-battery-half", style={"margin-right": "8px"}),
-                        "Battery: ", html.Span("N/A", id='battery-level', style={"font-size": "1.2rem", "color": "#00ff7f"})
-                    ], className='mb-2'),
-                    html.Div([
-                        html.I(className="bi bi-compass", style={"margin-right": "8px"}),
-                        "Heading: ", html.Span("N/A", id='heading', style={"font-size": "1.2rem", "color": "#ffdd57"})
-                    ], className='mb-2'),
-                    html.Div([
-                        html.I(className="bi bi-arrow-up-down", style={"margin-right": "8px"}),
-                        "Pitch: ", html.Span("N/A", id='pitch', style={"font-size": "1.2rem", "color": "#ff6347"})
-                    ], className='mb-2'),
-                    html.Div([
-                        html.I(className="bi bi-arrow-repeat", style={"margin-right": "8px"}),
-                        "Roll: ", html.Span("N/A", id='roll', style={"font-size": "1.2rem", "color": "#ff6347"})
-                    ], className='mb-2'),
-                    html.Div([
-                        html.I(className="bi bi-speedometer2", style={"margin-right": "8px"}),
-                        "Depth: ", html.Span("N/A", id='depth', style={"font-size": "1.2rem", "color": "#00bfff"})
-                    ], className='mb-2'),
-                    dcc.Graph(id='depth-graph', style={"height": "300px"})
-                ]), width=3, style={
-                    "background-color": "#1c1c1c",  # Dark panel background for contrast
-                    "border-radius": "10px",
-                    "padding": "10px",
-                    "box-shadow": "0px 0px 15px rgba(0, 0, 0, 0.7)"
-                }),
-                dbc.Col([
-                    html.H3("Live Video Feed", className='text-center mb-3', style={
-                        "color": "#00bfff",  # Aqua color
-                        "font-family": "SF Pro, Arial, sans-serif",
-                        "text-shadow": "2px 2px 4px #000",
-                        "font-size": "2rem"
-                    }),
-                    html.Div([
-                        html.Img(id='video-stream', style={
-                            'width': '95%',
-                            'height': 'auto',
-                            'border': '2px solid #00bfff',  # Aqua border to match the theme
-                            'box-shadow': '0px 0px 20px rgba(0, 191, 255, 0.7)',  # Glowing shadow effect
-                            'border-radius': '10px',
-                            'margin': '0 auto',
-                            'display': 'block'
-                        })
-                    ])
-                ], width=9)
-            ], align='center'),
-            dcc.Interval(id='interval-video', interval=1000, n_intervals=0)  # Update every second
-        ], fluid=True, style={"max-width": "1200px", "margin": "0 auto"})
+        html.Div([
+            html.Button("Toggle Telemetry", id="toggle-overlay", className="btn btn-primary", style={
+                "position": "absolute", "top": "10px", "right": "10px", "z-index": "2"
+            }),
+            html.Div(id="telemetry-overlay", style={
+                "display": "none",  # Hidden by default
+                "position": "absolute", "top": "20px", "right": "20px", "width": "300px",
+                "background-color": "#1c1c1c", "padding": "15px", "border-radius": "10px",
+                "box-shadow": "0px 0px 15px rgba(0, 0, 0, 0.7)", "z-index": "3"
+            }, children=[
+                html.H4("Telemetry Data",
+                        style={"color": "#87ceeb", "font-family": "Arial", "text-shadow": "1px 1px 3px #000"}),
+                html.Div(["Battery: ", html.Span("N/A", id='battery-level')]),
+                html.Div(["Heading: ", html.Span("N/A", id='heading'), html.Button("Lock", id="lock-heading")]),
+                html.Div(["Pitch: ", html.Span("N/A", id='pitch'), html.Button("Lock", id="lock-pitch")]),
+                html.Div(["Roll: ", html.Span("N/A", id='roll'), html.Button("Lock", id="lock-roll")]),
+                html.Div(["Depth: ", html.Span("N/A", id='depth'), html.Button("Lock", id="lock-depth")]),
+                dcc.Graph(id='depth-graph', style={"height": "200px", "margin-top": "10px"})
+            ]),
+            html.Div([
+                html.Img(id='video-stream', style={
+                    'width': '100vw', 'height': '100vh', 'object-fit': 'cover'
+                })
+            ])
+        ], style={"position": "relative", "overflow": "hidden", "width": "100vw", "height": "100vh"}),
+        # Full-screen video wrapper
+        dcc.Interval(id='interval-video', interval=1000, n_intervals=0)
     ])
 
     depth_data = []
+    locks = {
+        "battery": None,
+        "heading": None,
+        "pitch": None,
+        "roll": None,
+        "depth": None
+    }
 
+    # Toggle telemetry overlay visibility
+    @app_video.callback(
+        Output("telemetry-overlay", "style"),
+        Input("toggle-overlay", "n_clicks"),
+        State("telemetry-overlay", "style"),
+    )
+    def toggle_overlay(n_clicks, current_style):
+        if n_clicks and current_style["display"] == "none":
+            current_style["display"] = "block"
+        elif n_clicks:
+            current_style["display"] = "none"
+        return current_style
+
+    # Update telemetry data and handle locking of values
     @app_video.callback(
         [
             Output('battery-level', 'children'),
@@ -82,15 +73,29 @@ def init_video_app() -> dash.Dash:
             Output('depth', 'children'),
             Output('depth-graph', 'figure')
         ],
-        [Input('interval-video', 'n_intervals')]
+        [Input('interval-video', 'n_intervals')],
+        [
+         Input('lock-heading', 'n_clicks'),
+         Input('lock-pitch', 'n_clicks'),
+         Input('lock-roll', 'n_clicks'),
+         Input('lock-depth', 'n_clicks')]
     )
-    def update_video_info(n):
-        data = fetch_json_data()  # Use the data-fetching function from sensor_handling.py
+    def update_video_info(n, lock_heading, lock_pitch, lock_roll, lock_depth):
+        data = fetch_json_data()
+
+        # Get and lock telemetry data
         battery = f"{data.get('battery', 'N/A')}%"
         heading = f"{data.get('9dof', {}).get('gyroscope', {}).get('x', 'N/A')}°"
         pitch = f"{data.get('9dof', {}).get('gyroscope', {}).get('y', 'N/A')}°"
         roll = f"{data.get('9dof', {}).get('gyroscope', {}).get('z', 'N/A')}°"
         depth = f"{data.get('depth', {}).get('dpt', 'N/A')}m / {data.get('depth', {}).get('dptSet', 'N/A')}m"
+
+        # Handle "lock" functionality
+        for key, lock_click in zip(["heading", "pitch", "roll", "depth"],
+                                   [lock_heading, lock_pitch, lock_roll, lock_depth]):
+            if lock_click:
+                locks[key] = locals()[key]  # Save locked value
+            locals()[key] = locks[key] if locks[key] is not None else locals()[key]
 
         # Update depth data for graph
         current_depth = data.get('depth', {}).get('dpt', None)
