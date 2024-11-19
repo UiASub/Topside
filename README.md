@@ -1,3 +1,7 @@
+**Install dependencies to run (not tested)**
+```bash
+pip install -r requirements.txt
+```
 
 How to use git:
 
