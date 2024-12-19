@@ -2,8 +2,8 @@ import socket
 import json
 
 # Definer Topside (Host) serverens IP-adresse og port
-HOST = '192.168.69.1'  # Sett PC til static IP server. Ethernet->IPv4 address: 192.168.69.1. Netmask/IPv4 mask: 255.255.255.0. (Default) gateway: 'blank'.
-PORT = 65432  # Velg samme port for Topside- og ROV-program.
+HOST = '192.168.137.100'  # Sett PC til static IP server. Ethernet->IPv4 address: 192.168.137.100. Netmask/IPv4 mask: 255.255.255.0. (Default) gateway: 'blank'.
+PORT = 1234  # Velg samme port for Topside- og ROV-program. #Port 1234 (123x)
 
 # Opprett en socket-objekt
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
