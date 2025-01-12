@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col video-feed">
+        <h2>Video Feed</h2>
+        <img id="video-stream" alt="Live Video Stream">
+    </div>
+    <div class="col sensors">
+        <h2>Sensor Data</h2>
+        <div id="sensor-data">Loading...</div>
+    </div>
+</div>
+<div class="row">
+    <div class="col thrusters">
+        <h2>Thruster Status</h2>
+        <div id="thruster-status">Loading...</div>
+    </div>
+    <div class="col lights">
+        <h2>Lights</h2>
+        <div id="lights-control">Loading...</div>
+    </div>
+</div>
+<script src="/js/video.js"></script>
+<script src="/js/sensors.js"></script>
+<script src="/js/main.js"></script>
+{% endblock %}

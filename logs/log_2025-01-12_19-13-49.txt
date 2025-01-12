@@ -1,0 +1,6 @@
+2025-01-12 19:13:49,079 - INFO - Logger initialized.
+2025-01-12 19:13:49,098 - INFO - Video app started.
+2025-01-12 19:13:49,102 - INFO - Sensor app started.
+2025-01-12 19:13:49,106 - INFO - Debug server started.
+2025-01-12 19:14:34,925 - INFO - Shutdown signal received. Terminating processes...
+2025-01-12 19:14:34,927 - INFO - Debug server terminated.

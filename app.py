@@ -1,64 +1,47 @@
-import threading
-import dash
-from dash import dcc, html
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output
-from collections import deque
-from lib.sensor_handling import *
-from lib.video_stream import *
-from lib.utils import *
-from GUI.sensor import *
-from GUI.video import *
+from flask import Flask, render_template, jsonify
 from multiprocessing import Process
+from components.video import update_video_stream
+from components.sensors import fetch_sensor_data
 
+# Flask app setup
+app = Flask(__name__, static_folder='js')
 
-# Backend server details
-HOST = '127.0.0.1'
-TCP_PORT = 65432  # Port for JSON data
-UDP_PORT = 65433  # Port for video stream
-UDP_BUFFER_SIZE = 2**16
+# Serve the HTML Dashboard
+@app.route("/")
+def dashboard():
+    return render_template("static/templates/layout.html")
 
-# Store depth data over time
-depth_data = deque(maxlen=50)
+# API to update video stream
+@app.route("/api/video_stream")
+def video_stream():
+    # Replace with your actual video stream logic
+    return jsonify(update_video_stream())
 
-# Initialize Dash apps
-external_stylesheets = [dbc.themes.CYBORG]
+# API to fetch sensor data
+@app.route("/api/sensor_data")
+def sensor_data():
+    # Replace with your actual sensor fetching logic
+    return jsonify(fetch_sensor_data())
 
-# Define the video stream app
-app_video = init_video_app()
-# Callback to update the video stream
-app_video.callback(
-    Output('video-stream', 'src'),
-    [Input('interval-video', 'n_intervals')]
-)(update_video)
+# Function to run the video server process
+def run_video_server():
+    print("Starting video server on port 8050...")
+    app.run(debug=False, port=8050, use_reloader=False)
 
-# Function to run the video stream app
-def run_video_app():
-    app_video.run(debug=False, port=8050, use_reloader=False)
+# Function to run the sensor server process
+def run_sensor_server():
+    print("Starting sensor server on port 8051...")
+    app.run(debug=True, port=8051, use_reloader=False)
 
+if __name__ == "__main__":
+    # Create processes for video and sensor servers
+    video_process = Process(target=run_video_server)
+    sensor_process = Process(target=run_sensor_server)
 
-# Define the sensor data app
-app_sensor = init_sensor_app()
-# Callback to update sensor data
-app_sensor.callback(
-    [Output('battery-display', 'children'),
-     Output('thruster-table', 'children'),
-     Output('sensor-table', 'children'),
-     Output('depth-graph', 'figure')],
-    [Input('interval-sensor', 'n_intervals')]
-)(update_sensors)
-
-# Function to run the sensor data app
-def run_sensor_app():
-    app_sensor.run(debug=True, port=8051, use_reloader=False)
-
-if __name__ == '__main__':
-    # Start both apps in separate threads
-    video_process = Process(target=run_video_app)
-    sensor_process = Process(target=run_sensor_app)
-
+    # Start the processes
     video_process.start()
     sensor_process.start()
 
+    # Wait for both processes to complete
     video_process.join()
     sensor_process.join()
