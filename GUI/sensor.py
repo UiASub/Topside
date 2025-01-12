@@ -8,7 +8,7 @@ from components.lights import lights_component
 from components.depth import depth_component
 from lib.utils import fetch_json_data
 from dash.dependencies import Input, Output
-from pipeline.pipeline_follow import follow_pipeline, stop_following_pipeline
+#from pipeline.pipeline_follow import follow_pipeline, stop_following_pipeline
 
 
 def init_sensor_app() -> dash.Dash:
@@ -47,41 +47,3 @@ def init_sensor_app() -> dash.Dash:
             return "Autonomous Mode: OFF"
 
     return app_sensor
-
-# old version
-# def init_sensor_app() -> dash.Dash:
-#     external_stylesheets = [dbc.themes.CYBORG]
-#     app_sensor = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-
-#     # Layout for the sensor data app
-#     app_sensor.layout = html.Div([
-#         dbc.Container([
-#             html.H1("ROV Sensor Monitor", className='text-center mb-4'),
-
-#             # Section for Battery
-#             dbc.Row([
-#                 dbc.Col(html.H3("Battery", className='mb-3'), width=12),
-#                 dbc.Col(html.Div(id='battery-display', className='mb-4'), width=12)
-#             ]),
-
-#             # Section for Thrusters
-#             dbc.Row([
-#                 dbc.Col(html.H3("Thrusters Power and Temp", className='mb-3'), width=12),
-#                 dbc.Col(id='thruster-table', width=12)
-#             ]),
-
-#             # Section for 9DOF Sensor Data
-#             dbc.Row([
-#                 dbc.Col(html.H3("9DOF Sensor Data", className='mb-3'), width=12),
-#                 dbc.Col(id='sensor-table', width=12)
-#             ]),
-
-#             # Section for Depth Data with Graph
-#             dbc.Row([
-#                 dbc.Col(html.H3("Depth Data", className='mb-3'), width=12),
-#                 dbc.Col(dcc.Graph(id='depth-graph'), width=12)
-#             ]),
-#             dcc.Interval(id='interval-sensor', interval=1000, n_intervals=0)
-#         ], fluid=True)
-#     ])
-#     return app_sensor
