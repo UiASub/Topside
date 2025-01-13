@@ -3,9 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="static/css/styles.css">
     <title>{% block title %}ROV Dashboard{% endblock %}</title>
 </head>
+<nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">Change View</a>
+            <ul class="nav-links">
+                <li><a href="/">Home</a></li>
+                <li><a href="/Camera1">Camera 1</a></li>
+                <li><a href="/Camera2">Camera 2</a></li>
+            </ul>
+        </div>
+    </nav>
 <body>
     <header>
         <h1>ROV Mission Dashboard</h1>
@@ -13,9 +23,12 @@
     <main>
         {% block content %}{% endblock %}
     </main>
-    <footer>
-        <p>&copy; 2025 UiaSub</p>
-    </footer>
-<script src="{{ url_for('static', filename='js/update.js') }}"></script>
+    <footer class="footer">
+    <p>&copy; 2025 UiASub.</p>
+    <div class="social-links">
+        <a href="https://uiasub.no/" target="_blank">Website</a>
+    </div>
+</footer>
+<script src="{{ url_for('static', filename='js/.js') }}"></script>
 </body>
 </html>

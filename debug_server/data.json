@@ -25,7 +25,7 @@
             "temp": 25
         },
         "L_AFT_P": {
-            "power": 520,
+            "power": 400    ,
             "temp": 26
         },
         "L_AFT_S": {

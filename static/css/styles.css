@@ -35,3 +35,71 @@ img#video-stream {
     width: 100%;
     border-radius: 10px;
 }
+
+
+
+/* Navbar */
+.navbar {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+
+.navbar .logo {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 15px;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-links li a {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 16px;
+}
+
+.footer {
+    text-align: center;
+    padding: 10px 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    position: relative;
+    bottom: 0;
+    width: 100%;
+}
+
+
+#thruster-status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+#thruster-status-table th, #thruster-status-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #444;
+}
+
+#thruster-status-table th {
+    background-color: #222;
+    color: #fff;
+}
+
+#thruster-status-table tr:nth-child(even) {
+    background-color: #333;
+}
