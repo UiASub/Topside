@@ -1,6 +1,7 @@
 #egendefinerte til dette prosjektet
-event_log.txt
-
+logs/*
+.idea/*
+debug_server/server_logs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

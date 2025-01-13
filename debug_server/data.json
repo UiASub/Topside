@@ -1,0 +1,64 @@
+{
+    "thrusters": {
+        "U_FWD_P": {
+            "power": 400,
+            "temp": 20
+        },
+        "U_FWD_S": {
+            "power": 420,
+            "temp": 21
+        },
+        "U_AFT_P": {
+            "power": 440,
+            "temp": 22
+        },
+        "U_AFT_S": {
+            "power": 460,
+            "temp": 23
+        },
+        "L_FWD_P": {
+            "power": 480,
+            "temp": 24
+        },
+        "L_FWD_S": {
+            "power": 500,
+            "temp": 25
+        },
+        "L_AFT_P": {
+            "power": 520,
+            "temp": 26
+        },
+        "L_AFT_S": {
+            "power": 540,
+            "temp": 27
+        }
+    },
+    "9dof": {
+        "acceleration": {
+            "x": 0.02,
+            "y": -0.01,
+            "z": 9.81
+        },
+        "gyroscope": {
+            "x": 0.01,
+            "y": 0.02,
+            "z": 0.00
+        },
+        "magnetometer": {
+            "x": 30.6,
+            "y": -22.3,
+            "z": 15.5
+        }
+    },
+    "lights": {
+        "Light1": 50,
+        "Light2": 50,
+        "Light3": 50,
+        "Light4": 50
+    },
+    "battery": 69,
+    "depth": {
+        "dpt": 123,
+        "dptSet": 124
+    }
+}

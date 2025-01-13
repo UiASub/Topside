@@ -47,7 +47,7 @@ from lib.utils import fetch_json_data
 #     return app_sensor
 
 def init_sensor_app() -> dash.Dash:
-    external_stylesheets = [dbc.themes.CYBORG]
+    external_stylesheets = [dbc.themes.SLATE]
     app_sensor = dash.Dash(__name__, external_stylesheets=external_stylesheets)
     app_sensor.layout = dbc.Container([
         html.H1("ROV Control Panel", className="text-center"),
