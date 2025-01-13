@@ -1,17 +1,16 @@
-async function updateSensorData() {
+async function updateSensors() {
     try {
-        const response = await fetch('/api/sensor_data');
+        const response = await fetch("/api/sensors");
         const data = await response.json();
-        const sensorElement = document.getElementById('sensor-data');
-        sensorElement.innerHTML = `
-            <p>Temperature: ${data.temperature}</p>
-            <p>Pressure: ${data.pressure}</p>
-            <p>Depth: ${data.depth}</p>
+        const sensorData = document.getElementById("sensor-data");
+        sensorData.innerHTML = `
+            <p>Acceleration: x=${data.acceleration.x}, y=${data.acceleration.y}, z=${data.acceleration.z}</p>
+            <p>Gyroscope: x=${data.gyroscope.x}, y=${data.gyroscope.y}, z=${data.gyroscope.z}</p>
+            <p>Magnetometer: x=${data.magnetometer.x}, y=${data.magnetometer.y}, z=${data.magnetometer.z}</p>
         `;
     } catch (error) {
-        console.error('Error updating sensor data:', error);
+        console.error("Error fetching sensors:", error);
     }
 }
 
-// Update the sensor data every second
-setInterval(updateSensorData, 1000);
+setInterval(updateSensors, 500);
