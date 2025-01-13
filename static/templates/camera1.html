@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <meta charset="UTF-8">
+    <title>Camera 1</title> 
+</head>
+<body class="camera_window">
+    <h1>Camera 1 Feed</h1>
+    <img
+        src="{{ url_for('video_feed') }}"
+        style="border:2px solid #fff; max-width:80%; height:auto;"
+        alt="Live Camera Feed">
+</body>
+ <div class="navigation">
+            <a href="/" class="back_button">Back to Dashboard</a>
+        </div>
+</html>
