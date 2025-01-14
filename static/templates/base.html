@@ -3,12 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Bootstrap CSS (example: via CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-  >
-  <!-- Your Custom Styles -->
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   <title>{% block title %}ROV Dashboard{% endblock %}</title>
 </head>
@@ -16,9 +13,7 @@
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom sticky-top">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="/">
-        Change View
-      </a>
+      <a class="navbar-brand fw-bold" href="/">Change View</a>
       <button
         class="navbar-toggler"
         type="button"
@@ -30,10 +25,7 @@
       >
         <span class="navbar-toggler-icon"></span>
       </button>
-      <div
-        class="collapse navbar-collapse justify-content-end"
-        id="navbarSupportedContent"
-      >
+      <div class="collapse navbar-collapse justify-content-end" id="navbarSupportedContent">
         <ul class="navbar-nav mb-2 mb-lg-0">
           <li class="nav-item">
             <a class="nav-link" href="/">Home</a>
@@ -50,8 +42,8 @@
   </nav>
 
   <!-- Header -->
-  <header class="py-3 bg-secondary bg-opacity-25 text-center">
-    <h1 class="fw-bold">ROV Mission Dashboard</h1>
+  <header class="header">
+    <h1>ROV Mission Dashboard</h1>
   </header>
 
   <!-- Main Content -->
@@ -60,16 +52,16 @@
   </main>
 
   <!-- Footer -->
-  <footer class="footer bg-secondary bg-opacity-25 text-center py-2 mt-auto">
-    <p class="m-0">&copy; 2025 UiASub.</p>
+  <footer class="footer">
+    <p>&copy; 2025 UiASub.</p>
     <div class="social-links">
       <a href="https://uiasub.no/" target="_blank">Website</a>
     </div>
   </footer>
 
-  <!-- Bootstrap JS (example: via CDN) -->
+  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Your Custom JS -->
-  <script src="{{ url_for('static', filename='js/.js') }}"></script>
+  <!-- Custom JS -->
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
 </body>
 </html>

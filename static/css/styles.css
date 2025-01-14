@@ -27,7 +27,7 @@ body {
 
 /* Footer */
 .footer .social-links a {
-  color: #0dcaf0; /* Bootstrap's 'info' color */
+  color: #0dcaf0;
   text-decoration: none;
   margin: 0 5px;
 }
@@ -56,4 +56,90 @@ body {
   max-width: 800px;
   margin: 20px auto;
   text-align: center;
+}
+
+.heading1 {
+  color: whitesmoke;
+}
+
+/* General Body Styling */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Header */
+.header {
+  background-color: #343a40;
+  color: #ffffff;
+  text-align: center;
+  padding: 15px 0;
+  text-shadow: 1px 1px 3px #000;
+}
+
+/* Footer */
+.footer {
+  background-color: #343a40;
+  color: #ffffff;
+  text-align: center;
+  padding: 10px 0;
+}
+.footer .social-links a {
+  color: #0dcaf0;
+  text-decoration: none;
+  margin: 0 5px;
+}
+.footer .social-links a:hover {
+  text-decoration: underline;
+}
+
+/* Navbar */
+.navbar-brand:hover {
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+/* Custom Card */
+.custom-card {
+  background-color: #212529;
+  color: #ffffff;
+  border: 1px solid #495057;
+  display: flex;
+  flex-direction: column;
+}
+.custom-card .card-title {
+  color: #0dcaf0;
+  font-weight: bold;
+}
+
+/* Custom Table */
+.custom-table {
+  background-color: #212529; /* Table background color */
+  color: #ffffff;
+  border-color: #495057;
+  width: 100%;
+}
+.custom-table th, .custom-table td {
+  background-color: #343a40; /* Cell background color */
+  border: 1px solid #495057; /* Cell border */
+  color: #ffffff;
+  text-align: center;
+  vertical-align: middle;
+  padding: 8px;
+}
+
+/* Progress Bar */
+.progress-bar {
+  background-color: #0dcaf0;
+}
+
+/* Ensure images fit well */
+.custom-image {
+  border: 1px solid #495057;
+  border-radius: 5px;
+}
+
+/* Ensure uniform heights for all cards */
+.card {
+  height: 100%;
 }

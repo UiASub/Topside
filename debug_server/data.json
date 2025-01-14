@@ -56,7 +56,7 @@
         "Light3": 50,
         "Light4": 50
     },
-    "battery": 15,
+    "battery": 100,
     "depth": {
         "dpt": 123,
         "dptSet": 124

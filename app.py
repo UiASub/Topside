@@ -24,6 +24,10 @@ def camera1():
     """Render the camera1.html template."""
     return render_template("camera1.html")
 
+@app_dashboard.route("/Camera2")
+def camera2():
+    return render_template("camera2.html")
+
 @app_dashboard.route("/video_feed")
 def video_feed():
     """Return a streaming MJPEG response from the camera."""
