@@ -17,10 +17,6 @@ register_routes(app)
 # Initialize camera
 camera = init_camera()
 
-
-app_video = Flask(__name__, static_folder="static", template_folder="templates")
-app_sensor = Flask(__name__, static_folder="static", template_folder="templates")
-
 # Function to run the dashboard server
 def run_dashboard_server():
     print("Starting dashboard server on port 5000...")
