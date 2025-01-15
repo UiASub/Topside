@@ -8,7 +8,6 @@ def init_camera():
     return camera
 
 def generate_frames(camera):
-
     # Replace these with your actual calibration parameters
     camera_matrix = np.array([
         [900, 0, 640],
