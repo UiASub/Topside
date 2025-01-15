@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
+from autonomus.aruco_logger import ArUcoLogger
 
+aruco_logger = ArUcoLogger()
 
 class ArUcoMarkerDetector:
     """Class for detecting ArUco markers with image preprocessing and drawing axes."""
@@ -10,6 +12,7 @@ class ArUcoMarkerDetector:
         self.aruco_params = cv2.aruco.DetectorParameters()
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
+        self.logger = ArUcoLogger()
 
     def preprocess_image(self, image):
         """Converts the image to grayscale and applies Gaussian blur for better detection."""
@@ -39,6 +42,15 @@ class ArUcoMarkerDetector:
             print("No markers detected.")
         return image
 
+    def detect_markers(self, image):
+        """Detects ArUco markers in the preprocessed image."""
+        gray_image = self.preprocess_image(image)
+        corners, ids, rejected = cv2.aruco.detectMarkers(gray_image, self.aruco_dict, parameters=self.aruco_params)
+        if ids is not None:
+            for marker_id in ids.flatten():
+                self.logger.log_marker(marker_id)  # Log detected markers
+        return corners, ids, rejected
+
     def display_image(self, image):
         """Displays the image with detected markers and axes."""
         cv2.imshow('Detected ArUco Markers with Axes', image)
@@ -64,7 +76,6 @@ def capture_image_from_webcam():
     return frame
 
 
-# Example usage:
 if __name__ == "__main__":
 
     # Replace with your actual camera matrix and distortion coefficients
