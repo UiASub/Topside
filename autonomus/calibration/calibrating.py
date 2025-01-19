@@ -1,76 +1,86 @@
-import cv2
 import numpy as np
+import cv2 as cv
 import glob
+import os
 
-"""
-Dette scriptet kjøres for å kalibrere kameraet for best mulig aruco detection resultat, bruk sjakkmønstefilen vedlagt for kalibrering. Spør Storm ved flere spørsmål
+# Termination criteria for corner refinement
+criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-Mer info her: https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
-"""
+# Prepare object points based on correct grid size (9x6 internal corners)
+objp = np.zeros((9 * 6, 3), np.float32)
+objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
 
+# Arrays to store object points and image points
+objpoints = []  # 3D points in real-world space
+imgpoints = []  # 2D points in the image plane
 
-def calibrate_camera(images_path, pattern_size=(9, 6), square_size=1.0):
-    """
-    Calibrate the camera using images of a chessboard pattern.
+# Define correct path for calibration images
+image_dir = os.path.join(os.path.dirname(__file__), 'calibration_images')
+image_pattern = os.path.join(image_dir, '*.jpg')
 
-    :param images_path: Path to the images of the chessboard.
-    :param pattern_size: The number of internal corners per a chessboard row and column (e.g., (9, 6)).
-    :param square_size: The size of a single square in your chessboard in a unit (e.g., 1.0 cm or 1.0 m).
-    :return: Camera matrix and distortion coefficients.
-    """
-    # Termination criteria for corner sub-pixel refinement
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+# Load calibration images
+images = glob.glob(image_pattern)
 
-    # Prepare object points (3D points in real world space)
-    objp = np.zeros((np.prod(pattern_size), 3), np.float32)
-    objp[:, :2] = np.indices(pattern_size).T.reshape(-1, 2)
-    objp *= square_size
+if not images:
+    print(f"No images found in directory: {image_dir}. Please check the path and filenames.")
+    exit()
 
-    # Arrays to store object points and image points
-    objpoints = []  # 3D points in real-world space
-    imgpoints = []  # 2D points in image plane
+for fname in images:
+    img = cv.imread(fname)
+    if img is None:
+        print(f"Failed to load image: {fname}")
+        continue
 
-    # Read all images from the folder
-    images = glob.glob(f"{images_path}/*.jpg")
-    if not images:
-        print("No images found in the specified path.")
-        return None, None
+    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    for fname in images:
-        img = cv2.imread(fname)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Find the chessboard corners
-        ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
-
-        if ret:
-            objpoints.append(objp)
-            corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-            imgpoints.append(corners2)
-
-            # Draw and display the corners for visualization (optional)
-            img = cv2.drawChessboardCorners(img, pattern_size, corners2, ret)
-            cv2.imshow('Chessboard', img)
-            cv2.waitKey(500)
-
-    cv2.destroyAllWindows()
-
-    # Perform camera calibration
-    ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None,
-                                                                        None)
+    # Find the chessboard corners (using correct 9x6 pattern)
+    ret, corners = cv.findChessboardCorners(gray, (9, 6), None)
 
     if ret:
-        print("Camera calibration successful.")
-        print("Camera Matrix:")
-        print(camera_matrix)
-        print("Distortion Coefficients:")
-        print(dist_coeffs)
+        objpoints.append(objp)
+
+        # Refine detected corners
+        corners2 = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+        imgpoints.append(corners2)
+
+        # Draw and display the corners
+        cv.drawChessboardCorners(img, (9, 6), corners2, ret)
+        cv.imshow('Calibration Image', img)
+        cv.waitKey(500)
     else:
-        print("Camera calibration failed.")
+        print(f"Chessboard corners not found in: {fname}")
 
-    return camera_matrix, dist_coeffs
+cv.destroyAllWindows()
 
+# Check if enough valid patterns were detected
+if len(objpoints) > 0:
+    # Perform camera calibration using the last valid grayscale shape
+    img_shape = gray.shape[::-1]
+    ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, img_shape, None, None)
 
-# Call the function with the path to your images
-images_path = "autonomus/calibration/calibration_image.png"
-camera_matrix, dist_coeffs = calibrate_camera(images_path)
+    # Save calibration results
+    np.savez(os.path.join(image_dir, "camera_calibration_data.npz"), camera_matrix=mtx, dist_coeffs=dist)
+
+    print("Calibration successful!")
+    print("Camera Matrix:\n", mtx)
+    print("Distortion Coefficients:\n", dist)
+
+    # Test undistortion
+    test_img_path = images[0]  # Use the first image for testing
+    test_img = cv.imread(test_img_path)
+    h, w = test_img.shape[:2]
+    newcameramtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+
+    # Apply undistortion
+    dst = cv.undistort(test_img, mtx, dist, None, newcameramtx)
+
+    # Crop and save the undistorted image
+    x, y, w, h = roi
+    dst = dst[y:y + h, x:x + w]
+    undistorted_img_path = os.path.join(image_dir, 'undistorted_result.png')
+    cv.imwrite(undistorted_img_path, dst)
+
+    print(f"Undistorted image saved as '{undistorted_img_path}'")
+
+else:
+    print("No valid images found with detectable chessboard corners. Calibration aborted.")
