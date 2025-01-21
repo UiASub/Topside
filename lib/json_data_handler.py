@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-DATA_FILE = Path("debug_server/data.json")
+DATA_FILE = Path("data/data.json")
 
 
 class JSONDataHandler:
@@ -11,7 +11,7 @@ class JSONDataHandler:
     def read_data(self):
         """Reads and returns the data from the JSON file."""
         try:
-            with open(self.file_path, 'r') as json_file:
+            with open(self.file_path, "r") as json_file:
                 return json.load(json_file)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"Error reading JSON file: {e}")
@@ -27,7 +27,7 @@ class JSONDataHandler:
         try:
             data = self.read_data()
             data.update(new_data)
-            with open(self.file_path, 'w') as json_file:
+            with open(self.file_path, "w") as json_file:
                 json.dump(data, json_file, indent=4)
         except Exception as e:
             print(f"Error updating JSON file: {e}")
