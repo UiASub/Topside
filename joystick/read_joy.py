@@ -7,7 +7,7 @@ def read_joy(port: str) -> None:
     try:
         ser = serial.Serial(port, 115200, timeout=1)
     except serial.SerialException as e:
-        print(f"Failed to open serial port {port}: {e}")
+        print(f"Joystick: Failed to open serial port {port}: {e}")
         return
 
     while True:
