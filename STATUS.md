@@ -18,7 +18,9 @@ Funksjonelt ferdig. Hvis noen ønsker å endre styling på den, evt implementere
 **Sende ned -> rover data/data.json** (kun felt som er relevant).
 **Motta opp <- rover sin data.json str.** Deretter lagre relevante felt i topside data/data.json.
 
-Jonathan starter!
+**TCP går gjennom Raspberry Pi**
+**Hvordan sendes ArUco-data fra Raspberry Pi til roverens hovedprosessor?**
+**Skal det brukes PID-kontroll for finjustering?**
 
 #### Autonomous pipeline [WIP]
 ##### Pipeline inspection
