@@ -29,6 +29,7 @@ def read_joy(port: str) -> None:
                         )  # Default empty dictionary if file is invalid
 
                     existing_data["Thrust"] = data["Thrust"]
+                    existing_data["Gain"] = data["Gain"]
 
                     # Go to the beginning of the file before writing
                     file.seek(0)
