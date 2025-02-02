@@ -4,6 +4,15 @@ import json
 
 # port is typically "COM3" or some other "COMx" port.
 def read_joy(port: str) -> None:
+    """Oppretter kobling til joystick over Seriel med port __port__ og leser data fra den.
+    Kjører kontinuerlig i en loop og skriver data til filen data/data.json.
+
+    Bruk: spawn denne ut i en egen prosess med multiprosessing librariet.
+
+    Args:
+        port (str): Dette er serial porten som joystick er koblet til. F.eks. "COM3" eller "/dev/ttyUSB0"
+    """
+
     try:
         ser = serial.Serial(port, 115200, timeout=1)
     except serial.SerialException as e:
