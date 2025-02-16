@@ -23,8 +23,8 @@ def run_dashboard_server():
 
 if __name__ == "__main__":
     # Create processes for each server
-    dashboard_process = Process(target=run_dashboard_server)
-    joystick_process = Process(target=read_joy, args=("COM3",))
+    dashboard_process = Process(target=run_dashboard_server, daemon=True)
+    joystick_process = Process(target=read_joy, daemon=True, args=("COM3",))
 
     # Start the processes
     dashboard_process.start()
