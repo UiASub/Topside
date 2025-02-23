@@ -1,0 +1,21 @@
+<div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content modal-custom">
+      <div class="modal-header modal-header-custom">
+        <h5 class="modal-title" id="configModalLabel">Configuration</h5>
+        <button type="button" class="btn-close modal-close-btn" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body modal-body-custom">
+        <div class="mb-3">
+          <label for="update-interval" class="form-label">
+            Update Interval (ms): <span id="interval-value">500</span>
+          </label>
+          <input type="range" class="form-range" id="update-interval" min="1" max="2000" step="100" value="500">
+        </div>
+      </div>
+      <div class="modal-footer modal-footer-custom">
+         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

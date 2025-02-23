@@ -13,4 +13,4 @@ async function updateSensors() {
     }
 }
 
-setInterval(updateSensors, 500);
+// setInterval(updateSensors, 500);

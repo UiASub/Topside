@@ -11,4 +11,4 @@ async function updateLights() {
     }
 }
 
-setInterval(updateLights, 500);
+// setInterval(updateLights, 500);

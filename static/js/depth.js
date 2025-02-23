@@ -10,4 +10,4 @@ async function updateDepth() {
 }
 
 
-setInterval(updateDepth, 500);
+// setInterval(updateDepth, 500);

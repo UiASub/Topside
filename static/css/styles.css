@@ -143,3 +143,32 @@ body {
 .card {
   height: 100%;
 }
+
+
+
+
+/* Modal custom styling */
+.modal-custom {
+    background-color: #343a40;  /* Dark background */
+    color: #f8f9fa;             /* Light text */
+    border: 1px solid #495057;
+}
+
+.modal-header-custom,
+.modal-body-custom,
+.modal-footer-custom {
+    border-color: #495057;
+}
+
+.modal-header-custom {
+    border-bottom: 1px solid #495057;
+}
+
+.modal-footer-custom {
+    border-top: 1px solid #495057;
+}
+
+/* Optional: Customize the close button */
+.btn-close.modal-close-btn {
+    filter: invert(1);  /* Makes the close icon light */
+}

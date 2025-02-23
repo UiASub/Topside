@@ -27,4 +27,4 @@ async function updateThrusterStatus() {
 }
 
 // Update intervall
-setInterval(updateThrusterStatus, 500);
+// setInterval(updateThrusterStatus, 500);

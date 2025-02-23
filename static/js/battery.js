@@ -31,4 +31,4 @@ async function updateBattery() {
 }
 
 // Update every 500ms
-setInterval(updateBattery, 500);
+// setInterval(updateBattery, 500);
