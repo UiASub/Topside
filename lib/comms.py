@@ -1,6 +1,6 @@
 import requests
 import json
-import eventlogger
+from lib import eventlogger
 import time
 import socket
 import threading
