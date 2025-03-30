@@ -1,0 +1,51 @@
+{
+    "Sensors": {
+        "thrusters": {
+            "thrust_U_FWD_P": 400,
+            "thrust_U_FWD_S": 420,
+            "thrust_U_AFT_P": 440,
+            "thrust_U_AFT_S": 460,
+            "thrust_L_FWD_P": 480,
+            "thrust_L_FWD_S": 500,
+            "thrust_L_AFT_P": 400,
+            "thrust_L_AFT_S": 540
+        },
+        "acceleration": {
+            "x": 0.02,
+            "y": -0.01,
+            "z": 9.81
+        },
+        "gyroscope": {
+            "x": 0.01,
+            "y": 0.02,
+            "z": 0.00
+        },
+        "magnetometer": {
+            "x": 30.6,
+            "y": -22.3,
+            "z": 15.5
+        },
+        "battery": 100,
+        "depth": 123,
+        "barometer": 9.1
+    },
+    "Target": {
+        "velocity": {
+            "x": 0.0,
+            "y": 0.1,
+            "z": 0.0,
+            "yaw": 2.1,
+            "pitch": 1.1,
+            "roll": 0.3
+        },
+        "depth": 128,
+        "lights": {
+            "light1": 50,
+            "light2": 50,
+            "light3": 50,
+            "light4": 50
+        },
+        "emergency_ascent": 0
+    }
+}
+
