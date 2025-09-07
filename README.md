@@ -1,3 +1,36 @@
+# Topside Control System
+
+ROV (Remotely Operated Vehicle) control system for underwater operations.
+
+## Features
+
+- **Dashboard Interface**: Web-based control and monitoring
+- **Sensor Integration**: 9DOF sensors, depth, battery monitoring
+- **Thruster Control**: Multi-thruster propulsion system
+- **Camera System**: Real-time video streaming
+- **Communication**: HTTP/UDP protocols + **NEW: Bitmask communication for STM32**
+
+## 🆕 Bitmask Communication for K2 Zephyr Prototype
+
+Efficient binary communication with STM32 microcontroller:
+- **84.2% space savings** (539 bytes JSON → 85 bytes binary)
+- **6.34x compression ratio**
+- **STM32 compatible** data format
+- **10Hz real-time transmission**
+
+```python
+from lib.bitmask_converter import convert_json_to_binary
+from lib.comms import send_bitmask_data_to_stm32
+
+# Convert and send data to STM32
+binary_data = convert_json_to_binary(sensor_data)
+send_bitmask_data_to_stm32(sensor_data)
+```
+
+See [BITMASK_COMMUNICATION.md](BITMASK_COMMUNICATION.md) for detailed documentation.
+
+## Installation
+
 **Install dependencies to run (not tested)**
 ```bash
 pip install -r requirements.txt
