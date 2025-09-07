@@ -1,6 +1,7 @@
 import requests
 import json
 from lib import eventlogger
+from lib.bitmask_converter import convert_json_to_binary, convert_binary_to_json
 import time
 import socket
 import threading
@@ -17,6 +18,10 @@ TIME_INTERVAL = 1.0 / UPDATE_RATE  # Time interval per send cycle
 UDP_IP = "127.0.0.1"  # Replace with the receiver's IP
 UDP_PORT = 5001  # Receiver port
 CONTROLS_JSON_PATH = "data/controls.json"  # Path to controls JSON file
+
+# Bitmask/Binary communication configurations for STM32
+STM32_UDP_IP = "127.0.0.1"  # Replace with STM32 IP
+STM32_UDP_PORT = 5002  # STM32 communication port
 
 def get_data():
     try:
@@ -192,6 +197,124 @@ def send_udp_data():
         eventlogger.logger.log_error(f"UDP socket error: {e}")
         print(f"UDP socket error: {e}")
 
+    finally:
+        udp_socket.close()
+
+
+def send_bitmask_data_to_stm32(json_data=None):
+    """
+    Sends data to STM32 microcontroller using bitmask/binary format.
+    Reads JSON from 'data/data.json' if no data provided, converts to binary,
+    and sends via UDP to STM32.
+    
+    Args:
+        json_data: Optional JSON data to send. If None, reads from data.json
+    """
+    try:
+        if json_data is None:
+            # Read from data.json if no data provided
+            from lib.json_data_handler import JSONDataHandler
+            data_handler = JSONDataHandler()
+            json_data = data_handler.read_data()
+        
+        # Convert JSON to binary format for STM32
+        binary_data = convert_json_to_binary(json_data)
+        
+        # Create UDP socket and send binary data
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.sendto(binary_data, (STM32_UDP_IP, STM32_UDP_PORT))
+        udp_socket.close()
+        
+        eventlogger.logger.log_info(f"Sent {len(binary_data)} bytes of binary data to STM32")
+        return True
+        
+    except Exception as e:
+        eventlogger.logger.log_error(f"Failed to send bitmask data to STM32: {e}")
+        print(f"Failed to send bitmask data to STM32: {e}")
+        return False
+
+
+def receive_bitmask_data_from_stm32(timeout=1.0):
+    """
+    Receives binary data from STM32 and converts it back to JSON format.
+    
+    Args:
+        timeout: Socket timeout in seconds
+        
+    Returns:
+        dict: JSON data received from STM32, or None if failed
+    """
+    try:
+        # Create UDP socket for receiving
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.settimeout(timeout)
+        udp_socket.bind(('', STM32_UDP_PORT + 1))  # Use different port for receiving
+        
+        # Receive binary data
+        binary_data, addr = udp_socket.recvfrom(1024)  # Adjust buffer size as needed
+        udp_socket.close()
+        
+        # Convert binary data back to JSON
+        json_data = convert_binary_to_json(binary_data)
+        
+        eventlogger.logger.log_info(f"Received {len(binary_data)} bytes of binary data from STM32")
+        return json_data
+        
+    except socket.timeout:
+        eventlogger.logger.log_warning("Timeout receiving data from STM32")
+        return None
+    except Exception as e:
+        eventlogger.logger.log_error(f"Failed to receive bitmask data from STM32: {e}")
+        print(f"Failed to receive bitmask data from STM32: {e}")
+        return None
+
+
+def send_bitmask_data_continuous():
+    """
+    Continuously sends bitmask data to STM32 at regular intervals.
+    Reads from data.json and sends binary data every 100ms (10 Hz).
+    """
+    try:
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)
+        
+        eventlogger.logger.log_info(f"Starting continuous bitmask transmission to STM32 at {STM32_UDP_IP}:{STM32_UDP_PORT}")
+        print(f"Starting continuous bitmask transmission to STM32 at {STM32_UDP_IP}:{STM32_UDP_PORT}")
+        
+        last_log_time = time.perf_counter()
+        next_cycle_time = time.perf_counter()
+        time_interval = 0.1  # 100ms = 10 Hz
+        
+        while True:
+            try:
+                # Read latest data
+                from lib.json_data_handler import JSONDataHandler
+                data_handler = JSONDataHandler()
+                json_data = data_handler.read_data()
+                
+                # Convert to binary and send
+                binary_data = convert_json_to_binary(json_data)
+                udp_socket.sendto(binary_data, (STM32_UDP_IP, STM32_UDP_PORT))
+                
+                # Log every 10 seconds
+                if time.perf_counter() - last_log_time >= 10:
+                    eventlogger.logger.log_info("STM32 bitmask transmission running")
+                    print("STM32 bitmask transmission running")
+                    last_log_time = time.perf_counter()
+                
+                # Maintain precise timing
+                next_cycle_time += time_interval
+                sleep_duration = next_cycle_time - time.perf_counter()
+                if sleep_duration > 0:
+                    time.sleep(sleep_duration)
+                    
+            except Exception as e:
+                eventlogger.logger.log_error(f"Error in continuous bitmask transmission: {e}")
+                time.sleep(1)  # Wait before retrying
+                
+    except Exception as e:
+        eventlogger.logger.log_error(f"Failed to start continuous bitmask transmission: {e}")
+        print(f"Failed to start continuous bitmask transmission: {e}")
     finally:
         udp_socket.close()
 
