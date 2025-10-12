@@ -14,7 +14,7 @@ class Logger:
         self.info_logs_list = []
         self.warn_logs_list = []
         self.error_logs_list = []
-        
+
         # Create the log file if it doesn't exist
         if not os.path.isfile(self.log_file):
             with open(self.log_file, 'w') as f:
@@ -32,13 +32,13 @@ class Logger:
         if len(self.info_logs_list) >= self.max_important_logs:
             self.info_logs_list.pop(0)  # Remove oldest log if at max capacity
         self.info_logs_list.append(message)
-        
+
     def _add_to_warn_list(self, message):
         """Helper function to add messages to the important log list for GUI display."""
         if len(self.warn_logs_list) >= self.max_important_logs:
             self.warn_logs_list.pop(0)  # Remove oldest log if at max capacity
         self.warn_logs_list.append(message)
-        
+
     def _add_to_error_list(self, message):
         """Helper function to add messages to the important log list for GUI display."""
         if len(self.error_logs_list) >= self.max_important_logs:
@@ -60,17 +60,17 @@ class Logger:
     def log_custom(self, event_type, message):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_message = f"{timestamp} - {event_type} - {message}"
-        
+
         # Write to file directly for custom events
         with open(self.log_file, 'a') as f:
             f.write(log_message + '\n')
-        
+
         self._add_to_error_list(f"{event_type}: {message}")
 
     def get_info_logs(self):
         """Returns a list of important logs for GUI display."""
         return self.info_logs_list
-    
+
     def get_warn_logs(self):
         """Returns a list of important logs for GUI display."""
         return self.warn_logs_list
