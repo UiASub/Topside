@@ -6,7 +6,6 @@ from lib.camera import init_camera, generate_frames
 data_handler = JSONDataHandler()
 camera = init_camera()
 
-
 def register_routes(app):
 
     @app.route("/")
