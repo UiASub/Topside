@@ -1,13 +1,9 @@
-from flask import Flask, render_template, jsonify, Response
-from multiprocessing import Process
-from lib.json_data_handler import JSONDataHandler
-from lib.camera import init_camera, generate_frames
+from flask import Flask
+from lib.camera import init_camera
 from routes import register_routes
-from joystick.read_joy import read_joy
 
 # Flask app for the main dashboard
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
-data_handler = JSONDataHandler()
 
 register_routes(app)
 
@@ -22,14 +18,5 @@ def run_dashboard_server():
 
 
 if __name__ == "__main__":
-    # Create processes for each server
-    dashboard_process = Process(target=run_dashboard_server, daemon=True)
-    joystick_process = Process(target=read_joy, daemon=True, args=("COM3",))
-
-    # Start the processes
-    dashboard_process.start()
-    joystick_process.start()
-
-    # Wait for all processes to complete
-    dashboard_process.join()
-    joystick_process.join()
+    # Start only the dashboard process
+    run_dashboard_server()
