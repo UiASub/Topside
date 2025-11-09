@@ -1,4 +1,4 @@
-from flask import render_template, jsonify, Response
+from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
 from lib.camera import init_camera, generate_frames
 
@@ -56,3 +56,39 @@ def register_routes(app):
     def get_depth():
         """API route for depth data."""
         return jsonify(data_handler.get_section("depth"))
+
+    @app.route("/api/rov/command", methods=["POST"])
+    def set_rov_command():
+        """
+        JSON body: any subset of
+        surge,sway,heave,roll,pitch,yaw ([-128..127]), light,manip ([0..255])
+        or normalized axes in [-1..1] via "axes": and optional "rate_hz"
+        """
+        data = request.get_json(force=True, silent=True) or {}
+        bm = current_app.config["BITMASK"]
+
+        # allow normalized axes
+        axes = data.get("axes")
+        if isinstance(axes, dict):
+            bm.set_from_axes(**axes)
+
+        # allow raw fields
+        allowed = {"surge","sway","heave","roll","pitch","yaw","light","manip"}
+        raw = {k:int(v) for k,v in data.items() if k in allowed}
+        if raw:
+            bm.set_command(**raw)
+
+        # optional live rate change
+        if "rate_hz" in data:
+            try:
+                rate = float(data["rate_hz"])
+                bm.period = 1.0 / rate if rate > 0 else 0.0
+            except Exception:
+                pass
+
+        return jsonify({"ok": True, "now": bm.get_command()})
+
+    @app.route("/api/rov/status", methods=["GET"])
+    def get_rov_status():
+        bm = current_app.config["BITMASK"]
+        return jsonify({"ok": True, "command": bm.get_command()})
