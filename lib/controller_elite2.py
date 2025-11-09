@@ -10,24 +10,36 @@ UDP_IP   = os.getenv("ROV_IP",   "192.168.2.50")
 UDP_PORT = int(os.getenv("ROV_UDP_PORT", "9000"))
 RATE_HZ  = int(os.getenv("ROV_RATE_HZ", "60"))
 
-# Deadzone tuning (Elite 2 with drift: increase RADIAL_DZ slightly if needed)
-RADIAL_DZ       = float(os.getenv("RADIAL_DZ", "0.14"))  # 0..0.3 typical
-ANTI_DZ         = float(os.getenv("ANTI_DZ", "0.06"))    # pushes small input past DZ
-EXPO            = float(os.getenv("EXPO", "0.25"))       # 0 = linear, 0.2-0.4 nice
-MAX_DELTA_PER_T = int(os.getenv("MAX_DELTA_PER_T", "120"))  # rate limit per tick (int16 units)
+# Deadzone tuning
+RADIAL_DZ       = float(os.getenv("RADIAL_DZ", "0.0"))   # keep available, but default off
+AXIS_DZ         = float(os.getenv("AXIS_DZ", "0.10"))    # per-axis threshold: no input until > 0.10
+ANTI_DZ         = float(os.getenv("ANTI_DZ", "0.06"))     # pushes small input past DZ
+EXPO            = float(os.getenv("EXPO", "0.25"))        # 0 = linear, 0.2–0.4 is nice
+MAX_DELTA_PER_T = int(os.getenv("MAX_DELTA_PER_T", "120"))  # i16 units per tick
 
 # Startup center calibration
 CALIBRATION_SEC = float(os.getenv("CALIBRATION_SEC", "0.8"))
 
-# Buttons bitfield layout
+# ===================== Bitfield layout (uint16) =====================
 BIT = {
-    "MODE_MANUAL": 0,
-    "MODE_DEPTH":  1,
-    "MODE_STAB":   2,
-    "CAM_TILT_UP": 3,
-    "CAM_TILT_DN": 4,
-    "ARM":        14,
-    "DISARM":     15,
+    # Modes (right face cluster)
+    "MODE_MANUAL":       0,   # B
+    "MODE_DEPTH":        1,   # Y
+    "MODE_STAB":         2,   # X
+    # Camera tilt
+    "CAM_TILT_UP":       3,   # RB
+    "CAM_TILT_DN":       4,   # LB
+    "CAM_TILT_CENTER":   5,   # L3 (left stick press)
+    # Utilities per diagram (D-pad + RS)
+    "GAIN_INC":          6,   # D-pad Up
+    "GAIN_DEC":          7,   # D-pad Down
+    "LIGHTS_DIM":        8,   # D-pad Left
+    "LIGHTS_BRIGHT":     9,   # D-pad Right
+    "TOGGLE_INPUT_HOLD": 10,  # R3 (right stick press)
+    "SHIFT":             11,  # A (used as a modifier if you want)
+    # Reserved / high bits
+    "ARM":               14,  # Menu/Start
+    "DISARM":            15,  # View/Back
 }
 
 # ===================== Helpers =====================
@@ -37,7 +49,6 @@ def _axis_to_i16(v: float) -> int:
     return int(round(v * 1000))
 
 def _expo(v: float, e: float) -> float:
-    # Smooth around center while keeping end range
     if e <= 1e-6: return v
     return math.copysign(abs(v) ** (1.0 + e), v)
 
@@ -45,16 +56,22 @@ def _radial_deadzone(x: float, y: float, dz: float):
     r = math.sqrt(x*x + y*y)
     if r < dz:
         return 0.0, 0.0
-    # scale remaining radius back to 0..1
     scale = (r - dz) / (1.0 - dz)
     if r > 1e-6:
         x = (x / r) * scale
         y = (y / r) * scale
     return x, y
 
+def _axis_deadzone(v: float, dz: float) -> float:
+    """Per-axis deadzone: zero under threshold, rescale remainder to full range."""
+    a = abs(v)
+    if a < dz:
+        return 0.0
+    # rescale so that dz maps to 0 and 1 maps to 1
+    return math.copysign((a - dz) / (1.0 - dz), v)
+
 def _apply_antidz(v: float, adz: float) -> float:
     if v == 0.0: return 0.0
-    # nudge small values past the sticky region
     return math.copysign(min(1.0, abs(v) + adz), v)
 
 def _rate_limit(prev: int, new: int, max_step: int) -> int:
@@ -68,8 +85,14 @@ def _rate_limit(prev: int, new: int, max_step: int) -> int:
 
 class Elite2ControllerSender:
     """
-    Reads an Xbox Elite/Series controller via pygame (SDL), applies drift mitigation,
-    and streams binary UDP packets to the ROV at RATE_HZ.
+    Xbox Elite/Series controller via pygame (SDL). Mapping matches the diagram:
+      - Left stick: surge (forward/back), sway (left/right)
+      - Right stick: yaw (left/right), heave (up/down)
+      - RB/LB: camera tilt up/down, L3: tilt center
+      - A=SHIFT, B=Manual, X=Stabilize, Y=Depth
+      - D-pad: up/down = gain +/- ; left/right = lights dim/bright
+      - R3: Toggle Input Hold
+      - Menu(Start)=ARM, View(Back)=DISARM
     """
 
     def __init__(self, ip=UDP_IP, port=UDP_PORT):
@@ -83,7 +106,7 @@ class Elite2ControllerSender:
         if pygame.joystick.get_count() == 0:
             raise RuntimeError("No controller detected")
 
-        # Pick first controller; prefer Xbox/Elite if present (covers BT "Series X Controller" too)
+        # Prefer Xbox/Elite/Series names
         chosen = 0
         for i in range(pygame.joystick.get_count()):
             name = pygame.joystick.Joystick(i).get_name().lower()
@@ -94,9 +117,9 @@ class Elite2ControllerSender:
         self.j = pygame.joystick.Joystick(chosen)
         self.j.init()
         self.name = self.j.get_name()
-        print(f"[Controller] Connected: {self.name} (axes={self.j.get_numaxes()}, buttons={self.j.get_numbuttons()})")
+        print(f"[Controller] Connected: {self.name} (axes={self.j.get_numaxes()}, buttons={self.j.get_numbuttons()}, hats={self.j.get_numhats()})")
 
-        # ---- Axis indices (macOS mapping: 0=LX,1=LY,2=RX,3=RY; triggers typically 4,5) ----
+        # ---- Axis indices (macOS mapping: 0=LX,1=LY,2=RX,3=RY; triggers=4,5) ----
         self.AX_LX, self.AX_LY, self.AX_RX, self.AX_RY = 0, 1, 2, 3
 
         # ---- Button indices (SDL on macOS) ----
@@ -106,7 +129,7 @@ class Elite2ControllerSender:
         self.BTN_VIEW, self.BTN_MENU = 8, 9
         self.BTN_LS, self.BTN_RS = 10, 11
 
-        # Elite/Series paddles often appear around 12..15 on macOS (adjust after checking joy_debug.py)
+        # Paddles often appear 12..15 (we mirror helpful actions onto them)
         self.paddle_btns = []
         nb = self.j.get_numbuttons()
         for idx in range(12, min(16, nb)):
@@ -120,6 +143,10 @@ class Elite2ControllerSender:
 
         # previous outputs for rate limiting
         self.prev_surge = self.prev_sway = self.prev_heave = self.prev_yaw = 0
+
+        # for debug printing
+        self._last_buttons = 0
+        self._last_button_names = []
 
     # ----- calibration -----
     def _calibrate_centers(self):
@@ -159,9 +186,16 @@ class Elite2ControllerSender:
         rx = max(-1.0, min(1.0, rx))
         ry = max(-1.0, min(1.0, ry))
 
-        # radial deadzone on both sticks
-        lx, ly = _radial_deadzone(lx, ly, RADIAL_DZ)
-        rx, ry = _radial_deadzone(rx, ry, RADIAL_DZ)
+        # optional: radial deadzone (kept available if RADIAL_DZ>0)
+        if RADIAL_DZ > 0.0:
+            lx, ly = _radial_deadzone(lx, ly, RADIAL_DZ)
+            rx, ry = _radial_deadzone(rx, ry, RADIAL_DZ)
+
+        # strict per-axis deadzone: no output until |v| > AXIS_DZ, then rescale
+        lx = _axis_deadzone(lx, AXIS_DZ)
+        ly = _axis_deadzone(ly, AXIS_DZ)
+        rx = _axis_deadzone(rx, AXIS_DZ)
+        ry = _axis_deadzone(ry, AXIS_DZ)
 
         # anti-deadzone and expo
         lx = _expo(_apply_antidz(lx, ANTI_DZ), EXPO)
@@ -169,39 +203,88 @@ class Elite2ControllerSender:
         rx = _expo(_apply_antidz(rx, ANTI_DZ), EXPO)
         ry = _expo(_apply_antidz(ry, ANTI_DZ), EXPO)
 
-        # Map to vehicle axes (note Y inverted so up is positive)
-        surge = _axis_to_i16(-ly)  # forward/back
-        sway  = _axis_to_i16(lx)   # left/right
-        yaw   = _axis_to_i16(rx)   # turn
-        heave = _axis_to_i16(-ry)  # up/down
+        # Map to vehicle axes (invert Y so up is +)
+        surge = _axis_to_i16(-ly)  # forward/back (Left Y)
+        sway  = _axis_to_i16(lx)   # left/right (Left X)
+        yaw   = _axis_to_i16(rx)   # left/right (Right X)
+        heave = _axis_to_i16(-ry)  # up/down   (Right Y)
 
-        # Rate limit (optional but feels better)
+        # Rate limit
         surge = _rate_limit(self.prev_surge, surge, MAX_DELTA_PER_T)
         sway  = _rate_limit(self.prev_sway,  sway,  MAX_DELTA_PER_T)
         heave = _rate_limit(self.prev_heave, heave, MAX_DELTA_PER_T)
         yaw   = _rate_limit(self.prev_yaw,   yaw,   MAX_DELTA_PER_T)
         self.prev_surge, self.prev_sway, self.prev_heave, self.prev_yaw = surge, sway, heave, yaw
 
-        # Buttons → bitfield
+        # ---------------- Buttons → bitfield ----------------
         def b(i): return 1 if (i < self.j.get_numbuttons() and self.j.get_button(i)) else 0
         bits = 0
+
+        # Modes (B / Y / X) + SHIFT (A)
         if b(self.BTN_B): bits |= (1 << BIT["MODE_MANUAL"])
-        if b(self.BTN_A): bits |= (1 << BIT["MODE_DEPTH"])
+        if b(self.BTN_Y): bits |= (1 << BIT["MODE_DEPTH"])
         if b(self.BTN_X): bits |= (1 << BIT["MODE_STAB"])
+        if b(self.BTN_A): bits |= (1 << BIT["SHIFT"])
+
+        # Camera tilt RB/LB + center on L3
         if b(self.BTN_RB): bits |= (1 << BIT["CAM_TILT_UP"])
         if b(self.BTN_LB): bits |= (1 << BIT["CAM_TILT_DN"])
-        if b(self.BTN_MENU):  bits |= (1 << BIT["ARM"])
-        if b(self.BTN_VIEW):  bits |= (1 << BIT["DISARM"])
+        if b(self.BTN_LS): bits |= (1 << BIT["CAM_TILT_CENTER"])
 
-        # Optional: map paddles as duplicates (e.g., P1/P2 camera, P3 arm, P4 disarm)
-        if self.paddle_btns:
-            if b(self.paddle_btns[0]): bits |= (1 << BIT["CAM_TILT_UP"])
-            if len(self.paddle_btns) > 1 and b(self.paddle_btns[1]): bits |= (1 << BIT["CAM_TILT_DN"])
-            if len(self.paddle_btns) > 2 and b(self.paddle_btns[2]): bits |= (1 << BIT["ARM"])
-            if len(self.paddle_btns) > 3 and b(self.paddle_btns[3]): bits |= (1 << BIT["DISARM"])
+        # Arm/Disarm (Menu/View)
+        if b(self.BTN_MENU): bits |= (1 << BIT["ARM"])
+        if b(self.BTN_VIEW): bits |= (1 << BIT["DISARM"])
+
+        # D-pad (hat 0) — gain/lights
+        if self.j.get_numhats() > 0:
+            hx, hy = self.j.get_hat(0)  # (-1,0,1)
+            if hy > 0: bits |= (1 << BIT["GAIN_INC"])      # Up
+            if hy < 0: bits |= (1 << BIT["GAIN_DEC"])      # Down
+            if hx < 0: bits |= (1 << BIT["LIGHTS_DIM"])    # Left
+            if hx > 0: bits |= (1 << BIT["LIGHTS_BRIGHT"]) # Right
+
+        # Toggle Input Hold on R3
+        if b(self.BTN_RS): bits |= (1 << BIT["TOGGLE_INPUT_HOLD"])
+
+        # Optional: mirror paddles to useful actions
+        for i, p in enumerate(self.paddle_btns):
+            if b(p):
+                if i == 0: bits |= (1 << BIT["CAM_TILT_UP"])
+                elif i == 1: bits |= (1 << BIT["CAM_TILT_DN"])
+                elif i == 2: bits |= (1 << BIT["ARM"])
+                elif i == 3: bits |= (1 << BIT["DISARM"])
+
+        # save for debug print
+        self._last_buttons = bits
+        self._last_button_names = self._collect_pressed_button_names(bits)
 
         armed = 1 if (bits & (1 << BIT["ARM"])) else 0
         return surge, sway, heave, yaw, bits, armed
+
+    def _collect_pressed_button_names(self, bits: int):
+        names = []
+        def add(bit_name, label):
+            if bits & (1 << BIT[bit_name]):
+                names.append(label)
+
+        add("MODE_MANUAL", "MANUAL(B)")
+        add("MODE_DEPTH", "DEPTH(Y)")
+        add("MODE_STAB", "STAB(X)")
+        add("SHIFT", "SHIFT(A)")
+
+        add("CAM_TILT_UP", "TILT_UP(RB)")
+        add("CAM_TILT_DN", "TILT_DN(LB)")
+        add("CAM_TILT_CENTER", "TILT_CENTER(L3)")
+
+        add("GAIN_INC", "GAIN+ (DPAD↑)")
+        add("GAIN_DEC", "GAIN- (DPAD↓)")
+        add("LIGHTS_DIM", "LIGHTS- (DPAD←)")
+        add("LIGHTS_BRIGHT", "LIGHTS+ (DPAD→)")
+
+        add("TOGGLE_INPUT_HOLD", "INPUT_HOLD(R3)")
+        add("ARM", "ARM(START)")
+        add("DISARM", "DISARM(BACK)")
+        return names
 
     # ----- main loop -----
     def run(self):
@@ -210,13 +293,14 @@ class Elite2ControllerSender:
         while True:
             surge, sway, heave, yaw, buttons, armed = self._read_axes_buttons()
 
-            # DEBUG: print once per second (helpful during setup; remove later)
+            # DEBUG once per second
             if (self.seq % max(1, RATE_HZ)) == 0:
-                print("surge/sway/heave/yaw:", surge, sway, heave, yaw)
+                print("surge/sway/heave/yaw:", surge, sway, heave, yaw,
+                      " buttons:", bin(self._last_buttons),
+                      " pressed:", self._last_button_names)
 
             pkt_wo_crc = struct.pack("!hhhhHBB", surge, sway, heave, yaw, buttons, armed, self.seq & 0xFF)
-            crc = 0  # (optional) fill with CRC16 if you enable it in firmware
-            pkt = pkt_wo_crc + struct.pack("!H", crc)
+            pkt = pkt_wo_crc + struct.pack("!H", 0)  # CRC optional
             self.sock.sendto(pkt, self.addr)
             self.seq = (self.seq + 1) & 0xFF
             time.sleep(period)
