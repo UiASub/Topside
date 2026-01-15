@@ -1,22 +1,25 @@
 import pygame
 import os
+from bitmask import init_bitmask
 
-class PS4Kontroller:
+class Controller:
     AXIS_THRESHOLDS = {
-        "leftx":  (0, 0.08),
-        "lefty":  (1, 0.08),
-        "rightx": (2, 0.08),
-        "righty": (3, 0.08),
-        "L2":     (4, 0.08),  # L2 trigger (some systems)
-        "R2":     (5, 0.08),  # R2 trigger (some systems)
+        "leftx":  (0, 0.1),
+        "lefty":  (1, 0.1),
+        "rightx": (2, 0.1),
+        "righty": (3, 0.1),
+        "L2":     (4, 0.1),  # L2 trigger (some systems)
+        "R2":     (5, 0.1),  # R2 trigger (some systems)
     }
 
     def __init__(self):
+        self.bm = init_bitmask() #initialize bitmask client
         pygame.init()
         pygame.joystick.init()
         self.joystick = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.connect_joystick()
+        
 
     def connect_joystick(self):
         if pygame.joystick.get_count() > 0:
@@ -93,7 +96,47 @@ class PS4Kontroller:
         line = " | ".join(output_parts)
         print(f"\r{line:<100}", end='', flush=True)
 
-controller = PS4Kontroller()
+        # --- BITMASK OUTPUT ----
+        # Read axes
+        heave = -self.get_calibrated_axis(3)   # Right Y (inverted)
+        yaw = self.get_calibrated_axis(2)     # Right X
+        # manip is r2 axis minus l2 axis
+        r2 = (self.get_calibrated_axis(5) + 1.0) / 2.0  # Normalize 0 to 1
+        l2 = (self.get_calibrated_axis(4) + 1.0) / 2.0  # Normalize 0 to 1
+        manip = r2-l2
+
+        # This runs while button 9 is held down L1 to make 
+        # surge and sway controls toggleable to pitch and roll
+        if self.joystick.get_button(9):
+            pitch = -self.get_calibrated_axis(1)  # Left Y (inverted)
+            roll = self.get_calibrated_axis(0)    # Left X
+            surge = 0.0
+            sway = 0.0
+        else:
+            surge = -self.get_calibrated_axis(1)  # Right Y (inverted)
+            sway = self.get_calibrated_axis(0)    # Right X
+            pitch = 0.0
+            roll = 0.0
+        
+        # Send to ROV!
+        self.bm.set_from_axes(
+            surge=surge,
+            sway=sway,
+            yaw=yaw,
+            pitch=pitch,
+            heave=heave,
+            roll=roll,
+            light=0.0,
+            manip=0.0
+        )
+
+        #debug code:
+        #cmd = self.bm.get_command()
+        #print(f"\n  CMD: surge={cmd['surge']:+4d} sway={cmd['sway']:+4d} heave={cmd['heave']:+4d} "
+        #      f"yaw={cmd['yaw']:+4d} pitch={cmd['pitch']:+4d} roll={cmd['roll']:+4d} "
+        #      f"manip={cmd['manip']:3d} seq={cmd['sequence']}")
+
+controller = Controller()
 while True:
     controller.update()
     pygame.time.delay(100)
