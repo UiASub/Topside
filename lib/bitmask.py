@@ -3,7 +3,6 @@ import socket, struct, threading, time, zlib
 from dataclasses import dataclass, asdict
 
 NUCLEO_HOST = "192.168.1.100" # default NUCLEO IP
-#NUCLEO_HOST = "127.0.0.1" # for local testing
 NUCLEO_PORT = 12345
 DEFAULT_RATE_HZ = 20.0      # send frequency
 

@@ -9,8 +9,6 @@ class Controller:
         "lefty":  (1, 0.1),
         "rightx": (2, 0.1),
         "righty": (3, 0.1),
-        "L2":     (4, 0.1),  # L2 trigger (some systems)
-        "R2":     (5, 0.1),  # R2 trigger (some systems)
     }
 
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
@@ -115,8 +113,9 @@ class Controller:
         heave = -self.get_calibrated_axis(3)   # Right Y (inverted)
         yaw = self.get_calibrated_axis(2)      # Right X
         # manip is r2 axis minus l2 axis
-        r2 = self.get_calibrated_axis(5)
-        l2 = self.get_calibrated_axis(4)
+        # Triggers: convert from -1..1 to 0..1
+        r2 = (self.joystick.get_axis(5) + 1) / 2  # R2 trigger
+        l2 = (self.joystick.get_axis(4) + 1) / 2  # L2 trigger
         manip = r2 - l2
 
         # This runs while button 9 is held down L1 to make 

@@ -9,8 +9,7 @@ import atexit
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
 
 # Start background UDP sender (20 Hz)
-#app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host="192.168.1.100", port=12345)
-app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host="127.0.0.1", port=12345)
+app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host="192.168.1.100", port=12345)
 
 # Initialize and start controller handler (60 Hz)
 app.config["CONTROLLER"] = Controller(bitmask_client=app.config["BITMASK"], rate_hz=60.0)
