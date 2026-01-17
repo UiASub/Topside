@@ -233,4 +233,80 @@ body {
     .resource-gauge {
         width: 60px;
     }
+/* 9DOF Sensor Display - ROV Orientation */
+.sensor-orientation {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.orientation-item {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    background-color: #2d3238;
+    border-radius: 6px;
+    border-bottom: 3px solid #6c757d;
+}
+
+.orientation-item.status-ok {
+    border-bottom-color: #28a745;
+}
+
+.orientation-item.status-warn {
+    border-bottom-color: #ffc107;
+}
+
+.orientation-item.status-alert {
+    border-bottom-color: #dc3545;
+}
+
+.orientation-item.heading {
+    border-bottom-color: #0dcaf0;
+}
+
+.orientation-label {
+    display: block;
+    font-size: 0.7rem;
+    color: #adb5bd;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.orientation-value {
+    display: block;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #f8f9fa;
+}
+
+/* Angular Rates */
+.sensor-rates {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rate-item {
+    flex: 1;
+    text-align: center;
+    padding: 6px;
+    background-color: #1e2124;
+    border-radius: 4px;
+}
+
+.rate-label {
+    display: block;
+    font-size: 0.65rem;
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+.rate-value {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    color: #adb5bd;
 }

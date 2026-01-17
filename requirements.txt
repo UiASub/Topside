@@ -7,3 +7,5 @@ pipenv==2025.0.4
 platformdirs==4.3.6
 plotly==6.4.0
 pyserial==3.5
+pygame>=2.5
+
