@@ -144,9 +144,6 @@ body {
   height: 100%;
 }
 
-
-
-
 /* Modal custom styling */
 .modal-custom {
     background-color: #343a40;  /* Dark background */
@@ -249,4 +246,55 @@ body {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.85rem;
     color: #adb5bd;
+}
+
+/* Controller SVG Styles */
+#controller-svg {
+    fill: #000000;
+    stroke: #555555;
+    stroke-width: 1;
+}
+
+#controller-svg #layout {
+    fill: #000000;
+    stroke: #000000;
+    stroke-width: 1;
+}
+
+/* Button default state */
+#controller-svg circle,
+#controller-svg rect,
+#controller-svg path,
+#controller-svg polygon {
+    transition: fill 0.1s ease, filter 0.1s ease;
+    fill: #000000;
+}
+
+/* All buttons default to black */
+#controller-b0, #controller-b1, #controller-b2, #controller-b3,
+#controller-b4, #controller-b5, #controller-b6, #controller-b7,
+#controller-b8, #controller-b9,
+#controller-b12, #controller-b13, #controller-b14, #controller-b15 {
+    fill: #000000;
+}
+
+/* Joysticks default to black */
+#controller-b10, #controller-b11 {
+    fill: #000000;
+    transition: cx 0.05s ease, cy 0.05s ease, fill 0.1s ease;
+}
+
+#controller-b10-below, #controller-b11-below, #controller-b11-bottom {
+    fill: #000000;
+}
+
+/* Active/Pressed button state */
+#controller-svg .selected-button {
+    fill: #dc3545 !important;
+}
+
+/* Joystick active state (when moved) */
+#controller-b10.stick-active,
+#controller-b11.stick-active {
+    fill: #dc3545 !important;
 }

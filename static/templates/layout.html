@@ -88,12 +88,29 @@
   </div>
 </div>
 
-{% include '_config_modal.html' %}
+<div class="row g-4 mt-1">
+  <!-- Controller Status -->
+  <div class="col-12">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">Controller Status</h5>
+        <div class="d-flex justify-content-center align-items-center">
+          <div id="controller-svg-container" style="max-width: 500px; width: 100%;">
+            {% include '_controller.html' %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
+
+{% include '_config_modal.html' %}
 
 <script src="/static/js/thrusters.js"></script>
 <script src="/static/js/sensors.js"></script>
 <script src="/static/js/lights.js"></script>
 <script src="/static/js/battery.js"></script>
 <script src="/static/js/depth.js"></script>
+<script src="/static/js/controller.js"></script>
 {% endblock %}
