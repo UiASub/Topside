@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Resource Monitor{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Title -->
+  <div class="row mb-4">
+    <div class="col-12 text-center">
+      <h2 class="text-info mb-1">Nucleo Resource Monitor</h2>
+      <p class="text-muted" id="connection-status">Waiting for telemetry...</p>
+    </div>
+  </div>
+
+  <!-- Main Gauges Row -->
+  <div class="row justify-content-center mb-4">
+    <!-- CPU Gauge -->
+    <div class="col-lg-4 col-md-6 mb-4">
+      <div class="card custom-card h-100">
+        <div class="card-body text-center">
+          <h5 class="card-title">CPU Usage</h5>
+          <div class="gauge-container">
+            <svg class="gauge" viewBox="0 0 200 120">
+              <!-- Background arc -->
+              <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" />
+              <!-- Value arc -->
+              <path id="cpu-arc" class="gauge-fill gauge-fill-cpu" d="M 20 100 A 80 80 0 0 1 20 100" />
+              <!-- Tick marks -->
+              <g class="gauge-ticks">
+                <line x1="20" y1="100" x2="30" y2="100" />
+                <line x1="33" y1="60" x2="42" y2="66" />
+                <line x1="65" y1="32" x2="70" y2="42" />
+                <line x1="100" y1="20" x2="100" y2="32" />
+                <line x1="135" y1="32" x2="130" y2="42" />
+                <line x1="167" y1="60" x2="158" y2="66" />
+                <line x1="180" y1="100" x2="170" y2="100" />
+              </g>
+              <!-- Tick labels -->
+              <text x="20" y="115" class="gauge-label">0</text>
+              <text x="100" y="15" class="gauge-label">50</text>
+              <text x="180" y="115" class="gauge-label">100</text>
+              <!-- Center value -->
+              <text id="cpu-value" x="100" y="85" class="gauge-value">0%</text>
+              <text x="100" y="105" class="gauge-unit">CPU</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Memory Gauge -->
+    <div class="col-lg-4 col-md-6 mb-4">
+      <div class="card custom-card h-100">
+        <div class="card-body text-center">
+          <h5 class="card-title">Memory Usage</h5>
+          <div class="gauge-container">
+            <svg class="gauge" viewBox="0 0 200 120">
+              <!-- Background arc -->
+              <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" />
+              <!-- Value arc -->
+              <path id="mem-arc" class="gauge-fill gauge-fill-mem" d="M 20 100 A 80 80 0 0 1 20 100" />
+              <!-- Tick marks -->
+              <g class="gauge-ticks">
+                <line x1="20" y1="100" x2="30" y2="100" />
+                <line x1="33" y1="60" x2="42" y2="66" />
+                <line x1="65" y1="32" x2="70" y2="42" />
+                <line x1="100" y1="20" x2="100" y2="32" />
+                <line x1="135" y1="32" x2="130" y2="42" />
+                <line x1="167" y1="60" x2="158" y2="66" />
+                <line x1="180" y1="100" x2="170" y2="100" />
+              </g>
+              <!-- Tick labels -->
+              <text x="20" y="115" class="gauge-label">0</text>
+              <text x="100" y="15" class="gauge-label">50</text>
+              <text x="180" y="115" class="gauge-label">100</text>
+              <!-- Center value -->
+              <text id="mem-value" x="100" y="85" class="gauge-value">0%</text>
+              <text x="100" y="105" class="gauge-unit">RAM</text>
+            </svg>
+          </div>
+          <div class="memory-details mt-2">
+            <span class="badge bg-secondary" id="mem-free">Free: -- KB</span>
+            <span class="badge bg-secondary" id="mem-total">Total: -- KB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Cards Row -->
+  <div class="row justify-content-center mb-4">
+    <!-- Uptime Card -->
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card custom-card stat-card">
+        <div class="card-body text-center">
+          <div class="stat-icon">&#9201;</div>
+          <h6 class="card-subtitle text-muted">Uptime</h6>
+          <h3 class="stat-value" id="uptime">--:--</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- Threads Card -->
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card custom-card stat-card">
+        <div class="card-body text-center">
+          <div class="stat-icon">&#128200;</div>
+          <h6 class="card-subtitle text-muted">Active Threads</h6>
+          <h3 class="stat-value" id="thread-count">--</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- Packets Card -->
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card custom-card stat-card">
+        <div class="card-body text-center">
+          <div class="stat-icon">&#128229;</div>
+          <h6 class="card-subtitle text-muted">UDP Packets RX</h6>
+          <h3 class="stat-value" id="udp-rx">--</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- Errors Card -->
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card custom-card stat-card">
+        <div class="card-body text-center">
+          <div class="stat-icon">&#9888;</div>
+          <h6 class="card-subtitle text-muted">UDP Errors</h6>
+          <h3 class="stat-value" id="udp-errors">0</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sequence Info -->
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card custom-card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <small class="text-muted">Sequence #</small>
+              <span id="sequence" class="ms-2">--</span>
+            </div>
+            <div>
+              <small class="text-muted">Last Update</small>
+              <span id="last-update" class="ms-2">--</span>
+            </div>
+            <div>
+              <small class="text-muted">Packets Lost</small>
+              <span id="packets-lost" class="ms-2 badge bg-secondary">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/resource_monitor.js"></script>
+{% endblock %}

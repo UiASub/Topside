@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row g-4">
   <!-- Battery Card -->
-  <div class="col-md-3">
+  <div class="col-md-4">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Battery</h5>
@@ -16,7 +16,7 @@
   </div>
 
   <!-- Depth Card -->
-  <div class="col-md-3">
+  <div class="col-md-4">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Depth</h5>
@@ -27,7 +27,7 @@
   </div>
 
   <!-- Lights Card -->
-  <div class="col-md-6">
+  <div class="col-md-4">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Lights</h5>
@@ -70,6 +70,40 @@
   </div>
 </div>
 
+<!-- Resource Monitor Bar -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body py-2">
+        <div class="resource-bar">
+          <div class="resource-item">
+            <span class="resource-label">CPU</span>
+            <div class="resource-gauge">
+              <div id="cpu-bar" class="resource-fill"></div>
+            </div>
+            <span id="cpu-value" class="resource-value">0%</span>
+          </div>
+          <div class="resource-item">
+            <span class="resource-label">RAM</span>
+            <div class="resource-gauge">
+              <div id="ram-bar" class="resource-fill"></div>
+            </div>
+            <span id="ram-value" class="resource-value">0%</span>
+          </div>
+          <div class="resource-item">
+            <span class="resource-label">Uptime</span>
+            <span id="uptime-value" class="resource-value-text">--:--</span>
+          </div>
+          <div class="resource-item">
+            <span class="resource-label">Threads</span>
+            <span id="thread-value" class="resource-value-text">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-4 mt-1">
   <!-- Video Feed -->
   <div class="col-12">
@@ -93,4 +127,5 @@
 <script src="/static/js/lights.js"></script>
 <script src="/static/js/battery.js"></script>
 <script src="/static/js/depth.js"></script>
+<script src="/static/js/gauges.js"></script>
 {% endblock %}

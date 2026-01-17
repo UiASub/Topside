@@ -172,3 +172,65 @@ body {
 .btn-close.modal-close-btn {
     filter: invert(1);  /* Makes the close icon light */
 }
+
+/* ==========================================
+   Resource Monitor Bar Styles
+   ========================================== */
+
+.resource-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.resource-label {
+    color: #6c757d;
+    font-size: 0.85rem;
+    min-width: 50px;
+}
+
+.resource-gauge {
+    width: 100px;
+    height: 8px;
+    background-color: #2d3748;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.resource-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #28a745;
+    border-radius: 4px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.resource-value {
+    color: #0dcaf0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    min-width: 40px;
+}
+
+.resource-value-text {
+    color: #ffffff;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .resource-bar {
+        gap: 12px;
+    }
+
+    .resource-gauge {
+        width: 60px;
+    }
+}
