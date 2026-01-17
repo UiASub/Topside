@@ -92,3 +92,11 @@ def register_routes(app):
     def get_rov_status():
         bm = current_app.config["BITMASK"]
         return jsonify({"ok": True, "command": bm.get_command()})
+
+    @app.route("/api/9dof/status", methods=["GET"])
+    def get_ninedof_status():
+        """API route for 9DOF receiver statistics."""
+        ninedof = current_app.config.get("NINEDOF")
+        if ninedof:
+            return jsonify({"ok": True, "stats": ninedof.get_stats()})
+        return jsonify({"ok": False, "error": "9DOF receiver not running"})
