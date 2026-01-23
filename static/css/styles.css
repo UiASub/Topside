@@ -233,6 +233,7 @@ body {
     .resource-gauge {
         width: 60px;
     }
+}
 /* 9DOF Sensor Display - ROV Orientation */
 .sensor-orientation {
     display: flex;
@@ -309,4 +310,50 @@ body {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.85rem;
     color: #adb5bd;
+}
+
+/* ==========================================
+   Resource Monitor SVG Gauges
+   ========================================== */
+
+.resource-gauge-svg {
+    width: 100%;
+    max-width: 150px;
+    height: auto;
+}
+
+.stat-box {
+    background-color: #2d3238;
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0dcaf0;
+}
+
+@media (max-width: 768px) {
+    .resource-gauge-svg {
+        max-width: 120px;
+    }
+
+    .stat-box {
+        padding: 8px 10px;
+    }
+
+    .stat-value {
+        font-size: 0.9rem;
+    }
 }

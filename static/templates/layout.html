@@ -73,33 +73,83 @@
   </div>
 </div>
 
-<!-- Resource Monitor Bar -->
+<!-- Resource Monitor -->
 <div class="row g-4 mt-1">
   <div class="col-12">
     <div class="card custom-card">
-      <div class="card-body py-2">
-        <div class="resource-bar">
-          <div class="resource-item">
-            <span class="resource-label">CPU</span>
-            <div class="resource-gauge">
-              <div id="cpu-bar" class="resource-fill"></div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Resource Monitor</h5>
+          <small id="connection-status" class="text-muted">Waiting for telemetry...</small>
+        </div>
+
+        <div class="row">
+          <!-- CPU Gauge -->
+          <div class="col-md-3 col-6 text-center">
+            <svg viewBox="0 0 200 120" class="resource-gauge-svg">
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#2d3748" stroke-width="12" stroke-linecap="round"/>
+              <path id="cpu-arc" d="M 20 100 A 80 80 0 0 1 20 100" fill="none" stroke="#28a745" stroke-width="12" stroke-linecap="round"/>
+              <text x="100" y="85" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold" id="cpu-value">0%</text>
+              <text x="100" y="110" text-anchor="middle" fill="#6c757d" font-size="14">CPU</text>
+            </svg>
+          </div>
+
+          <!-- Memory Gauge -->
+          <div class="col-md-3 col-6 text-center">
+            <svg viewBox="0 0 200 120" class="resource-gauge-svg">
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#2d3748" stroke-width="12" stroke-linecap="round"/>
+              <path id="mem-arc" d="M 20 100 A 80 80 0 0 1 20 100" fill="none" stroke="#28a745" stroke-width="12" stroke-linecap="round"/>
+              <text x="100" y="85" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold" id="mem-value">0%</text>
+              <text x="100" y="110" text-anchor="middle" fill="#6c757d" font-size="14">Memory</text>
+            </svg>
+            <div class="small text-muted">
+              <span id="mem-free">Free: -- KB</span> / <span id="mem-total">Total: -- KB</span>
             </div>
-            <span id="cpu-value" class="resource-value">0%</span>
           </div>
-          <div class="resource-item">
-            <span class="resource-label">RAM</span>
-            <div class="resource-gauge">
-              <div id="ram-bar" class="resource-fill"></div>
+
+          <!-- Stats -->
+          <div class="col-md-6">
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">Uptime</div>
+                  <div class="stat-value" id="uptime">--:--</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">Threads</div>
+                  <div class="stat-value" id="thread-count">--</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">UDP Received</div>
+                  <div class="stat-value" id="udp-rx">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">UDP Errors</div>
+                  <div class="stat-value" id="udp-errors">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">Sequence</div>
+                  <div class="stat-value" id="sequence">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="stat-label">Packets Lost</div>
+                  <div class="stat-value" id="packets-lost">0</div>
+                </div>
+              </div>
             </div>
-            <span id="ram-value" class="resource-value">0%</span>
-          </div>
-          <div class="resource-item">
-            <span class="resource-label">Uptime</span>
-            <span id="uptime-value" class="resource-value-text">--:--</span>
-          </div>
-          <div class="resource-item">
-            <span class="resource-label">Threads</span>
-            <span id="thread-value" class="resource-value-text">--</span>
+            <div class="mt-2 small text-muted">
+              Last update: <span id="last-update">--:--:--</span>
+            </div>
           </div>
         </div>
       </div>
@@ -130,5 +180,5 @@
 <script src="/static/js/lights.js"></script>
 <script src="/static/js/battery.js"></script>
 <script src="/static/js/depth.js"></script>
-<script src="/static/js/gauges.js"></script>
+<script src="/static/js/resource_monitor.js"></script>
 {% endblock %}

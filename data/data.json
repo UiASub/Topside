@@ -1,64 +1,30 @@
 {
-    "thrusters": {
-        "U_FWD_P": {
-            "power": 400,
-            "temp": 20
-        },
-        "U_FWD_S": {
-            "power": 420,
-            "temp": 21
-        },
-        "U_AFT_P": {
-            "power": 440,
-            "temp": 22
-        },
-        "U_AFT_S": {
-            "power": 460,
-            "temp": 23
-        },
-        "L_FWD_P": {
-            "power": 480,
-            "temp": 24
-        },
-        "L_FWD_S": {
-            "power": 500,
-            "temp": 25
-        },
-        "L_AFT_P": {
-            "power": 400    ,
-            "temp": 26
-        },
-        "L_AFT_S": {
-            "power": 540,
-            "temp": 27
-        }
-    },
     "9dof": {
         "acceleration": {
-            "x": 0.02,
-            "y": -0.01,
-            "z": 9.81
+            "x": -0.0032,
+            "y": -0.0176,
+            "z": 0.9973
         },
         "gyroscope": {
-            "x": 0.01,
-            "y": 0.02,
-            "z": 0.00
+            "x": 0.1,
+            "y": 0.3,
+            "z": 0.18
         },
         "magnetometer": {
-            "x": 30.6,
-            "y": -22.3,
-            "z": 15.5
+            "x": 0,
+            "y": 0,
+            "z": 0
         }
     },
-    "lights": {
-        "Light1": 50,
-        "Light2": 50,
-        "Light3": 50,
-        "Light4": 50
-    },
-    "battery": 100,
-    "depth": {
-        "dpt": 123,
-        "dptSet": 124
+    "resources": {
+        "sequence": 330,
+        "uptime_ms": 992494,
+        "cpu_percent": 100,
+        "heap_used_percent": 0,
+        "heap_free_kb": 135,
+        "heap_total_kb": 135,
+        "thread_count": 12,
+        "udp_rx_count": 9034,
+        "udp_rx_errors": 0
     }
 }

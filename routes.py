@@ -37,11 +37,6 @@ def register_routes(app):
         """Render the camera2.html template."""
         return render_template("camera2.html")
 
-    @app.route("/resources")
-    def resources():
-        """Render the resource monitor page."""
-        return render_template("resource_monitor.html")
-
     @app.route("/video_feed")
     def video_feed():
         """Return a streaming MJPEG response from the camera."""

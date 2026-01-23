@@ -159,7 +159,7 @@ class Controller:
         """Blocking loop that polls controller at ~60 Hz."""
         while not self._stop.is_set():
             self.update()
-            pygame.time.delay(self.delay_ms)
+            time.sleep(self.delay_ms)
 
     def start(self):
         """Start the controller loop in a background thread."""

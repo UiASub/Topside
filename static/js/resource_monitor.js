@@ -146,7 +146,7 @@ function updateDisplay(data) {
 
     // Update memory details
     document.getElementById('mem-free').textContent = `Free: ${formatNumber(data.heap_free_kb)} KB`;
-    document.getElementById('mem-total').textContent = `Total: ${formatNumber(data.heap_total_kb)} KB`;
+    document.getElementById('mem-total').textContent = `Total: ${formatNumber(data.heap_free_kb)} KB`;
 
     // Update stats
     document.getElementById('uptime').textContent = formatUptime(data.uptime_ms);

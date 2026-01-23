@@ -4,6 +4,7 @@ from lib.controller import Controller
 from routes import register_routes
 from lib.bitmask import init_bitmask
 from lib.ninedof_receiver import init_ninedof_receiver
+from lib.resource_receiver import init_resource_receiver
 import atexit
 
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
@@ -18,6 +19,9 @@ app.config["CONTROLLER"].start()
 # Start background 9DOF sensor receiver (UDP port 5002)
 app.config["NINEDOF"] = init_ninedof_receiver(port=5002)
 
+# Start background resource monitor receiver (UDP port 12346)
+app.config["RESOURCE"] = init_resource_receiver(port=12346)
+
 register_routes(app)
 camera = init_camera()
 
@@ -28,6 +32,8 @@ def _shutdown():
     if bm: bm.stop()
     ninedof = app.config.get("NINEDOF")
     if ninedof: ninedof.stop()
+    resource = app.config.get("RESOURCE")
+    if resource: resource.stop()
 atexit.register(_shutdown)
 
 def run_dashboard_server():
