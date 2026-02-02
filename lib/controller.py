@@ -1,3 +1,10 @@
+import os
+
+# fix for error 'NSInternalInconsistencyException', reason: 'nextEventMatchingMask should only be called from the Main Thread on posix systems
+if os.name == 'posix':
+    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+    os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Run pygame without video/window on Linux/MacOS
+
 import pygame
 from lib.bitmask import BitmaskClient
 import threading
