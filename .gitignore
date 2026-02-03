@@ -243,3 +243,9 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
+
+# Other files to ignore
+.python-version
+pyproject.toml
+uv.lock
+.DS_Store
