@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Pilot View – ROV Dashboard{% endblock %}
+
+{% block content %}
+<div class="pilot-container">
+
+  <!-- ── Camera Feed (background) ──────────────────────────── -->
+  <div class="pilot-feed fit-cover" id="pilot-feed-shell">
+    <img id="pilot-camera" src="/rpi_video_feed" alt="ROV Camera Feed" draggable="false">
+    <div class="pilot-feed-vignette" aria-hidden="true"></div>
+    <div class="pilot-feed-status" id="pilot-feed-status">
+      <span class="pilot-feed-dot" id="pilot-feed-dot"></span>
+      <span id="pilot-feed-state">CONNECTING…</span>
+      <button type="button" id="pilot-reconnect" class="pilot-feed-btn">Reconnect</button>
+      <button type="button" id="pilot-fit" class="pilot-feed-btn">Fit</button>
+    </div>
+  </div>
+
+  <!-- ── HUD Overlay ───────────────────────────────────────── -->
+  <div class="hud-overlay">
+
+    <!-- TOP BAR ------------------------------------------------->
+    <div class="hud-top">
+      <!-- Depth -->
+      <div class="hud-panel hud-depth">
+        <span class="hud-label">DEPTH</span>
+        <div class="hud-big-value">
+          <span id="hud-depth">--.-</span><span class="hud-unit">m</span>
+        </div>
+        <div class="hud-sub">
+          TGT <span id="hud-depth-target">--.-</span>m
+        </div>
+      </div>
+
+      <!-- Heading / Compass -->
+      <div class="hud-panel hud-heading">
+        <span class="hud-label">HEADING</span>
+        <div class="hud-compass">
+          <div class="compass-tick-strip" id="hud-compass-strip">
+            <!-- JS fills tick marks -->
+          </div>
+          <div class="compass-pointer">▼</div>
+        </div>
+        <div class="hud-big-value">
+          <span id="hud-heading">---</span><span class="hud-unit">°</span>
+        </div>
+      </div>
+
+      <!-- Battery -->
+      <div class="hud-panel hud-battery">
+        <span class="hud-label">BATTERY</span>
+        <div class="hud-battery-bar-outer">
+          <div id="hud-battery-fill" class="hud-battery-bar-inner" style="width: 0%"></div>
+        </div>
+        <div class="hud-big-value">
+          <span id="hud-battery">--</span><span class="hud-unit">%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEFT PANEL – Attitude ----------------------------------->
+    <div class="hud-left">
+      <div class="hud-panel">
+        <span class="hud-label">ATTITUDE</span>
+
+        <!-- Artificial horizon -->
+        <div class="hud-horizon-wrapper">
+          <svg id="hud-horizon" viewBox="0 0 120 120" class="hud-horizon-svg">
+            <!-- Sky / Ground -->
+            <defs>
+              <clipPath id="horizon-clip"><circle cx="60" cy="60" r="55"/></clipPath>
+            </defs>
+            <g clip-path="url(#horizon-clip)">
+              <rect id="horizon-sky"   x="-60" y="-120" width="240" height="180" fill="#1a3a5c"/>
+              <rect id="horizon-ground" x="-60" y="60"   width="240" height="180" fill="#5c3a1a"/>
+              <!-- Horizon line -->
+              <line id="horizon-line" x1="-60" y1="60" x2="180" y2="60" stroke="#00deff" stroke-width="1.5"/>
+            </g>
+            <!-- Fixed aircraft symbol -->
+            <line x1="20" y1="60" x2="48" y2="60" stroke="#fff" stroke-width="2.5"/>
+            <line x1="72" y1="60" x2="100" y2="60" stroke="#fff" stroke-width="2.5"/>
+            <circle cx="60" cy="60" r="4" stroke="#fff" stroke-width="2" fill="none"/>
+            <!-- Pitch ladder lines -->
+            <g id="horizon-pitch-group">
+              <line x1="40" y1="45" x2="80" y2="45" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+              <line x1="45" y1="50" x2="75" y2="50" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+              <line x1="45" y1="70" x2="75" y2="70" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+              <line x1="40" y1="75" x2="80" y2="75" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+            </g>
+            <!-- Roll arc -->
+            <path d="M 15,60 A 45,45 0 0,1 105,60" fill="none" stroke="rgba(0,222,255,0.3)" stroke-width="1"/>
+            <!-- Outer ring -->
+            <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(0,222,255,0.25)" stroke-width="1"/>
+          </svg>
+        </div>
+
+        <div class="hud-attitude-readouts">
+          <div class="hud-att-item">
+            <span class="hud-label-sm">ROLL</span>
+            <span class="hud-mono" id="hud-roll">+0.0°</span>
+          </div>
+          <div class="hud-att-item">
+            <span class="hud-label-sm">PITCH</span>
+            <span class="hud-mono" id="hud-pitch">+0.0°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL – Telemetry --------------------------------->
+    <div class="hud-right">
+      <div class="hud-panel">
+        <span class="hud-label">TELEMETRY</span>
+        <div class="hud-telem-grid">
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">GYRO X</span>
+            <span class="hud-mono" id="hud-gyro-x">0.0</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">GYRO Y</span>
+            <span class="hud-mono" id="hud-gyro-y">0.0</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">GYRO Z</span>
+            <span class="hud-mono" id="hud-gyro-z">0.0</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">ACCEL X</span>
+            <span class="hud-mono" id="hud-accel-x">0.0</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">ACCEL Y</span>
+            <span class="hud-mono" id="hud-accel-y">0.0</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">ACCEL Z</span>
+            <span class="hud-mono" id="hud-accel-z">0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-panel hud-panel-mt">
+        <span class="hud-label">LIGHTS</span>
+        <div class="hud-telem-item">
+          <span class="hud-label-sm">LEVEL</span>
+          <span class="hud-mono" id="hud-lights">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER – Crosshair -------------------------------------->
+    <div class="hud-crosshair">
+      <svg viewBox="0 0 100 100" width="70" height="70">
+        <circle cx="50" cy="50" r="22" stroke="rgba(0,222,255,0.35)" stroke-width="1" fill="none"/>
+        <circle cx="50" cy="50" r="2"  fill="rgba(0,222,255,0.6)"/>
+        <line x1="10" y1="50" x2="38" y2="50" stroke="rgba(0,222,255,0.5)" stroke-width="1.5"/>
+        <line x1="62" y1="50" x2="90" y2="50" stroke="rgba(0,222,255,0.5)" stroke-width="1.5"/>
+        <line x1="50" y1="10" x2="50" y2="38" stroke="rgba(0,222,255,0.5)" stroke-width="1.5"/>
+        <line x1="50" y1="62" x2="50" y2="90" stroke="rgba(0,222,255,0.5)" stroke-width="1.5"/>
+        <!-- Corner brackets -->
+        <path d="M 28,28 L 28,22 L 34,22" stroke="rgba(0,222,255,0.3)" stroke-width="1" fill="none"/>
+        <path d="M 72,28 L 72,22 L 66,22" stroke="rgba(0,222,255,0.3)" stroke-width="1" fill="none"/>
+        <path d="M 28,72 L 28,78 L 34,78" stroke="rgba(0,222,255,0.3)" stroke-width="1" fill="none"/>
+        <path d="M 72,72 L 72,78 L 66,78" stroke="rgba(0,222,255,0.3)" stroke-width="1" fill="none"/>
+      </svg>
+    </div>
+
+    <!-- BOTTOM BAR – Thrusters & Status ------------------------->
+    <div class="hud-bottom">
+      <div class="hud-panel hud-thruster-strip">
+        <span class="hud-label">THRUSTERS</span>
+        <div class="hud-thruster-row" id="hud-thrusters">
+          <!-- JS populates -->
+        </div>
+      </div>
+
+      <div class="hud-panel hud-status-panel">
+        <div class="hud-status-row">
+          <span class="hud-status-dot" id="hud-rpi-dot"></span>
+          <span class="hud-label-sm">CAM</span>
+        </div>
+        <div class="hud-status-row">
+          <span class="hud-status-dot status-ok" id="hud-conn-dot"></span>
+          <span class="hud-label-sm">SYS</span>
+        </div>
+      </div>
+
+      <div class="hud-panel hud-rec-indicator">
+        <span class="hud-rec-dot"></span>
+        <span class="hud-label-sm" id="hud-mission-time">00:00:00</span>
+      </div>
+    </div>
+
+  </div><!-- /hud-overlay -->
+</div><!-- /pilot-container -->
+
+<link rel="stylesheet" href="/static/css/pilot.css">
+<script src="/static/js/pilot.js"></script>
+{% endblock %}

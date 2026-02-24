@@ -1,6 +1,6 @@
 from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
-from lib.camera import init_camera, generate_frames
+from lib.camera import init_camera, generate_frames, generate_rpi_frames
 
 # Initialize required components
 data_handler = JSONDataHandler()
@@ -23,6 +23,37 @@ def register_routes(app):
     def camera2():
         """Render the camera2.html template."""
         return render_template("camera2.html")
+
+    @app.route("/pilot")
+    def pilot():
+        """Render the pilot monitoring screen."""
+        return render_template("pilot.html")
+
+    @app.route("/rpi_video_feed")
+    def rpi_video_feed():
+        """Return a streaming MJPEG response from the RPi camera."""
+        rpi_cam = current_app.config.get("RPI_CAMERA")
+        if rpi_cam is None:
+            return "RPi camera not initialized", 503
+        resp = Response(
+            generate_rpi_frames(rpi_cam),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.route("/api/rpi_camera/status")
+    def rpi_camera_status():
+        """Return RPi camera connection status."""
+        rpi_cam = current_app.config.get("RPI_CAMERA")
+        if rpi_cam:
+            if hasattr(rpi_cam, "get_status"):
+                return jsonify(rpi_cam.get_status())
+            return jsonify({"connected": rpi_cam.is_connected})
+        return jsonify({"connected": False})
 
     @app.route("/video_feed")
     def video_feed():
