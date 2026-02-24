@@ -6,6 +6,19 @@ from lib.camera import init_camera, generate_frames, generate_rpi_frames
 data_handler = JSONDataHandler()
 camera = init_camera()
 
+# Default resource data (used when no telemetry received)
+DEFAULT_RESOURCES = {
+    "sequence": 0,
+    "uptime_ms": 0,
+    "cpu_percent": 0,
+    "heap_used_percent": 0,
+    "heap_free_kb": 0,
+    "heap_total_kb": 0,
+    "thread_count": 0,
+    "udp_rx_count": 0,
+    "udp_rx_errors": 0
+}
+
 
 def register_routes(app):
 
@@ -87,6 +100,14 @@ def register_routes(app):
     def get_depth():
         """API route for depth data."""
         return jsonify(data_handler.get_section("depth"))
+
+    @app.route("/api/resources", methods=["GET"])
+    def get_resources():
+        """API route for resource monitor data (CPU, memory, etc.)."""
+        resources = data_handler.get_section("resources")
+        if resources is None:
+            return jsonify(DEFAULT_RESOURCES)
+        return jsonify(resources)
 
     @app.route("/api/rov/command", methods=["POST"])
     def set_rov_command():

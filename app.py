@@ -4,6 +4,7 @@ from lib.controller import Controller
 from routes import register_routes
 from lib.bitmask import init_bitmask
 from lib.ninedof_receiver import init_ninedof_receiver
+from lib.resource_receiver import init_resource_receiver
 import atexit
 import os
 
@@ -35,6 +36,8 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
     out_height=rpi_cam_out_height,
     jpeg_quality=rpi_cam_jpeg_quality,
 )
+# Start background resource monitor receiver (UDP port 12346)
+app.config["RESOURCE"] = init_resource_receiver(port=12346)
 
 register_routes(app)
 camera = init_camera()
@@ -48,6 +51,8 @@ def _shutdown():
     if ninedof: ninedof.stop()
     rpi_cam = app.config.get("RPI_CAMERA")
     if rpi_cam: rpi_cam.stop()
+    resource = app.config.get("RESOURCE")
+    if resource: resource.stop()
 atexit.register(_shutdown)
 
 def run_dashboard_server():

@@ -170,6 +170,67 @@ body {
     filter: invert(1);  /* Makes the close icon light */
 }
 
+/* ==========================================
+   Resource Monitor Bar Styles
+   ========================================== */
+
+.resource-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.resource-label {
+    color: #6c757d;
+    font-size: 0.85rem;
+    min-width: 50px;
+}
+
+.resource-gauge {
+    width: 100px;
+    height: 8px;
+    background-color: #2d3748;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.resource-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #28a745;
+    border-radius: 4px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.resource-value {
+    color: #0dcaf0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    min-width: 40px;
+}
+
+.resource-value-text {
+    color: #ffffff;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .resource-bar {
+        gap: 12px;
+    }
+
+    .resource-gauge {
+        width: 60px;
+    }
+}
 /* 9DOF Sensor Display - ROV Orientation */
 .sensor-orientation {
     display: flex;
@@ -297,4 +358,48 @@ body {
 #controller-b10.stick-active,
 #controller-b11.stick-active {
     fill: #dc3545 !important;
+/* ==========================================
+   Resource Monitor SVG Gauges
+   ========================================== */
+
+.resource-gauge-svg {
+    width: 100%;
+    max-width: 150px;
+    height: auto;
+}
+
+.stat-box {
+    background-color: #2d3238;
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0dcaf0;
+}
+
+@media (max-width: 768px) {
+    .resource-gauge-svg {
+        max-width: 120px;
+    }
+
+    .stat-box {
+        padding: 8px 10px;
+    }
+
+    .stat-value {
+        font-size: 0.9rem;
+    }
 }
