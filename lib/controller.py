@@ -1,9 +1,5 @@
 import os
-
-# fix for error 'NSInternalInconsistencyException', reason: 'nextEventMatchingMask should only be called from the Main Thread on posix systems
-if os.name == 'posix':
-    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-    os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Run pygame without video/window on Linux/MacOS
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'  # Suppress pygame banner
 
 import pygame
 from lib.bitmask import BitmaskClient
@@ -21,7 +17,10 @@ class Controller:
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
-        pygame.init()
+        # Only init subsystems we need — full pygame.init() tries to create
+        # a display/video context which crashes silently on Windows terminals.
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.display.init()   # minimal display init needed for event system
         pygame.joystick.init()
         self.joystick = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes

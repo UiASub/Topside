@@ -89,6 +89,57 @@
 </div>
 
 <div class="row g-4 mt-1">
+  <!-- Manual Control (no controller) -->
+  <div class="col-12">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Manual Control</h5>
+          <div>
+            <span id="mc-status" class="badge bg-secondary me-2">Idle</span>
+            <button id="mc-reset" class="btn btn-sm btn-outline-warning">Reset All</button>
+          </div>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-3" id="mc-slider-surge">
+            <label class="form-label">Surge <span class="float-end text-info" id="mc-val-surge">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="surge">
+          </div>
+          <div class="col-md-3" id="mc-slider-sway">
+            <label class="form-label">Sway <span class="float-end text-info" id="mc-val-sway">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="sway">
+          </div>
+          <div class="col-md-3" id="mc-slider-heave">
+            <label class="form-label">Heave <span class="float-end text-info" id="mc-val-heave">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="heave">
+          </div>
+          <div class="col-md-3" id="mc-slider-yaw">
+            <label class="form-label">Yaw <span class="float-end text-info" id="mc-val-yaw">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="yaw">
+          </div>
+          <div class="col-md-3" id="mc-slider-pitch">
+            <label class="form-label">Pitch <span class="float-end text-info" id="mc-val-pitch">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="pitch">
+          </div>
+          <div class="col-md-3" id="mc-slider-roll">
+            <label class="form-label">Roll <span class="float-end text-info" id="mc-val-roll">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="roll">
+          </div>
+          <div class="col-md-3" id="mc-slider-light">
+            <label class="form-label">Light <span class="float-end text-info" id="mc-val-light">0.00</span></label>
+            <input type="range" class="form-range" min="0" max="100" value="0" data-axis="light">
+          </div>
+          <div class="col-md-3" id="mc-slider-manip">
+            <label class="form-label">Manipulator <span class="float-end text-info" id="mc-val-manip">0.00</span></label>
+            <input type="range" class="form-range" min="-100" max="100" value="0" data-axis="manip">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
   <!-- Controller Status -->
   <div class="col-12">
     <div class="card custom-card h-100">
@@ -113,4 +164,5 @@
 <script src="/static/js/battery.js"></script>
 <script src="/static/js/depth.js"></script>
 <script src="/static/js/controller.js"></script>
+<script src="/static/js/manual_control.js"></script>
 {% endblock %}
