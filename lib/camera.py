@@ -52,6 +52,7 @@ class RPiCameraReceiver:
         out_width=960,
         out_height=540,
         jpeg_quality=70,
+        flip_180=False,
     ):
         self.host = host
         self.port = int(port)
@@ -59,6 +60,7 @@ class RPiCameraReceiver:
         self.out_width = max(160, int(out_width))
         self.out_height = max(120, int(out_height))
         self.jpeg_quality = min(95, max(40, int(jpeg_quality)))
+        self.flip_180 = bool(flip_180)
         self.is_connected = False
         self.is_listening = False
         self.backend = "none"
@@ -119,6 +121,7 @@ class RPiCameraReceiver:
             "out_width": self.out_width,
             "out_height": self.out_height,
             "jpeg_quality": self.jpeg_quality,
+            "flip_180": self.flip_180,
             "last_frame_age_ms": age_ms,
             "last_error": self.last_error,
         }
@@ -163,11 +166,13 @@ class RPiCameraReceiver:
 
     def _run_opencv_gstreamer(self):
         self.backend = "opencv-gstreamer"
+        videoflip_stage = "! videoflip method=rotate-180 " if self.flip_180 else ""
         pipeline = (
             f"udpsrc address={self.host} port={self.port} "
             "caps=application/x-rtp,media=video,encoding-name=H264,payload=96,clock-rate=90000 "
             f"! rtpjitterbuffer latency={self.latency_ms} drop-on-latency=true "
             "! rtph264depay ! h264parse ! avdec_h264 ! videoconvert "
+            f"{videoflip_stage}"
             f"! videoscale ! video/x-raw,width={self.out_width},height={self.out_height} "
             "! appsink drop=1 max-buffers=1 sync=false"
         )
@@ -216,6 +221,12 @@ class RPiCameraReceiver:
             "!", "h264parse",
             "!", "decodebin",
             "!", "videoconvert",
+        ]
+
+        if self.flip_180:
+            cmd += ["!", "videoflip", "method=rotate-180"]
+
+        cmd += [
             "!", "videoscale",
             "!", f"video/x-raw,width={self.out_width},height={self.out_height}",
             "!", "queue", "max-size-buffers=1", "max-size-bytes=0", "max-size-time=0", "leaky=downstream",
@@ -330,6 +341,7 @@ def init_rpi_camera(
     out_width=960,
     out_height=540,
     jpeg_quality=70,
+    flip_180=False,
 ):
     receiver = RPiCameraReceiver(
         host=host,
@@ -338,6 +350,7 @@ def init_rpi_camera(
         out_width=out_width,
         out_height=out_height,
         jpeg_quality=jpeg_quality,
+        flip_180=flip_180,
     )
     receiver.start()
     return receiver

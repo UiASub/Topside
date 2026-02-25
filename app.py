@@ -28,6 +28,7 @@ rpi_cam_latency_ms = int(os.getenv("RPI_CAMERA_LATENCY_MS", "12"))
 rpi_cam_out_width = int(os.getenv("RPI_CAMERA_OUT_WIDTH", "960"))
 rpi_cam_out_height = int(os.getenv("RPI_CAMERA_OUT_HEIGHT", "540"))
 rpi_cam_jpeg_quality = int(os.getenv("RPI_CAMERA_JPEG_QUALITY", "70"))
+rpi_cam_flip_180 = os.getenv("RPI_CAMERA_FLIP_180", "false").strip().lower() in {"1", "true", "yes", "on"}
 app.config["RPI_CAMERA"] = init_rpi_camera(
     host=rpi_cam_bind,
     port=rpi_cam_port,
@@ -35,6 +36,7 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
     out_width=rpi_cam_out_width,
     out_height=rpi_cam_out_height,
     jpeg_quality=rpi_cam_jpeg_quality,
+    flip_180=rpi_cam_flip_180,
 )
 # Start background resource monitor receiver (UDP port 12346)
 app.config["RESOURCE"] = init_resource_receiver(port=12346)
