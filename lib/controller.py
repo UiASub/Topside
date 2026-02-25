@@ -8,6 +8,7 @@ if os.name == 'posix':
 import pygame
 from lib.bitmask import BitmaskClient
 import threading
+import time
 
 
 class Controller:
@@ -26,8 +27,8 @@ class Controller:
         self.joystick = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.light = 0  # Initial light value
-        self._prev_btn_14 = False  # For edge detection of light increase
-        self._prev_btn_13 = False  # For edge detection of light decrease
+        self._prev_dpad_up = False   # For edge detection of light increase (D-pad up)
+        self._prev_dpad_down = False  # For edge detection of light decrease (D-pad down)
         self._stop = threading.Event()
         self._thread = None
         self._reconnect_delay = 0  # Counter for reconnect attempts
@@ -138,17 +139,18 @@ class Controller:
             pitch = 0.0
             roll = 0.0
         
-        # Light control with edge detection (only triggers once per press)
-        btn_14 = self.joystick.get_button(14)
-        btn_13 = self.joystick.get_button(13)
-        
-        if btn_14 and not self._prev_btn_14:  # Just pressed
+        # Light control with edge detection via D-pad hat (up/down)
+        hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
+        dpad_up = hat[1] > 0
+        dpad_down = hat[1] < 0
+
+        if dpad_up and not self._prev_dpad_up:    # Just pressed
             self.light = min(1.0, self.light + 0.1)  # +10% per press
-        if btn_13 and not self._prev_btn_13:  # Just pressed
+        if dpad_down and not self._prev_dpad_down:  # Just pressed
             self.light = max(0, self.light - 0.1)    # -10% per press
-        
-        self._prev_btn_14 = btn_14
-        self._prev_btn_13 = btn_13
+
+        self._prev_dpad_up = dpad_up
+        self._prev_dpad_down = dpad_down
 
         # Send to ROV!
         self.bm.set_from_axes(
@@ -166,7 +168,7 @@ class Controller:
         """Blocking loop that polls controller at ~60 Hz."""
         while not self._stop.is_set():
             self.update()
-            time.sleep(self.delay_ms)
+            time.sleep(self.delay_ms / 1000)
 
     def start(self):
         """Start the controller loop in a background thread."""

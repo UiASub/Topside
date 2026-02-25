@@ -52,7 +52,7 @@ class RPiCameraReceiver:
         out_width=960,
         out_height=540,
         jpeg_quality=70,
-        flip_180=False,
+        flip_180=True,
     ):
         self.host = host
         self.port = int(port)
