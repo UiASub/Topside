@@ -42,6 +42,11 @@ def register_routes(app):
         """Render the pilot monitoring screen."""
         return render_template("pilot.html")
 
+    @app.route("/debug")
+    def debug():
+        """Render the debug slider page."""
+        return render_template("debug.html")
+
     @app.route("/rpi_video_feed")
     def rpi_video_feed():
         """Return a streaming MJPEG response from the RPi camera."""
@@ -152,3 +157,26 @@ def register_routes(app):
         if ninedof:
             return jsonify({"ok": True, "stats": ninedof.get_stats()})
         return jsonify({"ok": False, "error": "9DOF receiver not running"})
+
+    # --- Debug override endpoints ---
+    @app.route("/api/debug/override", methods=["POST"])
+    def debug_override():
+        """Set debug override axes. Expects JSON with surge,sway,heave,roll,pitch,yaw in [-1..1]."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        axes = {}
+        for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
+            if key in data:
+                axes[key] = max(-1.0, min(1.0, float(data[key])))
+        ctrl.set_debug_override(axes)
+        return jsonify({"ok": True, "override": axes})
+
+    @app.route("/api/debug/clear", methods=["POST"])
+    def debug_clear():
+        """Clear debug override; return control to physical controller."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if ctrl:
+            ctrl.clear_debug_override()
+        return jsonify({"ok": True})

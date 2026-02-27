@@ -32,6 +32,9 @@ class Controller:
         self._stop = threading.Event()
         self._thread = None
         self._reconnect_delay = 0  # Counter for reconnect attempts
+        # Debug override state
+        self._debug_override = None   # None = no override; dict of axes when active
+        self._debug_lock = threading.Lock()
         self._try_connect()
         
     def _try_connect(self):
@@ -82,7 +85,37 @@ class Controller:
                 manip=0
             )
 
+    # --- Debug override API ---
+    def set_debug_override(self, axes: dict):
+        """Enable debug override with the given axis values."""
+        with self._debug_lock:
+            self._debug_override = dict(axes)
+
+    def clear_debug_override(self):
+        """Disable debug override; return to physical controller."""
+        with self._debug_lock:
+            self._debug_override = None
+        self._reset_command()
+
     def update(self):
+        # --- Check for debug override first ---
+        with self._debug_lock:
+            override = self._debug_override.copy() if self._debug_override is not None else None
+        if override is not None:
+            # Debug sliders have priority – send their values directly
+            if self.bm:
+                self.bm.set_from_axes(
+                    surge=override.get("surge", 0),
+                    sway=override.get("sway", 0),
+                    heave=override.get("heave", 0),
+                    roll=override.get("roll", 0),
+                    pitch=override.get("pitch", 0),
+                    yaw=override.get("yaw", 0),
+                    light=self.light,
+                    manip=0,
+                )
+            return  # Skip all joystick processing
+
         # Process pygame events (needed for hotplug detection)
         try:
             for event in pygame.event.get():

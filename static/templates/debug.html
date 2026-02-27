@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Debug Controls{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/debug.css') }}">
+
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Debug Override Controls</h5>
+          <div>
+            <span id="debug-status" class="badge bg-secondary me-2">INACTIVE</span>
+            <button id="btn-enable" class="btn btn-sm btn-success me-1">Enable Override</button>
+            <button id="btn-disable" class="btn btn-sm btn-danger" disabled>Disable Override</button>
+          </div>
+        </div>
+        <p class="text-muted small mb-4">
+          When enabled, these sliders override the physical controller. All values range from -1.0 to 1.0.
+          Double-click any slider to reset it to 0.
+        </p>
+
+        <div class="row g-3" id="slider-container">
+          <!-- Surge -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Surge</label>
+                <span class="slider-value" id="val-surge">0.00</span>
+              </div>
+              <small class="text-light-muted">Forward / Backward</small>
+              <input type="range" class="form-range debug-slider" id="slider-surge"
+                     min="-100" max="100" value="0" data-axis="surge">
+            </div>
+          </div>
+
+          <!-- Sway -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Sway</label>
+                <span class="slider-value" id="val-sway">0.00</span>
+              </div>
+              <small class="text-light-muted">Left / Right</small>
+              <input type="range" class="form-range debug-slider" id="slider-sway"
+                     min="-100" max="100" value="0" data-axis="sway">
+            </div>
+          </div>
+
+          <!-- Heave -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Heave</label>
+                <span class="slider-value" id="val-heave">0.00</span>
+              </div>
+              <small class="text-light-muted">Up / Down</small>
+              <input type="range" class="form-range debug-slider" id="slider-heave"
+                     min="-100" max="100" value="0" data-axis="heave">
+            </div>
+          </div>
+
+          <!-- Roll -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Roll</label>
+                <span class="slider-value" id="val-roll">0.00</span>
+              </div>
+              <small class="text-light-muted">Rotate around forward axis</small>
+              <input type="range" class="form-range debug-slider" id="slider-roll"
+                     min="-100" max="100" value="0" data-axis="roll">
+            </div>
+          </div>
+
+          <!-- Pitch -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Pitch</label>
+                <span class="slider-value" id="val-pitch">0.00</span>
+              </div>
+              <small class="text-light-muted">Nose up / down</small>
+              <input type="range" class="form-range debug-slider" id="slider-pitch"
+                     min="-100" max="100" value="0" data-axis="pitch">
+            </div>
+          </div>
+
+          <!-- Yaw -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Yaw</label>
+                <span class="slider-value" id="val-yaw">0.00</span>
+              </div>
+              <small class="text-light-muted">Turn left / right</small>
+              <input type="range" class="form-range debug-slider" id="slider-yaw"
+                     min="-100" max="100" value="0" data-axis="yaw">
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset All button -->
+        <div class="text-center mt-4">
+          <button id="btn-reset-all" class="btn btn-outline-warning">Reset All Sliders to 0</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Live ROV Command readout -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title">Live ROV Command</h5>
+        <pre id="rov-status" class="text-light mb-0" style="font-size: 0.85rem;">Loading...</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/debug.js"></script>
+{% endblock %}
