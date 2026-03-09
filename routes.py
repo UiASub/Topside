@@ -180,3 +180,24 @@ def register_routes(app):
         if ctrl:
             ctrl.clear_debug_override()
         return jsonify({"ok": True})
+
+    # --- Gain endpoints ---
+    @app.route("/api/controller/gains", methods=["GET"])
+    def get_gains():
+        """Return current gain settings."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify({"ok": True, "gains": ctrl.get_gains()})
+
+    @app.route("/api/controller/gains", methods=["POST"])
+    def set_gains():
+        """Set gain values. JSON body: master (0-1), surge, sway, heave, roll, pitch, yaw (0-1)."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        master = data.get("master")
+        axis_gains = {k: float(data[k]) for k in ("surge", "sway", "heave", "roll", "pitch", "yaw") if k in data}
+        ctrl.set_gains(master=master, **axis_gains)
+        return jsonify({"ok": True, "gains": ctrl.get_gains()})

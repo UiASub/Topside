@@ -19,6 +19,8 @@ class Controller:
         "righty": (3, 0.1),
     }
 
+    DEADZONE = 0.05  # Axes within +/- this value are treated as 0
+
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
@@ -35,6 +37,13 @@ class Controller:
         # Debug override state
         self._debug_override = None   # None = no override; dict of axes when active
         self._debug_lock = threading.Lock()
+        # Gain settings (per-axis and master)
+        self._gain_lock = threading.Lock()
+        self._master_gain = 1.0
+        self._axis_gains = {
+            "surge": 1.0, "sway": 1.0, "heave": 1.0,
+            "roll": 1.0, "pitch": 1.0, "yaw": 1.0,
+        }
         self._try_connect()
         
     def _try_connect(self):
@@ -68,12 +77,36 @@ class Controller:
                     print(f"  Calibrating {name} (axis {axis_id}): offset {initial:.3f}")
 
     def get_calibrated_axis(self, axis_id):
-        """Get axis value with calibration offset applied."""
+        """Get axis value with calibration offset and deadzone applied."""
         raw = self.joystick.get_axis(axis_id)
         offset = self.axis_offsets.get(axis_id, 0)
         calibrated = raw - offset
         # Clamp to -1 to 1 range
-        return max(-1.0, min(1.0, calibrated))
+        calibrated = max(-1.0, min(1.0, calibrated))
+        # Apply deadzone
+        if abs(calibrated) < self.DEADZONE:
+            return 0.0
+        return calibrated
+
+    # --- Gain API ---
+    def set_gains(self, master=None, **axis_gains):
+        """Set master and/or per-axis gains. Values should be 0.0 – 1.0."""
+        with self._gain_lock:
+            if master is not None:
+                self._master_gain = max(0.0, min(1.0, float(master)))
+            for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
+                if key in axis_gains:
+                    self._axis_gains[key] = max(0.0, min(1.0, float(axis_gains[key])))
+
+    def get_gains(self):
+        """Return current gain settings."""
+        with self._gain_lock:
+            return {"master": self._master_gain, **self._axis_gains}
+
+    def _apply_gain(self, axis_name, value):
+        """Multiply a value by its per-axis gain and the master gain."""
+        with self._gain_lock:
+            return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
     
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
@@ -184,6 +217,14 @@ class Controller:
 
         self._prev_dpad_up = dpad_up
         self._prev_dpad_down = dpad_down
+
+        # Apply gain to each axis
+        surge = self._apply_gain("surge", surge)
+        sway   = self._apply_gain("sway",  sway)
+        heave  = self._apply_gain("heave", heave)
+        roll   = self._apply_gain("roll",  roll)
+        pitch  = self._apply_gain("pitch", pitch)
+        yaw    = self._apply_gain("yaw",   yaw)
 
         # Send to ROV!
         self.bm.set_from_axes(
