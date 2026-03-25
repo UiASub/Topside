@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}IMU Graphs{% endblock %}
+
+{% block content %}
+<style>
+  .graph-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+  }
+  .graph-card canvas {
+    width: 100% !important;
+    height: 220px !important;
+  }
+  .graph-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .axis-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .axis-input {
+    width: 60px;
+    padding: 2px 5px;
+    font-size: 0.75rem;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    text-align: center;
+  }
+  .axis-input::placeholder { color: #666; }
+  .axis-auto {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+  }
+  .graph-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .graph-help {
+    font-size: 0.75rem;
+    color: #888;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">IMU Graphs</h5>
+  <div class="graph-controls">
+    <label class="small text-light-muted mb-0">
+      Window:
+      <select id="time-window" class="form-select form-select-sm bg-dark text-light d-inline-block" style="width: auto;">
+        <option value="10">10 s</option>
+        <option value="30" selected>30 s</option>
+        <option value="60">60 s</option>
+        <option value="120">2 min</option>
+        <option value="300">5 min</option>
+      </select>
+    </label>
+    <button id="btn-pause" class="btn btn-sm btn-outline-warning">Pause</button>
+    <button id="btn-clear" class="btn btn-sm btn-outline-secondary">Clear</button>
+    <button id="btn-reset-zoom" class="btn btn-sm btn-outline-info">Reset Zoom (all)</button>
+    <button id="btn-export" class="btn btn-sm btn-outline-light">Export CSV</button>
+  </div>
+</div>
+<p class="graph-help mb-2">
+  Scroll to zoom time axis. Shift+scroll to zoom Y-axis. Click+drag to pan. Double-click to reset zoom. Set min/max to lock Y-axis. Hover for readout.
+</p>
+
+<div class="row g-3" id="graph-grid">
+  <div class="col-md-6" data-key="yaw">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Yaw</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-yaw"></canvas>
+    </div>
+  </div>
+  <div class="col-md-6" data-key="yr">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Yaw Rate</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg/s</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-yr"></canvas>
+    </div>
+  </div>
+  <div class="col-md-6" data-key="pitch">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Pitch</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-pitch"></canvas>
+    </div>
+  </div>
+  <div class="col-md-6" data-key="pr">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Pitch Rate</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg/s</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-pr"></canvas>
+    </div>
+  </div>
+  <div class="col-md-6" data-key="roll">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Roll</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-roll"></canvas>
+    </div>
+  </div>
+  <div class="col-md-6" data-key="rr">
+    <div class="graph-card">
+      <div class="graph-header">
+        <h6 class="text-light mb-0">Roll Rate</h6>
+        <div class="axis-inputs">
+          <input type="number" class="axis-input y-min" placeholder="min">
+          <span class="text-muted small">to</span>
+          <input type="number" class="axis-input y-max" placeholder="max">
+          <span class="text-muted small">deg/s</span>
+          <button class="btn btn-sm btn-outline-secondary axis-auto">Auto</button>
+        </div>
+      </div>
+      <canvas id="chart-rr"></canvas>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="/static/js/graphs.js"></script>
+{% endblock %}

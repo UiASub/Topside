@@ -48,6 +48,11 @@ def register_routes(app):
         """Render the debug slider page."""
         return render_template("debug.html")
 
+    @app.route("/graphs")
+    def graphs():
+        """Render the IMU graphs page."""
+        return render_template("graphs.html")
+
     @app.route("/rpi_video_feed")
     def rpi_video_feed():
         """Return a streaming MJPEG response from the RPi camera."""
