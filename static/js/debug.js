@@ -118,4 +118,183 @@
   // Poll ROV status every 500 ms
   pollStatus();
   setInterval(pollStatus, 500);
+
+  // --- PID Configuration ---
+  const PID_AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"];
+  const PID_GAINS = ["kp", "ki", "kd"];
+  const pidStatus = document.getElementById("pid-status");
+  const btnPidRequest = document.getElementById("btn-pid-request");
+  const btnPidSend = document.getElementById("btn-pid-send");
+
+  function setPidStatus(text, cls) {
+    pidStatus.textContent = text;
+    pidStatus.className = "badge me-2 " + cls;
+  }
+
+  function fillPidFields(gains) {
+    PID_AXES.forEach(function (axis) {
+      PID_GAINS.forEach(function (g) {
+        var el = document.getElementById("pid-" + axis + "-" + g);
+        if (el && gains[axis]) el.value = gains[axis][g];
+      });
+    });
+  }
+
+  function readPidFields() {
+    var gains = {};
+    PID_AXES.forEach(function (axis) {
+      gains[axis] = {};
+      PID_GAINS.forEach(function (g) {
+        var el = document.getElementById("pid-" + axis + "-" + g);
+        gains[axis][g] = el ? parseFloat(el.value) || 0 : 0;
+      });
+    });
+    return gains;
+  }
+
+  btnPidRequest.addEventListener("click", async function () {
+    setPidStatus("REQUESTING...", "bg-warning text-dark");
+    btnPidRequest.disabled = true;
+    try {
+      var res = await fetch("/api/pid/gains");
+      var data = await res.json();
+      if (data.ok) {
+        fillPidFields(data.gains);
+        setPidStatus("LOADED", "bg-success");
+      } else {
+        setPidStatus("NO RESPONSE", "bg-danger");
+      }
+    } catch (e) {
+      setPidStatus("ERROR", "bg-danger");
+      console.error("PID request failed:", e);
+    }
+    btnPidRequest.disabled = false;
+  });
+
+  btnPidSend.addEventListener("click", async function () {
+    setPidStatus("SENDING...", "bg-warning text-dark");
+    btnPidSend.disabled = true;
+    try {
+      var res = await fetch("/api/pid/gains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(readPidFields()),
+      });
+      var data = await res.json();
+      if (data.ok) {
+        fillPidFields(data.gains);
+        var label = data.attempts > 1
+          ? "CONFIRMED (retry " + data.attempts + "/3)"
+          : "CONFIRMED";
+        setPidStatus(label, "bg-success");
+      } else {
+        setPidStatus(data.error || "NO RESPONSE", "bg-danger");
+      }
+    } catch (e) {
+      setPidStatus("ERROR", "bg-danger");
+      console.error("PID send failed:", e);
+    }
+    btnPidSend.disabled = false;
+  });
+
+  // --- PID Config Save / Load ---
+  var pidConfigName = document.getElementById("pid-config-name");
+  var pidConfigSelect = document.getElementById("pid-config-select");
+  var btnPidSave = document.getElementById("btn-pid-save");
+  var btnPidLoad = document.getElementById("btn-pid-load");
+  var btnPidDelete = document.getElementById("btn-pid-delete");
+  var pidConfigStatus = document.getElementById("pid-config-status");
+
+  function setConfigStatus(text, cls) {
+    pidConfigStatus.textContent = text;
+    pidConfigStatus.className = "badge small " + cls;
+  }
+
+  async function refreshConfigList() {
+    try {
+      var res = await fetch("/api/pid/configs");
+      var data = await res.json();
+      var names = data.configs || [];
+      pidConfigSelect.innerHTML = '<option value="">-- select --</option>';
+      names.forEach(function (n) {
+        var opt = document.createElement("option");
+        opt.value = n;
+        opt.textContent = n;
+        pidConfigSelect.appendChild(opt);
+      });
+    } catch (e) {
+      console.error("Failed to list PID configs:", e);
+    }
+  }
+
+  btnPidSave.addEventListener("click", async function () {
+    var name = pidConfigName.value.trim();
+    if (!name) {
+      setConfigStatus("Enter a name", "bg-warning text-dark");
+      return;
+    }
+    try {
+      var res = await fetch("/api/pid/configs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, gains: readPidFields() }),
+      });
+      var data = await res.json();
+      if (data.ok) {
+        setConfigStatus("Saved", "bg-success");
+        refreshConfigList();
+      } else {
+        setConfigStatus(data.error || "Error", "bg-danger");
+      }
+    } catch (e) {
+      setConfigStatus("Error", "bg-danger");
+    }
+  });
+
+  btnPidLoad.addEventListener("click", async function () {
+    var name = pidConfigSelect.value;
+    if (!name) {
+      setConfigStatus("Select a config", "bg-warning text-dark");
+      return;
+    }
+    try {
+      var res = await fetch("/api/pid/configs/" + encodeURIComponent(name));
+      var data = await res.json();
+      if (data.ok) {
+        fillPidFields(data.gains);
+        pidConfigName.value = name;
+        setConfigStatus("Loaded", "bg-success");
+      } else {
+        setConfigStatus(data.error || "Not found", "bg-danger");
+      }
+    } catch (e) {
+      setConfigStatus("Error", "bg-danger");
+    }
+  });
+
+  btnPidDelete.addEventListener("click", async function () {
+    var name = pidConfigSelect.value;
+    if (!name) {
+      setConfigStatus("Select a config", "bg-warning text-dark");
+      return;
+    }
+    if (!confirm('Delete config "' + name + '"?')) return;
+    try {
+      var res = await fetch("/api/pid/configs/" + encodeURIComponent(name), {
+        method: "DELETE",
+      });
+      var data = await res.json();
+      if (data.ok) {
+        setConfigStatus("Deleted", "bg-success");
+        refreshConfigList();
+      } else {
+        setConfigStatus(data.error || "Error", "bg-danger");
+      }
+    } catch (e) {
+      setConfigStatus("Error", "bg-danger");
+    }
+  });
+
+  // Load config list on page load
+  refreshConfigList();
 })();

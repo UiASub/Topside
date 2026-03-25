@@ -17,14 +17,14 @@
         }
     },
     "resources": {
-        "sequence": 2199,
-        "uptime_ms": 2211155,
-        "cpu_percent": 58,
+        "sequence": 299,
+        "uptime_ms": 365986,
+        "cpu_percent": 69,
         "heap_used_percent": 1,
         "heap_free_kb": 378,
         "heap_total_kb": 384,
-        "thread_count": 12,
-        "udp_rx_count": 32990,
+        "thread_count": 13,
+        "udp_rx_count": 2466,
         "udp_rx_errors": 0
     }
 }

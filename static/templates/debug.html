@@ -111,6 +111,106 @@
   </div>
 </div>
 
+<!-- PID Configuration -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">PID Configuration (MCU)</h5>
+          <div>
+            <span id="pid-status" class="badge bg-secondary me-2">READY</span>
+            <button id="btn-pid-request" class="btn btn-sm btn-info me-1">Request Current</button>
+            <button id="btn-pid-send" class="btn btn-sm btn-success">Send to MCU</button>
+          </div>
+        </div>
+        <p class="text-muted small mb-3">
+          Set exact P, I, D gains for each axis. Use "Request Current" to load values from the MCU, edit them, then "Send to MCU".
+        </p>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-dark table-bordered pid-table mb-0">
+            <thead>
+              <tr>
+                <th>Axis</th>
+                <th>P (Proportional)</th>
+                <th>I (Integral)</th>
+                <th>D (Derivative)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="fw-bold">Surge</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Sway</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Heave</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Roll</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Pitch</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Yaw</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kd" value="0"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Save / Load PID Configs -->
+        <div class="mt-3 pt-3 border-top border-secondary">
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Config Name</label>
+              <input type="text" class="form-control form-control-sm" id="pid-config-name" placeholder="e.g. pool-test-1" style="width: 200px;">
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-save" class="btn btn-sm btn-outline-success">Save Config</button>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Load Config</label>
+              <select class="form-select form-select-sm" id="pid-config-select" style="width: 200px;">
+                <option value="">-- select --</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-load" class="btn btn-sm btn-outline-info">Load</button>
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-delete" class="btn btn-sm btn-outline-danger">Delete</button>
+            </div>
+            <div class="col-auto">
+              <span id="pid-config-status" class="badge bg-secondary small">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Live ROV Command readout -->
 <div class="row g-4 mt-1">
   <div class="col-12">
