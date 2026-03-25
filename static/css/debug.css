@@ -61,6 +61,33 @@
   color: #0dcaf0;
 }
 
+/* PID config table */
+.pid-table th {
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.pid-table td:first-child {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pid-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  min-width: 90px;
+}
+
+.pid-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #0dcaf0;
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(13, 202, 240, 0.25);
+}
+
 /* Status badges */
 #debug-status.active {
   animation: pulse 1.5s infinite;

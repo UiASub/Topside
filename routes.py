@@ -1,6 +1,25 @@
+import json
+import os
+import re
+
 from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
 from lib.camera import init_camera, generate_frames, generate_rpi_frames
+from lib.pid_config_client import send_pid_gains, request_pid_gains, AXES as PID_AXES
+
+PID_CONFIGS_FILE = os.path.join(os.path.dirname(__file__), "data", "pid_configs.json")
+
+
+def _load_pid_configs():
+    if os.path.exists(PID_CONFIGS_FILE):
+        with open(PID_CONFIGS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_pid_configs(configs):
+    with open(PID_CONFIGS_FILE, "w") as f:
+        json.dump(configs, f, indent=2)
 
 # Initialize required components
 data_handler = JSONDataHandler()
@@ -268,3 +287,71 @@ def register_routes(app):
         axis_gains = {k: float(data[k]) for k in ("surge", "sway", "heave", "roll", "pitch", "yaw") if k in data}
         ctrl.set_gains(master=master, **axis_gains)
         return jsonify({"ok": True, "gains": ctrl.get_gains()})
+
+    # --- PID config (MCU) endpoints ---
+    @app.route("/api/pid/gains", methods=["GET"])
+    def get_pid_gains():
+        """Request current PID gains from the MCU via UDP."""
+        gains = request_pid_gains(timeout=2.0)
+        if gains is None:
+            return jsonify({"ok": False, "error": "No response from MCU"}), 504
+        return jsonify({"ok": True, "gains": gains})
+
+    @app.route("/api/pid/gains", methods=["POST"])
+    def set_pid_gains():
+        """Send PID gains to the MCU via UDP. Expects JSON: {axis: {kp, ki, kd}, ...}."""
+        data = request.get_json(force=True, silent=True) or {}
+        gains = {}
+        for axis in PID_AXES:
+            if axis in data and isinstance(data[axis], dict):
+                gains[axis] = {
+                    "kp": float(data[axis].get("kp", 0.0)),
+                    "ki": float(data[axis].get("ki", 0.0)),
+                    "kd": float(data[axis].get("kd", 0.0)),
+                }
+            else:
+                gains[axis] = {"kp": 0.0, "ki": 0.0, "kd": 0.0}
+        confirmed, attempts = send_pid_gains(gains, timeout=1.0, max_retries=3)
+        if confirmed is None:
+            return jsonify({"ok": False, "error": "No response from MCU after %d attempts" % attempts}), 504
+        return jsonify({"ok": True, "gains": confirmed, "attempts": attempts})
+
+    # --- PID config save/load ---
+    @app.route("/api/pid/configs", methods=["GET"])
+    def list_pid_configs():
+        """List all saved PID configurations."""
+        configs = _load_pid_configs()
+        return jsonify({"ok": True, "configs": list(configs.keys())})
+
+    @app.route("/api/pid/configs", methods=["POST"])
+    def save_pid_config():
+        """Save current PID fields as a named configuration."""
+        data = request.get_json(force=True, silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name or not re.match(r'^[\w\s\-\.]+$', name):
+            return jsonify({"ok": False, "error": "Invalid config name"}), 400
+        gains = data.get("gains")
+        if not isinstance(gains, dict):
+            return jsonify({"ok": False, "error": "Missing gains data"}), 400
+        configs = _load_pid_configs()
+        configs[name] = gains
+        _save_pid_configs(configs)
+        return jsonify({"ok": True, "name": name})
+
+    @app.route("/api/pid/configs/<name>", methods=["GET"])
+    def load_pid_config(name):
+        """Load a saved PID configuration by name."""
+        configs = _load_pid_configs()
+        if name not in configs:
+            return jsonify({"ok": False, "error": "Config not found"}), 404
+        return jsonify({"ok": True, "name": name, "gains": configs[name]})
+
+    @app.route("/api/pid/configs/<name>", methods=["DELETE"])
+    def delete_pid_config(name):
+        """Delete a saved PID configuration."""
+        configs = _load_pid_configs()
+        if name not in configs:
+            return jsonify({"ok": False, "error": "Config not found"}), 404
+        del configs[name]
+        _save_pid_configs(configs)
+        return jsonify({"ok": True})
