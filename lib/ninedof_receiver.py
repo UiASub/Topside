@@ -153,6 +153,11 @@ class IMUReceiver:
         sensor_pr = imu.get("pr", 0.0)
         sensor_rr = imu.get("rr", 0.0)
 
+        # Linear acceleration (m/s^2)
+        accel_x = imu.get("ax", 0.0)
+        accel_y = imu.get("ay", 0.0)
+        accel_z = imu.get("az", 0.0)
+
         with self._lock:
             self._packet_count += 1
             self._last_recv_time = time.monotonic()
@@ -178,6 +183,9 @@ class IMUReceiver:
                 "yr": round(raw_yr, 2),
                 "pr": round(raw_pr, 2),
                 "rr": round(raw_rr, 2),
+                "ax": round(accel_x, 3),
+                "ay": round(accel_y, 3),
+                "az": round(accel_z, 3),
             }
 
         # Update data.json
@@ -190,6 +198,9 @@ class IMUReceiver:
                     "yr": round(raw_yr, 2),
                     "pr": round(raw_pr, 2),
                     "rr": round(raw_rr, 2),
+                    "ax": round(accel_x, 3),
+                    "ay": round(accel_y, 3),
+                    "az": round(accel_z, 3),
                 }
             })
         except Exception as e:
