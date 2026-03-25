@@ -9,21 +9,21 @@ UDP_PORT = 5002
 
 # Default: identity mapping (sensor yaw/pitch/roll = ROV yaw/pitch/roll)
 DEFAULT_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
 
 
-def _build_remap(axes_cfg):
+def _build_remap(axes_cfg, valid_keys=("yaw", "pitch", "roll")):
     """Build a remap dict from axis config.
 
-    Each ROV output (yaw/pitch/roll) maps to a sensor output with an optional
-    sign flip.  e.g. {"yaw": "-pitch", "pitch": "+yaw", "roll": "+roll"}
-    means ROV yaw reads from inverted sensor pitch, etc.
+    Each ROV output maps to a sensor output with an optional sign flip.
+    e.g. {"yaw": "-pitch"} means ROV yaw reads from inverted sensor pitch.
     """
     remap = {}
-    for key in ("yaw", "pitch", "roll"):
+    for key in valid_keys:
         val = axes_cfg.get(key, "+" + key)
         sign = -1.0 if val.startswith("-") else 1.0
         src = val.lstrip("+-")
-        if src not in ("yaw", "pitch", "roll"):
+        if src not in valid_keys:
             src = key
             sign = 1.0
         remap[key] = {"src": src, "sign": sign}
@@ -53,12 +53,19 @@ class IMUReceiver:
 
         # Axis remap (identity by default)
         self._remap = _build_remap(DEFAULT_AXES)
+        self._accel_remap = _build_remap(DEFAULT_ACCEL_AXES, ("x", "y", "z"))
 
     def set_axis_mapping(self, axes_cfg):
-        """Update axis mapping at runtime."""
+        """Update YPR axis mapping at runtime."""
         with self._lock:
             self._remap = _build_remap(axes_cfg)
         print(f"IMU axis mapping updated: {axes_cfg}")
+
+    def set_accel_mapping(self, accel_cfg):
+        """Update accelerometer axis mapping at runtime."""
+        with self._lock:
+            self._accel_remap = _build_remap(accel_cfg, ("x", "y", "z"))
+        print(f"Accel axis mapping updated: {accel_cfg}")
 
     def start(self):
         """Start the receiver thread."""
@@ -122,6 +129,16 @@ class IMUReceiver:
             sensor_vals[remap["roll"]["src"]] * remap["roll"]["sign"],
         )
 
+    def _apply_accel_remap(self, sensor_ax, sensor_ay, sensor_az):
+        """Remap sensor accelerometer axes to ROV frame."""
+        sensor_vals = {"x": sensor_ax, "y": sensor_ay, "z": sensor_az}
+        remap = self._accel_remap
+        return (
+            sensor_vals[remap["x"]["src"]] * remap["x"]["sign"],
+            sensor_vals[remap["y"]["src"]] * remap["y"]["sign"],
+            sensor_vals[remap["z"]["src"]] * remap["z"]["sign"],
+        )
+
     def _run(self):
         """Main receiver loop."""
         while not self._stop.is_set():
@@ -170,6 +187,11 @@ class IMUReceiver:
                 sensor_yr, sensor_pr, sensor_rr
             )
 
+            # Remap accelerometer axes to ROV frame
+            mapped_ax, mapped_ay, mapped_az = self._apply_accel_remap(
+                accel_x, accel_y, accel_z
+            )
+
             # Apply tare offset
             yaw = raw_yaw - self._tare_offset["yaw"]
             pitch = raw_pitch - self._tare_offset["pitch"]
@@ -183,9 +205,9 @@ class IMUReceiver:
                 "yr": round(raw_yr, 2),
                 "pr": round(raw_pr, 2),
                 "rr": round(raw_rr, 2),
-                "ax": round(accel_x, 3),
-                "ay": round(accel_y, 3),
-                "az": round(accel_z, 3),
+                "ax": round(mapped_ax, 3),
+                "ay": round(mapped_ay, 3),
+                "az": round(mapped_az, 3),
             }
 
         # Update data.json
@@ -198,9 +220,9 @@ class IMUReceiver:
                     "yr": round(raw_yr, 2),
                     "pr": round(raw_pr, 2),
                     "rr": round(raw_rr, 2),
-                    "ax": round(accel_x, 3),
-                    "ay": round(accel_y, 3),
-                    "az": round(accel_z, 3),
+                    "ax": round(mapped_ax, 3),
+                    "ay": round(mapped_ay, 3),
+                    "az": round(mapped_az, 3),
                 }
             })
         except Exception as e:

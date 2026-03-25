@@ -8,5 +8,10 @@
         "yaw": "+yaw",
         "pitch": "+pitch",
         "roll": "+roll"
+    },
+    "accel_axes": {
+        "x": "+x",
+        "y": "+y",
+        "z": "+z"
     }
 }
