@@ -131,29 +131,11 @@
     if (pitchG) pitchG.setAttribute("transform", transform);
   }
 
-  // ── Sensor calibration state (mirrored from sensors.js) ───────
+  // ── Sensor calibration state ──────────────────────────────────
   let calibrationOffset = { roll: 0, pitch: 0, yaw: 0 };
-  let integratedYaw = 0;
-  let lastYawTime = null;
-
-  function calcOrientation(accel) {
-    const roll  = Math.atan2(accel.y, accel.z) * (180 / Math.PI);
-    const pitch = Math.atan2(-accel.x, Math.sqrt(accel.y ** 2 + accel.z ** 2)) * (180 / Math.PI);
-    return { roll, pitch };
-  }
-
-  function updateYaw(gyroZ) {
-    const now = Date.now();
-    if (lastYawTime !== null) {
-      const dt = (now - lastYawTime) / 1000;
-      integratedYaw += gyroZ * dt;
-    }
-    lastYawTime = now;
-    return integratedYaw;
-  }
 
   function fmtAngle(v) {
-    return (v >= 0 ? "+" : "") + v.toFixed(1) + "°";
+    return (v >= 0 ? "+" : "") + v.toFixed(1) + "\u00B0";
   }
 
   // ── Data fetchers ─────────────────────────────────────────────
@@ -191,16 +173,11 @@
       const res = await fetch("/api/sensors");
       const d = await res.json();
 
-      const accel = d.accel || {};
-      const gyro  = d.gyro  || {};
-
-      // Orientation
-      const orient = calcOrientation(accel);
-      const yaw = updateYaw(gyro.z || 0);
+      // VN-100S provides fused yaw/pitch/roll directly
       const cal = {
-        roll:  orient.roll  - calibrationOffset.roll,
-        pitch: orient.pitch - calibrationOffset.pitch,
-        yaw:   yaw          - calibrationOffset.yaw,
+        roll:  (d.roll  || 0) - calibrationOffset.roll,
+        pitch: (d.pitch || 0) - calibrationOffset.pitch,
+        yaw:   (d.yaw   || 0) - calibrationOffset.yaw,
       };
 
       // Update readouts
@@ -215,14 +192,6 @@
       if (elHdg) elHdg.textContent = heading.toFixed(0).padStart(3, "0");
       updateCompass(heading);
       updateHorizon(cal.roll, cal.pitch);
-
-      // Gyro / Accel telemetry
-      setTelem("hud-gyro-x", gyro.x);
-      setTelem("hud-gyro-y", gyro.y);
-      setTelem("hud-gyro-z", gyro.z);
-      setTelem("hud-accel-x", accel.x);
-      setTelem("hud-accel-y", accel.y);
-      setTelem("hud-accel-z", accel.z);
     } catch (_) { /* silent */ }
   }
 

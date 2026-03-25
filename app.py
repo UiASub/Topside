@@ -3,8 +3,9 @@ from lib.camera import init_camera, init_rpi_camera
 from lib.controller import Controller
 from routes import register_routes
 from lib.bitmask import init_bitmask
-from lib.ninedof_receiver import init_ninedof_receiver
+from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
+from lib.json_data_handler import JSONDataHandler
 import atexit
 import os
 
@@ -17,8 +18,14 @@ app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host="192.168.1.100", port=12
 app.config["CONTROLLER"] = Controller(bitmask_client=app.config["BITMASK"], rate_hz=60.0)
 app.config["CONTROLLER"].start()
 
-# Start background 9DOF sensor receiver (UDP port 5002)
-app.config["NINEDOF"] = init_ninedof_receiver(port=5002)
+# Start background IMU receiver (UDP port 5002)
+app.config["IMU"] = init_imu_receiver(port=5002)
+
+# Load saved IMU axis mapping from config
+_config = JSONDataHandler(file_path="data/config.json")
+_saved_axes = _config.get_section("imu_axes")
+if _saved_axes:
+    app.config["IMU"].set_axis_mapping(_saved_axes)
 
 # Initialize RPi camera stream receiver.
 # The receiver listens locally (0.0.0.0) and accepts RTP/H264 from the RPi sender.
@@ -49,8 +56,8 @@ def _shutdown():
     if ctrl: ctrl.stop()
     bm = app.config.get("BITMASK")
     if bm: bm.stop()
-    ninedof = app.config.get("NINEDOF")
-    if ninedof: ninedof.stop()
+    imu = app.config.get("IMU")
+    if imu: imu.stop()
     rpi_cam = app.config.get("RPI_CAMERA")
     if rpi_cam: rpi_cam.stop()
     resource = app.config.get("RESOURCE")

@@ -5,7 +5,142 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/debug.css') }}">
 
+<!-- IMU Live Readout -->
 <div class="row g-4">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">IMU – VN-100S</h5>
+          <div>
+            <span id="imu-status" class="badge bg-secondary me-2">NO DATA</span>
+            <button id="btn-tare" class="btn btn-sm btn-outline-info me-1">Tare (Zero)</button>
+            <button id="btn-clear-tare" class="btn btn-sm btn-outline-secondary">Clear Tare</button>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">YAW</span>
+              <div class="imu-value" id="imu-yaw">--.-°</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">PITCH</span>
+              <div class="imu-value" id="imu-pitch">--.-°</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">ROLL</span>
+              <div class="imu-value" id="imu-roll">--.-°</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-2">
+          <div class="col-12">
+            <small class="text-light-muted">
+              Packets: <span id="imu-pkt-count">0</span> |
+              Age: <span id="imu-age">--</span> ms |
+              Tare: <span id="imu-tare-info">none</span>
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMU Axis Mapping -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Axis Remapping</h5>
+        <p class="text-muted small mb-3">
+          Remap the sensor output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Yaw reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-yaw">
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Pitch reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-pitch">
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Roll reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-roll">
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-axes" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="axes-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMU Mass Center Offset -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Offset from Mass Center</h5>
+        <p class="text-muted small mb-3">
+          Distance from the IMU sensor to the ROV center of mass (mm). Used for PID compensation.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">X (forward +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-x" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">Y (starboard +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-y" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">Z (down +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-z" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-offset" class="btn btn-sm btn-primary w-100">Save Offset</button>
+          </div>
+        </div>
+        <div id="offset-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Debug Override Controls -->
+<div class="row g-4 mt-1">
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">

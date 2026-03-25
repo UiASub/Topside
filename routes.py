@@ -4,6 +4,7 @@ from lib.camera import init_camera, generate_frames, generate_rpi_frames
 
 # Initialize required components
 data_handler = JSONDataHandler()
+config_handler = JSONDataHandler(file_path="data/config.json")
 camera = init_camera()
 
 # Default resource data (used when no telemetry received)
@@ -88,8 +89,8 @@ def register_routes(app):
 
     @app.route("/api/sensors", methods=["GET"])
     def get_sensors():
-        """API route for sensor data."""
-        return jsonify(data_handler.get_section("9dof"))
+        """API route for IMU sensor data (yaw/pitch/roll)."""
+        return jsonify(data_handler.get_section("imu"))
 
     @app.route("/api/lights", methods=["GET"])
     def get_lights():
@@ -150,13 +151,74 @@ def register_routes(app):
         bm = current_app.config["BITMASK"]
         return jsonify({"ok": True, "command": bm.get_command()})
 
-    @app.route("/api/9dof/status", methods=["GET"])
-    def get_ninedof_status():
-        """API route for 9DOF receiver statistics."""
-        ninedof = current_app.config.get("NINEDOF")
-        if ninedof:
-            return jsonify({"ok": True, "stats": ninedof.get_stats()})
-        return jsonify({"ok": False, "error": "9DOF receiver not running"})
+    @app.route("/api/imu/status", methods=["GET"])
+    def get_imu_status():
+        """API route for IMU receiver statistics."""
+        imu = current_app.config.get("IMU")
+        if imu:
+            return jsonify({"ok": True, "stats": imu.get_stats()})
+        return jsonify({"ok": False, "error": "IMU receiver not running"})
+
+    @app.route("/api/imu/tare", methods=["POST"])
+    def imu_tare():
+        """Set current IMU orientation as zero reference."""
+        imu = current_app.config.get("IMU")
+        if not imu:
+            return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
+        imu.tare()
+        return jsonify({"ok": True, "tare_offset": imu.get_stats()["tare_offset"]})
+
+    @app.route("/api/imu/tare", methods=["DELETE"])
+    def imu_clear_tare():
+        """Clear the tare offset."""
+        imu = current_app.config.get("IMU")
+        if not imu:
+            return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
+        imu.clear_tare()
+        return jsonify({"ok": True})
+
+    @app.route("/api/imu/offset", methods=["GET"])
+    def get_imu_offset():
+        """Get IMU mass center offset (X, Y, Z in mm)."""
+        offset = config_handler.get_section("imu_offset")
+        if not offset:
+            offset = {"x": 0.0, "y": 0.0, "z": 0.0}
+        return jsonify({"ok": True, "offset": offset})
+
+    @app.route("/api/imu/offset", methods=["POST"])
+    def set_imu_offset():
+        """Set IMU mass center offset. JSON: {x, y, z} in mm."""
+        data = request.get_json(force=True, silent=True) or {}
+        offset = config_handler.get_section("imu_offset") or {"x": 0.0, "y": 0.0, "z": 0.0}
+        for axis in ("x", "y", "z"):
+            if axis in data:
+                offset[axis] = round(float(data[axis]), 1)
+        config_handler.update_data({"imu_offset": offset})
+        return jsonify({"ok": True, "offset": offset})
+
+    @app.route("/api/imu/axes", methods=["GET"])
+    def get_imu_axes():
+        """Get IMU axis mapping. Each ROV axis maps to a sensor output with sign."""
+        axes = config_handler.get_section("imu_axes")
+        if not axes:
+            axes = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+        return jsonify({"ok": True, "axes": axes})
+
+    @app.route("/api/imu/axes", methods=["POST"])
+    def set_imu_axes():
+        """Set IMU axis mapping. JSON: {yaw, pitch, roll} each like '+yaw','-pitch', etc."""
+        data = request.get_json(force=True, silent=True) or {}
+        axes = config_handler.get_section("imu_axes") or {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+        valid = {"+yaw", "-yaw", "+pitch", "-pitch", "+roll", "-roll"}
+        for key in ("yaw", "pitch", "roll"):
+            if key in data and data[key] in valid:
+                axes[key] = data[key]
+        config_handler.update_data({"imu_axes": axes})
+        # Update the receiver's axis mapping
+        imu = current_app.config.get("IMU")
+        if imu:
+            imu.set_axis_mapping(axes)
+        return jsonify({"ok": True, "axes": axes})
 
     # --- Debug override endpoints ---
     @app.route("/api/debug/override", methods=["POST"])

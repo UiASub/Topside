@@ -1,4 +1,4 @@
-// debug.js – Debug slider page logic
+// debug.js – Debug slider page logic + IMU readout + offset controls
 (function () {
   const AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"];
   const SEND_INTERVAL_MS = 50; // 20 Hz updates while override is active
@@ -118,4 +118,185 @@
   // Poll ROV status every 500 ms
   pollStatus();
   setInterval(pollStatus, 500);
+
+  // IMU Live Readout
+  const imuStatus = document.getElementById("imu-status");
+  const imuYaw = document.getElementById("imu-yaw");
+  const imuPitch = document.getElementById("imu-pitch");
+  const imuRoll = document.getElementById("imu-roll");
+  const imuPktCount = document.getElementById("imu-pkt-count");
+  const imuAge = document.getElementById("imu-age");
+  const imuTareInfo = document.getElementById("imu-tare-info");
+
+  function fmtDeg(v) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return "--.-\u00B0";
+    return (n >= 0 ? "+" : "") + n.toFixed(1) + "\u00B0";
+  }
+
+  async function pollIMU() {
+    try {
+      const res = await fetch("/api/imu/status");
+      const data = await res.json();
+      if (!data.ok) return;
+
+      const s = data.stats;
+      const d = s.last_data;
+
+      imuYaw.textContent = fmtDeg(d.yaw);
+      imuPitch.textContent = fmtDeg(d.pitch);
+      imuRoll.textContent = fmtDeg(d.roll);
+      imuPktCount.textContent = s.packet_count;
+      imuAge.textContent = s.age_ms != null ? s.age_ms : "--";
+
+      // Color based on age
+      if (s.age_ms != null && s.age_ms < 500) {
+        imuStatus.textContent = "LIVE";
+        imuStatus.className = "badge bg-success me-2";
+      } else if (s.age_ms != null && s.age_ms < 2000) {
+        imuStatus.textContent = "STALE";
+        imuStatus.className = "badge bg-warning me-2";
+      } else {
+        imuStatus.textContent = "NO DATA";
+        imuStatus.className = "badge bg-secondary me-2";
+      }
+
+      // Tare info
+      const t = s.tare_offset;
+      if (t && (t.yaw !== 0 || t.pitch !== 0 || t.roll !== 0)) {
+        imuTareInfo.textContent =
+          "Y:" + t.yaw.toFixed(1) + " P:" + t.pitch.toFixed(1) + " R:" + t.roll.toFixed(1);
+      } else {
+        imuTareInfo.textContent = "none";
+      }
+    } catch (_) {
+      /* silent */
+    }
+  }
+
+  document.getElementById("btn-tare").addEventListener("click", async () => {
+    try {
+      await fetch("/api/imu/tare", { method: "POST" });
+    } catch (e) {
+      console.error("Tare failed:", e);
+    }
+  });
+
+  document.getElementById("btn-clear-tare").addEventListener("click", async () => {
+    try {
+      await fetch("/api/imu/tare", { method: "DELETE" });
+    } catch (e) {
+      console.error("Clear tare failed:", e);
+    }
+  });
+
+  pollIMU();
+  setInterval(pollIMU, 200);
+
+  // IMU Offset from Mass Center
+  const offsetX = document.getElementById("offset-x");
+  const offsetY = document.getElementById("offset-y");
+  const offsetZ = document.getElementById("offset-z");
+  const offsetFeedback = document.getElementById("offset-feedback");
+
+  // Load current offset on page load
+  async function loadOffset() {
+    try {
+      const res = await fetch("/api/imu/offset");
+      const data = await res.json();
+      if (data.ok && data.offset) {
+        offsetX.value = data.offset.x;
+        offsetY.value = data.offset.y;
+        offsetZ.value = data.offset.z;
+      }
+    } catch (_) {
+      /* silent */
+    }
+  }
+
+  document.getElementById("btn-save-offset").addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/imu/offset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          x: parseFloat(offsetX.value) || 0,
+          y: parseFloat(offsetY.value) || 0,
+          z: parseFloat(offsetZ.value) || 0,
+        }),
+      });
+      if (!res.ok) {
+        offsetFeedback.textContent = "Server error: " + res.status;
+        offsetFeedback.className = "small mt-2 text-danger";
+        return;
+      }
+      const data = await res.json();
+      if (data.ok) {
+        offsetFeedback.textContent = "Offset saved: X=" + data.offset.x + " Y=" + data.offset.y + " Z=" + data.offset.z;
+        offsetFeedback.className = "small mt-2 text-success";
+      } else {
+        offsetFeedback.textContent = "Failed to save offset";
+        offsetFeedback.className = "small mt-2 text-danger";
+      }
+    } catch (e) {
+      offsetFeedback.textContent = "Error: " + e.message;
+      offsetFeedback.className = "small mt-2 text-danger";
+    }
+  });
+
+  loadOffset();
+
+  // ============================
+  // IMU Axis Mapping
+  // ============================
+  const axesYaw = document.getElementById("axes-yaw");
+  const axesPitch = document.getElementById("axes-pitch");
+  const axesRoll = document.getElementById("axes-roll");
+  const axesFeedback = document.getElementById("axes-feedback");
+
+  async function loadAxes() {
+    try {
+      const res = await fetch("/api/imu/axes");
+      const data = await res.json();
+      if (data.ok && data.axes) {
+        axesYaw.value = data.axes.yaw;
+        axesPitch.value = data.axes.pitch;
+        axesRoll.value = data.axes.roll;
+      }
+    } catch (_) {
+      /* silent */
+    }
+  }
+
+  document.getElementById("btn-save-axes").addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/imu/axes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          yaw: axesYaw.value,
+          pitch: axesPitch.value,
+          roll: axesRoll.value,
+        }),
+      });
+      if (!res.ok) {
+        axesFeedback.textContent = "Server error: " + res.status;
+        axesFeedback.className = "small mt-2 text-danger";
+        return;
+      }
+      const data = await res.json();
+      if (data.ok) {
+        axesFeedback.textContent = "Orientation saved — takes effect immediately";
+        axesFeedback.className = "small mt-2 text-success";
+      } else {
+        axesFeedback.textContent = "Failed to save orientation";
+        axesFeedback.className = "small mt-2 text-danger";
+      }
+    } catch (e) {
+      axesFeedback.textContent = "Error: " + e.message;
+      axesFeedback.className = "small mt-2 text-danger";
+    }
+  });
+
+  loadAxes();
 })();
