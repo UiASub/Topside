@@ -5,6 +5,7 @@ import re
 from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
 from lib.camera import init_camera, generate_frames, generate_rpi_frames
+from lib.axis_config_sender import send_axis_config
 from lib.pid_config_client import send_pid_gains, request_pid_gains, AXES as PID_AXES
 
 PID_CONFIGS_FILE = os.path.join(os.path.dirname(__file__), "data", "pid_configs.json")
@@ -25,6 +26,19 @@ def _save_pid_configs(configs):
 data_handler = JSONDataHandler()
 config_handler = JSONDataHandler(file_path="data/config.json")
 camera = init_camera()
+
+# Defaults for axis configs
+_DEFAULT_IMU_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+_DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
+_DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
+
+
+def _send_full_axis_config():
+    """Read all axis settings from config and send to MCU in one packet."""
+    imu_axes = config_handler.get_section("imu_axes") or _DEFAULT_IMU_AXES
+    accel_axes = config_handler.get_section("accel_axes") or _DEFAULT_ACCEL_AXES
+    offset = config_handler.get_section("imu_offset") or _DEFAULT_OFFSET
+    send_axis_config(imu_axes=imu_axes, accel_axes=accel_axes, offset=offset)
 
 # Default resource data (used when no telemetry received)
 DEFAULT_RESOURCES = {
@@ -218,6 +232,8 @@ def register_routes(app):
             if axis in data:
                 offset[axis] = round(float(data[axis]), 1)
         config_handler.update_data({"imu_offset": offset})
+        # Send updated offset to microcontroller for centripetal compensation
+        _send_full_axis_config()
         return jsonify({"ok": True, "offset": offset})
 
     @app.route("/api/imu/axes", methods=["GET"])
@@ -238,11 +254,39 @@ def register_routes(app):
             if key in data and data[key] in valid:
                 axes[key] = data[key]
         config_handler.update_data({"imu_axes": axes})
-        # Update the receiver's axis mapping
+        # Update the receiver's axis mapping (topside display)
         imu = current_app.config.get("IMU")
         if imu:
             imu.set_axis_mapping(axes)
+        # Send full config to microcontroller so PID uses correct orientation
+        _send_full_axis_config()
         return jsonify({"ok": True, "axes": axes})
+
+    @app.route("/api/imu/accel_axes", methods=["GET"])
+    def get_accel_axes():
+        """Get accelerometer axis mapping. Each ROV axis maps to a sensor output with sign."""
+        axes = config_handler.get_section("accel_axes")
+        if not axes:
+            axes = {"x": "+x", "y": "+y", "z": "+z"}
+        return jsonify({"ok": True, "accel_axes": axes})
+
+    @app.route("/api/imu/accel_axes", methods=["POST"])
+    def set_accel_axes():
+        """Set accelerometer axis mapping. JSON: {x, y, z} each like '+x','-y', etc."""
+        data = request.get_json(force=True, silent=True) or {}
+        axes = config_handler.get_section("accel_axes") or {"x": "+x", "y": "+y", "z": "+z"}
+        valid = {"+x", "-x", "+y", "-y", "+z", "-z"}
+        for key in ("x", "y", "z"):
+            if key in data and data[key] in valid:
+                axes[key] = data[key]
+        config_handler.update_data({"accel_axes": axes})
+        # Update the receiver's accel mapping (topside display)
+        imu = current_app.config.get("IMU")
+        if imu:
+            imu.set_accel_mapping(axes)
+        # Send full config to microcontroller
+        _send_full_axis_config()
+        return jsonify({"ok": True, "accel_axes": axes})
 
     # --- Debug override endpoints ---
     @app.route("/api/debug/override", methods=["POST"])

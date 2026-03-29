@@ -1,21 +1,24 @@
 {
     "imu": {
-        "yaw": 112.68,
-        "pitch": -11.35,
-        "roll": -81.15,
-        "yr": -0.02,
-        "pr": 0.03,
-        "rr": 0.04
+        "yaw": -48.41,
+        "pitch": -2.03,
+        "roll": 77.24,
+        "yr": -0.01,
+        "pr": -0.05,
+        "rr": -0.01,
+        "ax": 0.003,
+        "ay": -0.001,
+        "az": -0.005
     },
     "resources": {
-        "sequence": 379,
-        "uptime_ms": 382849,
-        "cpu_percent": 43,
+        "sequence": 1982,
+        "uptime_ms": 1989536,
+        "cpu_percent": 48,
         "heap_used_percent": 1,
-        "heap_free_kb": 378,
+        "heap_free_kb": 377,
         "heap_total_kb": 384,
-        "thread_count": 12,
-        "udp_rx_count": 7376,
+        "thread_count": 13,
+        "udp_rx_count": 22191,
         "udp_rx_errors": 0
     }
 }

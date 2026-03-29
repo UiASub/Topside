@@ -4,6 +4,7 @@ from lib.controller import Controller
 from routes import register_routes
 from lib.bitmask import init_bitmask
 from lib.ninedof_receiver import init_imu_receiver
+from lib.axis_config_sender import send_axis_config
 from lib.resource_receiver import init_resource_receiver
 from lib.json_data_handler import JSONDataHandler
 import atexit
@@ -26,6 +27,19 @@ _config = JSONDataHandler(file_path="data/config.json")
 _saved_axes = _config.get_section("imu_axes")
 if _saved_axes:
     app.config["IMU"].set_axis_mapping(_saved_axes)
+
+# Load saved accel axis mapping from config
+_saved_accel_axes = _config.get_section("accel_axes")
+if _saved_accel_axes:
+    app.config["IMU"].set_accel_mapping(_saved_accel_axes)
+
+# Send full axis config (YPR remap, accel remap, offset) to microcontroller on startup
+_saved_offset = _config.get_section("imu_offset")
+send_axis_config(
+    imu_axes=_saved_axes,
+    accel_axes=_saved_accel_axes,
+    offset=_saved_offset,
+)
 
 # Initialize RPi camera stream receiver.
 # The receiver listens locally (0.0.0.0) and accepts RTP/H264 from the RPi sender.
