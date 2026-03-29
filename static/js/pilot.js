@@ -28,7 +28,7 @@
   }
 
   function cameraUrl() {
-    return `/rpi_video_feed?ts=${Date.now()}`;
+    return `/ip_video_feed?ts=${Date.now()}`;
   }
 
   function scheduleCameraReconnect(reason = "Reconnecting…") {
@@ -253,7 +253,7 @@
 
   async function fetchCameraStatus() {
     try {
-      const res = await fetch("/api/rpi_camera/status");
+      const res = await fetch("/api/ip_camera/status");
       const d = await res.json();
       const dot = document.getElementById("hud-rpi-dot");
       if (dot) {

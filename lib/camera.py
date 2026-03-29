@@ -371,3 +371,201 @@ def generate_rpi_frames(rpi_camera):
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+
+class IPCameraReceiver:
+    """Connects to an IP camera via RTSP and exposes latest JPEG frame.
+
+    Designed for SMTSEC SIP-K327GS (GK7205V300 DSP) and similar cameras
+    that serve H.264/H.265 over RTSP.
+    """
+
+    RECONNECT_DELAY = 3.0  # seconds between reconnect attempts
+
+    def __init__(
+        self,
+        url,
+        out_width=960,
+        out_height=540,
+        jpeg_quality=70,
+        flip_180=False,
+    ):
+        self.url = url
+        self.out_width = max(160, int(out_width))
+        self.out_height = max(120, int(out_height))
+        self.jpeg_quality = min(95, max(40, int(jpeg_quality)))
+        self.flip_180 = bool(flip_180)
+        self.is_connected = False
+        self.last_error = None
+
+        self._stop_event = threading.Event()
+        self._thread = None
+        self._cap = None
+
+        self._frame_lock = threading.Lock()
+        self._frame_cond = threading.Condition(self._frame_lock)
+        self._latest_jpeg = None
+        self._frame_seq = 0
+        self._last_frame_ts = 0.0
+        self._placeholder_jpeg = self._build_placeholder_jpeg()
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3.0)
+        self._release_cap()
+
+    def get_latest_jpeg(self):
+        with self._frame_lock:
+            return self._latest_jpeg
+
+    def get_latest_jpeg_and_seq(self):
+        with self._frame_lock:
+            return self._latest_jpeg, self._frame_seq
+
+    def wait_for_next_frame(self, last_seq, timeout=0.25):
+        with self._frame_cond:
+            if self._frame_seq == last_seq:
+                self._frame_cond.wait(timeout=timeout)
+            return self._latest_jpeg, self._frame_seq
+
+    def get_placeholder_jpeg(self):
+        return self._placeholder_jpeg
+
+    def get_status(self):
+        age_ms = None
+        if self._last_frame_ts > 0:
+            age_ms = int((time.monotonic() - self._last_frame_ts) * 1000)
+        return {
+            "connected": bool(self.is_connected),
+            "url": self.url,
+            "out_width": self.out_width,
+            "out_height": self.out_height,
+            "jpeg_quality": self.jpeg_quality,
+            "flip_180": self.flip_180,
+            "last_frame_age_ms": age_ms,
+            "last_error": self.last_error,
+        }
+
+    def _set_frame(self, frame):
+        ok, buf = cv2.imencode(
+            '.jpg', frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality],
+        )
+        if not ok:
+            return
+        with self._frame_cond:
+            self._latest_jpeg = buf.tobytes()
+            self._frame_seq += 1
+            self._frame_cond.notify_all()
+        self._last_frame_ts = time.monotonic()
+        self.is_connected = True
+
+    def _build_placeholder_jpeg(self):
+        blank = np.zeros((720, 1280, 3), dtype=np.uint8)
+        cv2.putText(
+            blank, "WAITING FOR IP CAMERA STREAM", (280, 360),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 222, 255), 2, cv2.LINE_AA,
+        )
+        ok, buf = cv2.imencode('.jpg', blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        return buf.tobytes() if ok else b""
+
+    def _open_stream(self):
+        """Try to open the RTSP stream. Returns True on success."""
+        # Force TCP transport for reliability over Ethernet
+        cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
+        if not cap.isOpened():
+            cap.release()
+            return False
+        self._cap = cap
+        return True
+
+    def _release_cap(self):
+        self.is_connected = False
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+
+    def _run_loop(self):
+        """Main thread: connect → read frames → reconnect on failure."""
+        while not self._stop_event.is_set():
+            print(f"[IP Camera] Connecting to {self.url} …")
+            if not self._open_stream():
+                self.last_error = f"Failed to open: {self.url}"
+                print(f"[IP Camera] ✗ {self.last_error}")
+                self.is_connected = False
+                if self._stop_event.wait(self.RECONNECT_DELAY):
+                    break
+                continue
+
+            print("[IP Camera] ✓ Stream connected")
+            self.last_error = None
+            had_frame = False
+
+            while not self._stop_event.is_set():
+                ok, frame = self._cap.read()
+                if not ok or frame is None:
+                    print("[IP Camera] Lost connection, will reconnect …")
+                    self.is_connected = False
+                    self._release_cap()
+                    break
+
+                if not had_frame:
+                    print("[IP Camera] ✓ Receiving frames")
+                    had_frame = True
+
+                if frame.shape[1] != self.out_width or frame.shape[0] != self.out_height:
+                    frame = cv2.resize(frame, (self.out_width, self.out_height))
+                if self.flip_180:
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+
+                self._set_frame(frame)
+
+            # Brief pause before reconnecting
+            if not self._stop_event.is_set():
+                self._stop_event.wait(self.RECONNECT_DELAY)
+
+        self._release_cap()
+
+
+def init_ip_camera(
+    url,
+    out_width=960,
+    out_height=540,
+    jpeg_quality=70,
+    flip_180=False,
+):
+    """Initialize and start an IP camera receiver (RTSP/HTTP)."""
+    receiver = IPCameraReceiver(
+        url=url,
+        out_width=out_width,
+        out_height=out_height,
+        jpeg_quality=jpeg_quality,
+        flip_180=flip_180,
+    )
+    receiver.start()
+    return receiver
+
+
+def generate_ip_camera_frames(ip_camera):
+    """Flask MJPEG generator for the IP camera receiver."""
+    last_seq = -1
+    while True:
+        frame, seq = ip_camera.wait_for_next_frame(last_seq, timeout=0.25)
+        if frame is None:
+            frame = ip_camera.get_placeholder_jpeg()
+        elif seq == last_seq:
+            continue
+        last_seq = seq
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')

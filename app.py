@@ -1,5 +1,5 @@
 from flask import Flask
-from lib.camera import init_camera, init_rpi_camera
+from lib.camera import init_camera, init_rpi_camera, init_ip_camera
 from lib.controller import Controller
 from routes import register_routes
 from lib.bitmask import init_bitmask
@@ -59,6 +59,20 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
     jpeg_quality=rpi_cam_jpeg_quality,
     flip_180=rpi_cam_flip_180,
 )
+
+# Initialize IP camera (SMTSEC SIP-K327GS) via RTSP
+ip_cam_url = os.getenv("IP_CAMERA_URL", "rtsp://192.168.1.168:554/stream1")
+ip_cam_out_width = int(os.getenv("IP_CAMERA_OUT_WIDTH", "960"))
+ip_cam_out_height = int(os.getenv("IP_CAMERA_OUT_HEIGHT", "540"))
+ip_cam_jpeg_quality = int(os.getenv("IP_CAMERA_JPEG_QUALITY", "70"))
+ip_cam_flip_180 = os.getenv("IP_CAMERA_FLIP_180", "false").strip().lower() in {"1", "true", "yes", "on"}
+app.config["IP_CAMERA"] = init_ip_camera(
+    url=ip_cam_url,
+    out_width=ip_cam_out_width,
+    out_height=ip_cam_out_height,
+    jpeg_quality=ip_cam_jpeg_quality,
+    flip_180=ip_cam_flip_180,
+)
 # Start background resource monitor receiver (UDP port 12346)
 app.config["RESOURCE"] = init_resource_receiver(port=12346)
 
@@ -74,6 +88,8 @@ def _shutdown():
     if imu: imu.stop()
     rpi_cam = app.config.get("RPI_CAMERA")
     if rpi_cam: rpi_cam.stop()
+    ip_cam = app.config.get("IP_CAMERA")
+    if ip_cam: ip_cam.stop()
     resource = app.config.get("RESOURCE")
     if resource: resource.stop()
 atexit.register(_shutdown)

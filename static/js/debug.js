@@ -360,6 +360,7 @@
   const pidStatus = document.getElementById("pid-status");
   const btnPidRequest = document.getElementById("btn-pid-request");
   const btnPidSend = document.getElementById("btn-pid-send");
+  const btnPidReset = document.getElementById("btn-pid-reset");
 
   function setPidStatus(text, cls) {
     pidStatus.textContent = text;
@@ -430,6 +431,34 @@
       console.error("PID send failed:", e);
     }
     btnPidSend.disabled = false;
+  });
+
+  btnPidReset.addEventListener("click", async function () {
+    var zeros = {};
+    PID_AXES.forEach(function (axis) {
+      zeros[axis] = { kp: 0, ki: 0, kd: 0 };
+    });
+    fillPidFields(zeros);
+    setPidStatus("SENDING...", "bg-warning text-dark");
+    btnPidReset.disabled = true;
+    try {
+      var res = await fetch("/api/pid/gains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(zeros),
+      });
+      var data = await res.json();
+      if (data.ok) {
+        fillPidFields(data.gains);
+        setPidStatus("RESET OK", "bg-success");
+      } else {
+        setPidStatus(data.error || "NO RESPONSE", "bg-danger");
+      }
+    } catch (e) {
+      setPidStatus("ERROR", "bg-danger");
+      console.error("PID reset failed:", e);
+    }
+    btnPidReset.disabled = false;
   });
 
   // --- PID Config Save / Load ---

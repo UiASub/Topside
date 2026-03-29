@@ -4,7 +4,7 @@ import re
 
 from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
-from lib.camera import init_camera, generate_frames, generate_rpi_frames
+from lib.camera import init_camera, generate_frames, generate_rpi_frames, generate_ip_camera_frames
 from lib.axis_config_sender import send_axis_config
 from lib.pid_config_client import send_pid_gains, request_pid_gains, AXES as PID_AXES
 
@@ -119,6 +119,30 @@ def register_routes(app):
             generate_frames(camera),
             mimetype="multipart/x-mixed-replace; boundary=frame",
         )
+
+    @app.route("/ip_video_feed")
+    def ip_video_feed():
+        """Return a streaming MJPEG response from the IP camera."""
+        ip_cam = current_app.config.get("IP_CAMERA")
+        if ip_cam is None:
+            return "IP camera not initialized", 503
+        resp = Response(
+            generate_ip_camera_frames(ip_cam),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.route("/api/ip_camera/status")
+    def ip_camera_status():
+        """Return IP camera connection status."""
+        ip_cam = current_app.config.get("IP_CAMERA")
+        if ip_cam:
+            return jsonify(ip_cam.get_status())
+        return jsonify({"connected": False})
 
     @app.route("/api/thrusters", methods=["GET"])
     def get_thrusters():
