@@ -98,6 +98,50 @@
   </div>
 </div>
 
+<!-- Accelerometer Axis Mapping -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Accelerometer Axis Remapping</h5>
+        <p class="text-muted small mb-3">
+          Remap the accelerometer output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV X reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-x">
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Y reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-y">
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Z reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-z">
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-accel" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="accel-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- IMU Mass Center Offset -->
 <div class="row g-4 mt-1">
   <div class="col-12">

@@ -300,6 +300,60 @@
 
   loadAxes();
 
+  // ============================
+  // Accelerometer Axis Mapping
+  // ============================
+  const accelX = document.getElementById("accel-x");
+  const accelY = document.getElementById("accel-y");
+  const accelZ = document.getElementById("accel-z");
+  const accelFeedback = document.getElementById("accel-feedback");
+
+  async function loadAccelAxes() {
+    try {
+      const res = await fetch("/api/imu/accel_axes");
+      const data = await res.json();
+      if (data.ok && data.accel_axes) {
+        accelX.value = data.accel_axes.x;
+        accelY.value = data.accel_axes.y;
+        accelZ.value = data.accel_axes.z;
+      }
+    } catch (_) {
+      /* silent */
+    }
+  }
+
+  document.getElementById("btn-save-accel").addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/imu/accel_axes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          x: accelX.value,
+          y: accelY.value,
+          z: accelZ.value,
+        }),
+      });
+      if (!res.ok) {
+        accelFeedback.textContent = "Server error: " + res.status;
+        accelFeedback.className = "small mt-2 text-danger";
+        return;
+      }
+      const data = await res.json();
+      if (data.ok) {
+        accelFeedback.textContent = "Accel mapping saved — takes effect immediately";
+        accelFeedback.className = "small mt-2 text-success";
+      } else {
+        accelFeedback.textContent = "Failed to save accel mapping";
+        accelFeedback.className = "small mt-2 text-danger";
+      }
+    } catch (e) {
+      accelFeedback.textContent = "Error: " + e.message;
+      accelFeedback.className = "small mt-2 text-danger";
+    }
+  });
+
+  loadAccelAxes();
+
   // --- PID Configuration ---
   const PID_AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"];
   const PID_GAINS = ["kp", "ki", "kd"];
