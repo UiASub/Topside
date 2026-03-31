@@ -1,0 +1,17 @@
+{
+    "imu_offset": {
+        "x": 120.0,
+        "y": 0.0,
+        "z": -50.0
+    },
+    "imu_axes": {
+        "yaw": "+yaw",
+        "pitch": "+pitch",
+        "roll": "+roll"
+    },
+    "accel_axes": {
+        "x": "+x",
+        "y": "+y",
+        "z": "+z"
+    }
+}

@@ -31,10 +31,22 @@
             <a class="nav-link" href="/">Home</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="/pilot"> Pilot</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="/Camera1">Camera 1</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="/Camera2">Camera 2</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/resources">Resources</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/graphs">Graphs</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/debug">Debug</a>
           </li>
           <li class="nav-item">
   <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#configModal">
@@ -48,17 +60,17 @@
   </nav>
 
   <!-- Header -->
-  <header class="header">
+  <header class="header" id="page-header">
     <h1>ROV Mission Dashboard</h1>
   </header>
 
   <!-- Main Content -->
-  <main class="container my-4">
+  <main class="container my-4" id="main-content">
     {% block content %}{% endblock %}
   </main>
 
   <!-- Footer -->
-  <footer class="footer">
+  <footer class="footer" id="page-footer">
     <p>&copy; 2025 UiASub.</p>
     <div class="social-links">
       <a href="https://uiasub.no/" target="_blank">Website</a>

@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}Debug Controls{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/debug.css') }}">
+
+<!-- IMU Live Readout -->
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">IMU – VN-100S</h5>
+          <div>
+            <span id="imu-status" class="badge bg-secondary me-2">NO DATA</span>
+            <button id="btn-tare" class="btn btn-sm btn-outline-info me-1">Tare (Zero)</button>
+            <button id="btn-clear-tare" class="btn btn-sm btn-outline-secondary">Clear Tare</button>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">YAW</span>
+              <div class="imu-value" id="imu-yaw">--.-°</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">PITCH</span>
+              <div class="imu-value" id="imu-pitch">--.-°</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="debug-slider-card text-center">
+              <span class="text-light-muted small">ROLL</span>
+              <div class="imu-value" id="imu-roll">--.-°</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-2">
+          <div class="col-12">
+            <small class="text-light-muted">
+              Packets: <span id="imu-pkt-count">0</span> |
+              Age: <span id="imu-age">--</span> ms |
+              Tare: <span id="imu-tare-info">none</span>
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMU Axis Mapping -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Axis Remapping</h5>
+        <p class="text-muted small mb-3">
+          Remap the sensor output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Yaw reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-yaw">
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Pitch reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-pitch">
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Roll reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-roll">
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-axes" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="axes-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Accelerometer Axis Mapping -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Accelerometer Axis Remapping</h5>
+        <p class="text-muted small mb-3">
+          Remap the accelerometer output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV X reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-x">
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Y reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-y">
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">ROV Z reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-z">
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-accel" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="accel-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMU Mass Center Offset -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Offset from Mass Center</h5>
+        <p class="text-muted small mb-3">
+          Distance from the IMU sensor to the ROV center of mass (mm). Used for PID compensation.
+        </p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">X (forward +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-x" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">Y (starboard +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-y" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted">Z (down +)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-z" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-offset" class="btn btn-sm btn-primary w-100">Save Offset</button>
+          </div>
+        </div>
+        <div id="offset-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Debug Override Controls -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Debug Override Controls</h5>
+          <div>
+            <span id="debug-status" class="badge bg-secondary me-2">INACTIVE</span>
+            <button id="btn-enable" class="btn btn-sm btn-success me-1">Enable Override</button>
+            <button id="btn-disable" class="btn btn-sm btn-danger" disabled>Disable Override</button>
+          </div>
+        </div>
+        <p class="text-muted small mb-4">
+          When enabled, these sliders override the physical controller. All values range from -1.0 to 1.0.
+          Double-click any slider to reset it to 0.
+        </p>
+
+        <div class="row g-3" id="slider-container">
+          <!-- Surge -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Surge</label>
+                <span class="slider-value" id="val-surge">0.00</span>
+              </div>
+              <small class="text-light-muted">Forward / Backward</small>
+              <input type="range" class="form-range debug-slider" id="slider-surge"
+                     min="-100" max="100" value="0" data-axis="surge">
+            </div>
+          </div>
+
+          <!-- Sway -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Sway</label>
+                <span class="slider-value" id="val-sway">0.00</span>
+              </div>
+              <small class="text-light-muted">Left / Right</small>
+              <input type="range" class="form-range debug-slider" id="slider-sway"
+                     min="-100" max="100" value="0" data-axis="sway">
+            </div>
+          </div>
+
+          <!-- Heave -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Heave</label>
+                <span class="slider-value" id="val-heave">0.00</span>
+              </div>
+              <small class="text-light-muted">Up / Down</small>
+              <input type="range" class="form-range debug-slider" id="slider-heave"
+                     min="-100" max="100" value="0" data-axis="heave">
+            </div>
+          </div>
+
+          <!-- Roll -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Roll</label>
+                <span class="slider-value" id="val-roll">0.00</span>
+              </div>
+              <small class="text-light-muted">Rotate around forward axis</small>
+              <input type="range" class="form-range debug-slider" id="slider-roll"
+                     min="-100" max="100" value="0" data-axis="roll">
+            </div>
+          </div>
+
+          <!-- Pitch -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Pitch</label>
+                <span class="slider-value" id="val-pitch">0.00</span>
+              </div>
+              <small class="text-light-muted">Nose up / down</small>
+              <input type="range" class="form-range debug-slider" id="slider-pitch"
+                     min="-100" max="100" value="0" data-axis="pitch">
+            </div>
+          </div>
+
+          <!-- Yaw -->
+          <div class="col-md-6 col-lg-4">
+            <div class="debug-slider-card">
+              <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label fw-bold mb-0">Yaw</label>
+                <span class="slider-value" id="val-yaw">0.00</span>
+              </div>
+              <small class="text-light-muted">Turn left / right</small>
+              <input type="range" class="form-range debug-slider" id="slider-yaw"
+                     min="-100" max="100" value="0" data-axis="yaw">
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset All button -->
+        <div class="text-center mt-4">
+          <button id="btn-reset-all" class="btn btn-outline-warning">Reset All Sliders to 0</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PID Configuration -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">PID Configuration (MCU)</h5>
+          <div>
+            <span id="pid-status" class="badge bg-secondary me-2">READY</span>
+            <button id="btn-pid-request" class="btn btn-sm btn-info me-1">Request Current</button>
+            <button id="btn-pid-send" class="btn btn-sm btn-success me-1">Send to MCU</button>
+            <button id="btn-pid-reset" class="btn btn-sm btn-outline-danger">Reset All to 0</button>
+          </div>
+        </div>
+        <p class="text-muted small mb-3">
+          Set exact P, I, D gains for each axis. Use "Request Current" to load values from the MCU, edit them, then "Send to MCU".
+        </p>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-dark table-bordered pid-table mb-0">
+            <thead>
+              <tr>
+                <th>Axis</th>
+                <th>P (Proportional)</th>
+                <th>I (Integral)</th>
+                <th>D (Derivative)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="fw-bold">Surge</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Sway</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Heave</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Roll</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Pitch</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kd" value="0"></td>
+              </tr>
+              <tr>
+                <td class="fw-bold">Yaw</td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kp" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-ki" value="0"></td>
+                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kd" value="0"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Save / Load PID Configs -->
+        <div class="mt-3 pt-3 border-top border-secondary">
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Config Name</label>
+              <input type="text" class="form-control form-control-sm" id="pid-config-name" placeholder="e.g. pool-test-1" style="width: 200px;">
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-save" class="btn btn-sm btn-outline-success">Save Config</button>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Load Config</label>
+              <select class="form-select form-select-sm" id="pid-config-select" style="width: 200px;">
+                <option value="">-- select --</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-load" class="btn btn-sm btn-outline-info">Load</button>
+            </div>
+            <div class="col-auto">
+              <button id="btn-pid-delete" class="btn btn-sm btn-outline-danger">Delete</button>
+            </div>
+            <div class="col-auto">
+              <span id="pid-config-status" class="badge bg-secondary small">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Live ROV Command readout -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title">Live ROV Command</h5>
+        <pre id="rov-status" class="text-light mb-0" style="font-size: 0.85rem;">Loading...</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/debug.js"></script>
+{% endblock %}

@@ -1,0 +1,99 @@
+/* Debug page styles */
+
+.text-light-muted {
+  color: #adb5bd !important;
+}
+
+.debug-slider-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: border-color 0.2s;
+}
+
+.debug-slider-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.slider-value {
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #0dcaf0;
+  min-width: 4rem;
+  text-align: right;
+}
+
+/* Colour the slider track based on value */
+.debug-slider {
+  cursor: pointer;
+}
+
+.debug-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.debug-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+/* Positive = green tint, negative = red tint, zero = neutral */
+.debug-slider.positive {
+  accent-color: #198754;
+}
+
+.debug-slider.negative {
+  accent-color: #dc3545;
+}
+
+.debug-slider.zero {
+  accent-color: #6c757d;
+}
+
+/* IMU readout */
+.imu-value {
+  font-family: 'Courier New', monospace;
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #0dcaf0;
+}
+
+/* PID config table */
+.pid-table th {
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.pid-table td:first-child {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pid-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  min-width: 90px;
+}
+
+.pid-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #0dcaf0;
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(13, 202, 240, 0.25);
+}
+
+/* Status badges */
+#debug-status.active {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

@@ -1,10 +1,57 @@
+import json
+import os
+import re
+
 from flask import render_template, jsonify, Response, request, current_app
 from lib.json_data_handler import JSONDataHandler
-from lib.camera import init_camera, generate_frames
+from lib.camera import init_camera, generate_frames, generate_rpi_frames, generate_ip_camera_frames
+from lib.axis_config_sender import send_axis_config
+from lib.pid_config_client import send_pid_gains, request_pid_gains, AXES as PID_AXES
+
+PID_CONFIGS_FILE = os.path.join(os.path.dirname(__file__), "data", "pid_configs.json")
+
+
+def _load_pid_configs():
+    if os.path.exists(PID_CONFIGS_FILE):
+        with open(PID_CONFIGS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_pid_configs(configs):
+    with open(PID_CONFIGS_FILE, "w") as f:
+        json.dump(configs, f, indent=2)
 
 # Initialize required components
 data_handler = JSONDataHandler()
+config_handler = JSONDataHandler(file_path="data/config.json")
 camera = init_camera()
+
+# Defaults for axis configs
+_DEFAULT_IMU_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+_DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
+_DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
+
+
+def _send_full_axis_config():
+    """Read all axis settings from config and send to MCU in one packet."""
+    imu_axes = config_handler.get_section("imu_axes") or _DEFAULT_IMU_AXES
+    accel_axes = config_handler.get_section("accel_axes") or _DEFAULT_ACCEL_AXES
+    offset = config_handler.get_section("imu_offset") or _DEFAULT_OFFSET
+    send_axis_config(imu_axes=imu_axes, accel_axes=accel_axes, offset=offset)
+
+# Default resource data (used when no telemetry received)
+DEFAULT_RESOURCES = {
+    "sequence": 0,
+    "uptime_ms": 0,
+    "cpu_percent": 0,
+    "heap_used_percent": 0,
+    "heap_free_kb": 0,
+    "heap_total_kb": 0,
+    "thread_count": 0,
+    "udp_rx_count": 0,
+    "udp_rx_errors": 0
+}
 
 
 def register_routes(app):
@@ -24,6 +71,47 @@ def register_routes(app):
         """Render the camera2.html template."""
         return render_template("camera2.html")
 
+    @app.route("/pilot")
+    def pilot():
+        """Render the pilot monitoring screen."""
+        return render_template("pilot.html")
+
+    @app.route("/debug")
+    def debug():
+        """Render the debug slider page."""
+        return render_template("debug.html")
+
+    @app.route("/graphs")
+    def graphs():
+        """Render the IMU graphs page."""
+        return render_template("graphs.html")
+
+    @app.route("/rpi_video_feed")
+    def rpi_video_feed():
+        """Return a streaming MJPEG response from the RPi camera."""
+        rpi_cam = current_app.config.get("RPI_CAMERA")
+        if rpi_cam is None:
+            return "RPi camera not initialized", 503
+        resp = Response(
+            generate_rpi_frames(rpi_cam),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.route("/api/rpi_camera/status")
+    def rpi_camera_status():
+        """Return RPi camera connection status."""
+        rpi_cam = current_app.config.get("RPI_CAMERA")
+        if rpi_cam:
+            if hasattr(rpi_cam, "get_status"):
+                return jsonify(rpi_cam.get_status())
+            return jsonify({"connected": rpi_cam.is_connected})
+        return jsonify({"connected": False})
+
     @app.route("/video_feed")
     def video_feed():
         """Return a streaming MJPEG response from the camera."""
@@ -32,6 +120,30 @@ def register_routes(app):
             mimetype="multipart/x-mixed-replace; boundary=frame",
         )
 
+    @app.route("/ip_video_feed")
+    def ip_video_feed():
+        """Return a streaming MJPEG response from the IP camera."""
+        ip_cam = current_app.config.get("IP_CAMERA")
+        if ip_cam is None:
+            return "IP camera not initialized", 503
+        resp = Response(
+            generate_ip_camera_frames(ip_cam),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.route("/api/ip_camera/status")
+    def ip_camera_status():
+        """Return IP camera connection status."""
+        ip_cam = current_app.config.get("IP_CAMERA")
+        if ip_cam:
+            return jsonify(ip_cam.get_status())
+        return jsonify({"connected": False})
+
     @app.route("/api/thrusters", methods=["GET"])
     def get_thrusters():
         """API route for thrusters data."""
@@ -39,8 +151,8 @@ def register_routes(app):
 
     @app.route("/api/sensors", methods=["GET"])
     def get_sensors():
-        """API route for sensor data."""
-        return jsonify(data_handler.get_section("9dof"))
+        """API route for IMU sensor data (yaw/pitch/roll)."""
+        return jsonify(data_handler.get_section("imu"))
 
     @app.route("/api/lights", methods=["GET"])
     def get_lights():
@@ -56,6 +168,14 @@ def register_routes(app):
     def get_depth():
         """API route for depth data."""
         return jsonify(data_handler.get_section("depth"))
+
+    @app.route("/api/resources", methods=["GET"])
+    def get_resources():
+        """API route for resource monitor data (CPU, memory, etc.)."""
+        resources = data_handler.get_section("resources")
+        if resources is None:
+            return jsonify(DEFAULT_RESOURCES)
+        return jsonify(resources)
 
     @app.route("/api/rov/command", methods=["POST"])
     def set_rov_command():
@@ -93,10 +213,213 @@ def register_routes(app):
         bm = current_app.config["BITMASK"]
         return jsonify({"ok": True, "command": bm.get_command()})
 
-    @app.route("/api/9dof/status", methods=["GET"])
-    def get_ninedof_status():
-        """API route for 9DOF receiver statistics."""
-        ninedof = current_app.config.get("NINEDOF")
-        if ninedof:
-            return jsonify({"ok": True, "stats": ninedof.get_stats()})
-        return jsonify({"ok": False, "error": "9DOF receiver not running"})
+    @app.route("/api/imu/status", methods=["GET"])
+    def get_imu_status():
+        """API route for IMU receiver statistics."""
+        imu = current_app.config.get("IMU")
+        if imu:
+            return jsonify({"ok": True, "stats": imu.get_stats()})
+        return jsonify({"ok": False, "error": "IMU receiver not running"})
+
+    @app.route("/api/imu/tare", methods=["POST"])
+    def imu_tare():
+        """Set current IMU orientation as zero reference."""
+        imu = current_app.config.get("IMU")
+        if not imu:
+            return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
+        imu.tare()
+        return jsonify({"ok": True, "tare_offset": imu.get_stats()["tare_offset"]})
+
+    @app.route("/api/imu/tare", methods=["DELETE"])
+    def imu_clear_tare():
+        """Clear the tare offset."""
+        imu = current_app.config.get("IMU")
+        if not imu:
+            return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
+        imu.clear_tare()
+        return jsonify({"ok": True})
+
+    @app.route("/api/imu/offset", methods=["GET"])
+    def get_imu_offset():
+        """Get IMU mass center offset (X, Y, Z in mm)."""
+        offset = config_handler.get_section("imu_offset")
+        if not offset:
+            offset = {"x": 0.0, "y": 0.0, "z": 0.0}
+        return jsonify({"ok": True, "offset": offset})
+
+    @app.route("/api/imu/offset", methods=["POST"])
+    def set_imu_offset():
+        """Set IMU mass center offset. JSON: {x, y, z} in mm."""
+        data = request.get_json(force=True, silent=True) or {}
+        offset = config_handler.get_section("imu_offset") or {"x": 0.0, "y": 0.0, "z": 0.0}
+        for axis in ("x", "y", "z"):
+            if axis in data:
+                offset[axis] = round(float(data[axis]), 1)
+        config_handler.update_data({"imu_offset": offset})
+        # Send updated offset to microcontroller for centripetal compensation
+        _send_full_axis_config()
+        return jsonify({"ok": True, "offset": offset})
+
+    @app.route("/api/imu/axes", methods=["GET"])
+    def get_imu_axes():
+        """Get IMU axis mapping. Each ROV axis maps to a sensor output with sign."""
+        axes = config_handler.get_section("imu_axes")
+        if not axes:
+            axes = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+        return jsonify({"ok": True, "axes": axes})
+
+    @app.route("/api/imu/axes", methods=["POST"])
+    def set_imu_axes():
+        """Set IMU axis mapping. JSON: {yaw, pitch, roll} each like '+yaw','-pitch', etc."""
+        data = request.get_json(force=True, silent=True) or {}
+        axes = config_handler.get_section("imu_axes") or {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
+        valid = {"+yaw", "-yaw", "+pitch", "-pitch", "+roll", "-roll"}
+        for key in ("yaw", "pitch", "roll"):
+            if key in data and data[key] in valid:
+                axes[key] = data[key]
+        config_handler.update_data({"imu_axes": axes})
+        # Update the receiver's axis mapping (topside display)
+        imu = current_app.config.get("IMU")
+        if imu:
+            imu.set_axis_mapping(axes)
+        # Send full config to microcontroller so PID uses correct orientation
+        _send_full_axis_config()
+        return jsonify({"ok": True, "axes": axes})
+
+    @app.route("/api/imu/accel_axes", methods=["GET"])
+    def get_accel_axes():
+        """Get accelerometer axis mapping. Each ROV axis maps to a sensor output with sign."""
+        axes = config_handler.get_section("accel_axes")
+        if not axes:
+            axes = {"x": "+x", "y": "+y", "z": "+z"}
+        return jsonify({"ok": True, "accel_axes": axes})
+
+    @app.route("/api/imu/accel_axes", methods=["POST"])
+    def set_accel_axes():
+        """Set accelerometer axis mapping. JSON: {x, y, z} each like '+x','-y', etc."""
+        data = request.get_json(force=True, silent=True) or {}
+        axes = config_handler.get_section("accel_axes") or {"x": "+x", "y": "+y", "z": "+z"}
+        valid = {"+x", "-x", "+y", "-y", "+z", "-z"}
+        for key in ("x", "y", "z"):
+            if key in data and data[key] in valid:
+                axes[key] = data[key]
+        config_handler.update_data({"accel_axes": axes})
+        # Update the receiver's accel mapping (topside display)
+        imu = current_app.config.get("IMU")
+        if imu:
+            imu.set_accel_mapping(axes)
+        # Send full config to microcontroller
+        _send_full_axis_config()
+        return jsonify({"ok": True, "accel_axes": axes})
+
+    # --- Debug override endpoints ---
+    @app.route("/api/debug/override", methods=["POST"])
+    def debug_override():
+        """Set debug override axes. Expects JSON with surge,sway,heave,roll,pitch,yaw in [-1..1]."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        axes = {}
+        for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
+            if key in data:
+                axes[key] = max(-1.0, min(1.0, float(data[key])))
+        ctrl.set_debug_override(axes)
+        return jsonify({"ok": True, "override": axes})
+
+    @app.route("/api/debug/clear", methods=["POST"])
+    def debug_clear():
+        """Clear debug override; return control to physical controller."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if ctrl:
+            ctrl.clear_debug_override()
+        return jsonify({"ok": True})
+
+    # --- Gain endpoints ---
+    @app.route("/api/controller/gains", methods=["GET"])
+    def get_gains():
+        """Return current gain settings."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify({"ok": True, "gains": ctrl.get_gains()})
+
+    @app.route("/api/controller/gains", methods=["POST"])
+    def set_gains():
+        """Set gain values. JSON body: master (0-1), surge, sway, heave, roll, pitch, yaw (0-1)."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        master = data.get("master")
+        axis_gains = {k: float(data[k]) for k in ("surge", "sway", "heave", "roll", "pitch", "yaw") if k in data}
+        ctrl.set_gains(master=master, **axis_gains)
+        return jsonify({"ok": True, "gains": ctrl.get_gains()})
+
+    # --- PID config (MCU) endpoints ---
+    @app.route("/api/pid/gains", methods=["GET"])
+    def get_pid_gains():
+        """Request current PID gains from the MCU via UDP."""
+        gains = request_pid_gains(timeout=2.0)
+        if gains is None:
+            return jsonify({"ok": False, "error": "No response from MCU"}), 504
+        return jsonify({"ok": True, "gains": gains})
+
+    @app.route("/api/pid/gains", methods=["POST"])
+    def set_pid_gains():
+        """Send PID gains to the MCU via UDP. Expects JSON: {axis: {kp, ki, kd}, ...}."""
+        data = request.get_json(force=True, silent=True) or {}
+        gains = {}
+        for axis in PID_AXES:
+            if axis in data and isinstance(data[axis], dict):
+                gains[axis] = {
+                    "kp": float(data[axis].get("kp", 0.0)),
+                    "ki": float(data[axis].get("ki", 0.0)),
+                    "kd": float(data[axis].get("kd", 0.0)),
+                }
+            else:
+                gains[axis] = {"kp": 0.0, "ki": 0.0, "kd": 0.0}
+        confirmed, attempts = send_pid_gains(gains, timeout=1.0, max_retries=3)
+        if confirmed is None:
+            return jsonify({"ok": False, "error": "No response from MCU after %d attempts" % attempts}), 504
+        return jsonify({"ok": True, "gains": confirmed, "attempts": attempts})
+
+    # --- PID config save/load ---
+    @app.route("/api/pid/configs", methods=["GET"])
+    def list_pid_configs():
+        """List all saved PID configurations."""
+        configs = _load_pid_configs()
+        return jsonify({"ok": True, "configs": list(configs.keys())})
+
+    @app.route("/api/pid/configs", methods=["POST"])
+    def save_pid_config():
+        """Save current PID fields as a named configuration."""
+        data = request.get_json(force=True, silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name or not re.match(r'^[\w\s\-\.]+$', name):
+            return jsonify({"ok": False, "error": "Invalid config name"}), 400
+        gains = data.get("gains")
+        if not isinstance(gains, dict):
+            return jsonify({"ok": False, "error": "Missing gains data"}), 400
+        configs = _load_pid_configs()
+        configs[name] = gains
+        _save_pid_configs(configs)
+        return jsonify({"ok": True, "name": name})
+
+    @app.route("/api/pid/configs/<name>", methods=["GET"])
+    def load_pid_config(name):
+        """Load a saved PID configuration by name."""
+        configs = _load_pid_configs()
+        if name not in configs:
+            return jsonify({"ok": False, "error": "Config not found"}), 404
+        return jsonify({"ok": True, "name": name, "gains": configs[name]})
+
+    @app.route("/api/pid/configs/<name>", methods=["DELETE"])
+    def delete_pid_config(name):
+        """Delete a saved PID configuration."""
+        configs = _load_pid_configs()
+        if name not in configs:
+            return jsonify({"ok": False, "error": "Config not found"}), 404
+        del configs[name]
+        _save_pid_configs(configs)
+        return jsonify({"ok": True})

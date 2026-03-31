@@ -8,6 +8,7 @@ if os.name == 'posix':
 import pygame
 from lib.bitmask import BitmaskClient
 import threading
+import time
 
 
 class Controller:
@@ -18,6 +19,8 @@ class Controller:
         "righty": (3, 0.1),
     }
 
+    DEADZONE = 0.05  # Axes within +/- this value are treated as 0
+
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
@@ -26,11 +29,21 @@ class Controller:
         self.joystick = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.light = 0  # Initial light value
-        self._prev_btn_14 = False  # For edge detection of light increase
-        self._prev_btn_13 = False  # For edge detection of light decrease
+        self._prev_dpad_up = False   # For edge detection of light increase (D-pad up)
+        self._prev_dpad_down = False  # For edge detection of light decrease (D-pad down)
         self._stop = threading.Event()
         self._thread = None
         self._reconnect_delay = 0  # Counter for reconnect attempts
+        # Debug override state
+        self._debug_override = None   # None = no override; dict of axes when active
+        self._debug_lock = threading.Lock()
+        # Gain settings (per-axis and master)
+        self._gain_lock = threading.Lock()
+        self._master_gain = 1.0
+        self._axis_gains = {
+            "surge": 1.0, "sway": 1.0, "heave": 1.0,
+            "roll": 1.0, "pitch": 1.0, "yaw": 1.0,
+        }
         self._try_connect()
         
     def _try_connect(self):
@@ -64,12 +77,36 @@ class Controller:
                     print(f"  Calibrating {name} (axis {axis_id}): offset {initial:.3f}")
 
     def get_calibrated_axis(self, axis_id):
-        """Get axis value with calibration offset applied."""
+        """Get axis value with calibration offset and deadzone applied."""
         raw = self.joystick.get_axis(axis_id)
         offset = self.axis_offsets.get(axis_id, 0)
         calibrated = raw - offset
         # Clamp to -1 to 1 range
-        return max(-1.0, min(1.0, calibrated))
+        calibrated = max(-1.0, min(1.0, calibrated))
+        # Apply deadzone
+        if abs(calibrated) < self.DEADZONE:
+            return 0.0
+        return calibrated
+
+    # --- Gain API ---
+    def set_gains(self, master=None, **axis_gains):
+        """Set master and/or per-axis gains. Values should be 0.0 – 1.0."""
+        with self._gain_lock:
+            if master is not None:
+                self._master_gain = max(0.0, min(1.0, float(master)))
+            for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
+                if key in axis_gains:
+                    self._axis_gains[key] = max(0.0, min(1.0, float(axis_gains[key])))
+
+    def get_gains(self):
+        """Return current gain settings."""
+        with self._gain_lock:
+            return {"master": self._master_gain, **self._axis_gains}
+
+    def _apply_gain(self, axis_name, value):
+        """Multiply a value by its per-axis gain and the master gain."""
+        with self._gain_lock:
+            return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
     
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
@@ -81,7 +118,37 @@ class Controller:
                 manip=0
             )
 
+    # --- Debug override API ---
+    def set_debug_override(self, axes: dict):
+        """Enable debug override with the given axis values."""
+        with self._debug_lock:
+            self._debug_override = dict(axes)
+
+    def clear_debug_override(self):
+        """Disable debug override; return to physical controller."""
+        with self._debug_lock:
+            self._debug_override = None
+        self._reset_command()
+
     def update(self):
+        # --- Check for debug override first ---
+        with self._debug_lock:
+            override = self._debug_override.copy() if self._debug_override is not None else None
+        if override is not None:
+            # Debug sliders have priority – send their values directly
+            if self.bm:
+                self.bm.set_from_axes(
+                    surge=override.get("surge", 0),
+                    sway=override.get("sway", 0),
+                    heave=override.get("heave", 0),
+                    roll=override.get("roll", 0),
+                    pitch=override.get("pitch", 0),
+                    yaw=override.get("yaw", 0),
+                    light=self.light,
+                    manip=0,
+                )
+            return  # Skip all joystick processing
+
         # Process pygame events (needed for hotplug detection)
         try:
             for event in pygame.event.get():
@@ -138,17 +205,26 @@ class Controller:
             pitch = 0.0
             roll = 0.0
         
-        # Light control with edge detection (only triggers once per press)
-        btn_14 = self.joystick.get_button(14)
-        btn_13 = self.joystick.get_button(13)
-        
-        if btn_14 and not self._prev_btn_14:  # Just pressed
+        # Light control with edge detection via D-pad hat (up/down)
+        hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
+        dpad_up = hat[1] > 0
+        dpad_down = hat[1] < 0
+
+        if dpad_up and not self._prev_dpad_up:    # Just pressed
             self.light = min(1.0, self.light + 0.1)  # +10% per press
-        if btn_13 and not self._prev_btn_13:  # Just pressed
+        if dpad_down and not self._prev_dpad_down:  # Just pressed
             self.light = max(0, self.light - 0.1)    # -10% per press
-        
-        self._prev_btn_14 = btn_14
-        self._prev_btn_13 = btn_13
+
+        self._prev_dpad_up = dpad_up
+        self._prev_dpad_down = dpad_down
+
+        # Apply gain to each axis
+        surge = self._apply_gain("surge", surge)
+        sway   = self._apply_gain("sway",  sway)
+        heave  = self._apply_gain("heave", heave)
+        roll   = self._apply_gain("roll",  roll)
+        pitch  = self._apply_gain("pitch", pitch)
+        yaw    = self._apply_gain("yaw",   yaw)
 
         # Send to ROV!
         self.bm.set_from_axes(
@@ -166,7 +242,7 @@ class Controller:
         """Blocking loop that polls controller at ~60 Hz."""
         while not self._stop.is_set():
             self.update()
-            pygame.time.delay(self.delay_ms)
+            time.sleep(self.delay_ms / 1000)
 
     def start(self):
         """Start the controller loop in a background thread."""
