@@ -1,8 +1,14 @@
 # lib/bitmask.py
-import socket, struct, threading, time, zlib
+import struct
+import threading
+import time
 from dataclasses import dataclass, asdict
 
-NUCLEO_HOST = "192.168.1.100" # default NUCLEO IP
+from lib.crc import crc32_ieee
+from lib.net_transport import DEFAULT_ROV_HOST, UdpSender, next_sequence
+from typing import Optional
+
+NUCLEO_HOST = DEFAULT_ROV_HOST  # default NUCLEO IP
 NUCLEO_PORT = 12345
 DEFAULT_RATE_HZ = 20.0      # send frequency
 
@@ -35,11 +41,11 @@ def encode_payload(cmd: Command) -> int:
 
 def build_packet(seq: int, payload_u64: int) -> bytes:
     header = struct.pack("!IQ", seq & 0xFFFFFFFF, payload_u64 & 0xFFFFFFFFFFFFFFFF)
-    crc = zlib.crc32(header) & 0xFFFFFFFF
-    return header + struct.pack("!I", crc)
+    crc = crc32_ieee(header)
+    return header + struct.pack("!I", crc & 0xFFFFFFFF)
 
 class BitmaskClient:
-    def __init__(self, host=NUCLEO_HOST, port=NUCLEO_PORT, rate_hz=DEFAULT_RATE_HZ):
+    def __init__(self, host=NUCLEO_HOST, port=NUCLEO_PORT, rate_hz=DEFAULT_RATE_HZ, watchdog_timeout=0.75):
         self.host, self.port = host, port
         self.period = 1.0 / float(rate_hz) if rate_hz > 0 else 0.0
         self._cmd = Command()
@@ -47,20 +53,39 @@ class BitmaskClient:
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="BitmaskSender", daemon=True)
-        self._sock = None
+        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, name="BitmaskWatchdog", daemon=True)
+        self._sender: Optional[UdpSender] = None
+        self._resource_monitor = None
+
+        # Uplink health/state
+        self._status_lock = threading.Lock()
+        self._last_packet: bytes | None = None
+        self._last_send_time = 0.0
+        self._last_ack_time = 0.0
+        self._last_ack_count = None
+        self._watchdog_timeout = watchdog_timeout
+        self._watchdog_resends = 0
+        self._last_command_snapshot: dict | None = None
 
     def start(self):
-        if self._thread.is_alive(): return
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if self._thread.is_alive():
+            return
+        self._sender = UdpSender(self.host, self.port)
+        self._stop.clear()
+        with self._status_lock:
+            self._last_ack_time = time.monotonic()
         self._thread.start()
+        self._watchdog_thread.start()
 
     def stop(self):
         self._stop.set()
-        if self._thread.is_alive(): self._thread.join(timeout=1.0)
-        if self._sock:
-            try: self._sock.close()
-            except: pass
-            self._sock = None
+        if self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+        if self._watchdog_thread.is_alive():
+            self._watchdog_thread.join(timeout=1.0)
+        if self._sender:
+            self._sender.close()
+            self._sender = None
 
     def set_command(self, **kwargs):
         with self._lock:
@@ -71,6 +96,24 @@ class BitmaskClient:
     def get_command(self) -> dict:
         with self._lock:
             return asdict(self._cmd) | {"sequence": self._seq}
+
+    def set_resource_monitor(self, monitor) -> None:
+        self._resource_monitor = monitor
+
+    def get_uplink_status(self) -> dict:
+        with self._status_lock:
+            now = time.monotonic()
+            send_age = None if self._last_send_time == 0 else max(0.0, now - self._last_send_time) * 1000.0
+            ack_age = None if self._last_ack_time == 0 else max(0.0, now - self._last_ack_time) * 1000.0
+            return {
+                "sequence": self._seq,
+                "last_send_age_ms": send_age,
+                "last_ack_age_ms": ack_age,
+                "last_ack_count": self._last_ack_count,
+                "watchdog_timeout": self._watchdog_timeout,
+                "watchdog_resends": self._watchdog_resends,
+                "last_command": self._last_command_snapshot or {},
+            }
 
     # convenience: set from normalized axes
     def set_from_axes(self, surge=0.0, sway=0.0, heave=0.0, roll=0.0, pitch=0.0, yaw=0.0,
@@ -87,12 +130,46 @@ class BitmaskClient:
             with self._lock:
                 payload = encode_payload(self._cmd)
                 pkt = build_packet(self._seq, payload)
-                self._seq = (self._seq + 1) & 0xFFFFFFFF
-            try:
-                self._sock.sendto(pkt, (self.host, self.port))
-            except Exception:
-                pass
+                self._seq = next_sequence(self._seq)
+                command_snapshot = asdict(self._cmd)
+            sender = self._sender
+            if sender:
+                try:
+                    sender.send(pkt)
+                except Exception:
+                    pass
+            with self._status_lock:
+                self._last_packet = pkt
+                self._last_send_time = time.monotonic()
+                self._last_command_snapshot = command_snapshot
             time.sleep(self.period)
+
+    def _watchdog_loop(self):
+        while not self._stop.is_set():
+            time.sleep(0.1)
+            monitor = self._resource_monitor
+            if monitor is None:
+                continue
+            counters = getattr(monitor, "get_udp_counters", None)
+            if counters is None:
+                continue
+            udp_rx_count, _errors = counters()
+            now = time.monotonic()
+            with self._status_lock:
+                if udp_rx_count != self._last_ack_count:
+                    self._last_ack_count = udp_rx_count
+                    self._last_ack_time = now
+                    continue
+                # No new acks yet
+                if self._last_packet and (now - self._last_ack_time) > self._watchdog_timeout:
+                    sender = self._sender
+                    if sender:
+                        try:
+                            sender.send(self._last_packet)
+                            self._watchdog_resends += 1
+                        except Exception:
+                            pass
+                    self._last_ack_time = now
 
 # simple initializer
 def init_bitmask(rate_hz=DEFAULT_RATE_HZ, host=NUCLEO_HOST, port=NUCLEO_PORT) -> BitmaskClient:

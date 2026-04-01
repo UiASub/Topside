@@ -16,4 +16,5 @@ plotly==6.4.0
 requests==2.33.0
 pyserial==3.5
 pygame>=2.5
+pytest==9.0.2
 

@@ -31,6 +31,15 @@ camera = init_camera()
 _DEFAULT_IMU_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
 _DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
 _DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
+ATTITUDE_LIMITS_DEG = {"roll": 45.0, "pitch": 45.0, "yaw": 180.0}
+
+
+def _clamp(value, lower, upper):
+    if value < lower:
+        return lower
+    if value > upper:
+        return upper
+    return value
 
 
 def _send_full_axis_config():
@@ -79,7 +88,7 @@ def register_routes(app):
     @app.route("/debug")
     def debug():
         """Render the debug slider page."""
-        return render_template("debug.html")
+        return render_template("debug.html", attitude_limits=ATTITUDE_LIMITS_DEG)
 
     @app.route("/graphs")
     def graphs():
@@ -177,6 +186,52 @@ def register_routes(app):
             return jsonify(DEFAULT_RESOURCES)
         return jsonify(resources)
 
+    @app.route("/api/command/status", methods=["GET"])
+    def get_command_status():
+        bm = current_app.config.get("BITMASK")
+        resource = current_app.config.get("RESOURCE")
+        override = current_app.config.get("SETPOINT_OVERRIDE")
+        uplink = bm.get_uplink_status() if bm else {}
+        udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
+        state = override.get_state() if override else {}
+        return jsonify({
+            "ok": True,
+            "uplink": uplink,
+            "udp_rx_count": udp_rx,
+            "udp_rx_errors": udp_err,
+            "override": state,
+        })
+
+    @app.route("/api/control/telemetry", methods=["GET"])
+    def control_telemetry():
+        receiver = current_app.config.get("CONTROL_TELEM")
+        latest = receiver.get_latest() if receiver else data_handler.get_section("control_telemetry")
+        return jsonify({"ok": bool(latest), "telemetry": latest or {}})
+
+    @app.route("/api/control/telemetry/history", methods=["GET"])
+    def control_telemetry_history():
+        receiver = current_app.config.get("CONTROL_TELEM")
+        limit = int(request.args.get("limit", "120"))
+        if receiver:
+            history = receiver.get_history(limit=limit)
+            return jsonify({"ok": True, "history": history})
+        return jsonify({"ok": False, "history": []}), 503
+
+    @app.route("/api/logs/live", methods=["GET"])
+    def live_logs():
+        limit = int(request.args.get("limit", "100"))
+        limit = max(1, min(500, limit))
+        log_stream = current_app.config.get("LOG_STREAM")
+        entries = log_stream.get_recent(limit) if log_stream else []
+        return jsonify({"ok": True, "logs": entries})
+
+    @app.route("/api/setpoint/status", methods=["GET"])
+    def setpoint_status():
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if not client:
+            return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+        return jsonify({"ok": True, "state": client.get_state()})
+
     @app.route("/api/rov/command", methods=["POST"])
     def set_rov_command():
         """
@@ -211,7 +266,17 @@ def register_routes(app):
     @app.route("/api/rov/status", methods=["GET"])
     def get_rov_status():
         bm = current_app.config["BITMASK"]
-        return jsonify({"ok": True, "command": bm.get_command()})
+        resource = current_app.config.get("RESOURCE")
+        udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
+        return jsonify({
+            "ok": True,
+            "command": bm.get_command(),
+            "uplink": bm.get_uplink_status(),
+            "resource": {
+                "udp_rx_count": udp_rx,
+                "udp_rx_errors": udp_err,
+            },
+        })
 
     @app.route("/api/imu/status", methods=["GET"])
     def get_imu_status():
@@ -315,17 +380,56 @@ def register_routes(app):
     # --- Debug override endpoints ---
     @app.route("/api/debug/override", methods=["POST"])
     def debug_override():
-        """Set debug override axes. Expects JSON with surge,sway,heave,roll,pitch,yaw in [-1..1]."""
+        """Set debug override axes as raw virtual joystick input via the bitmask command link."""
         data = request.get_json(force=True, silent=True) or {}
-        ctrl = current_app.config.get("CONTROLLER")
-        if not ctrl:
-            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        bm = current_app.config.get("BITMASK")
+        if not bm:
+            return jsonify({"ok": False, "error": "Bitmask client unavailable"}), 503
         axes = {}
         for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
             if key in data:
                 axes[key] = max(-1.0, min(1.0, float(data[key])))
-        ctrl.set_debug_override(axes)
+        if not axes:
+            return jsonify({"ok": False, "error": "No axes supplied"}), 400
+
+        bm.set_from_axes(**axes)
+
+        ctrl = current_app.config.get("CONTROLLER")
+        if ctrl:
+            ctrl.set_debug_override(axes)
+
         return jsonify({"ok": True, "override": axes})
+
+    @app.route("/api/debug/attitude_setpoint", methods=["POST"])
+    def debug_attitude_setpoint():
+        """Send roll/pitch/yaw setpoints in physical degrees via the override client."""
+        data = request.get_json(force=True, silent=True) or {}
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if not client:
+            return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+        axes = {}
+        for axis, limit in ATTITUDE_LIMITS_DEG.items():
+            if axis not in data:
+                continue
+            try:
+                value = float(data[axis])
+            except (TypeError, ValueError):
+                continue
+            axes[axis] = _clamp(value, -limit, limit)
+        if not axes:
+            return jsonify({"ok": False, "error": "No valid attitude axes supplied"}), 400
+        try:
+            state = client.send_override(axes, replay_attempts=5, replay_delay=0.1)
+        except Exception as exc:  # pylint: disable=broad-except
+            client.set_error(str(exc))
+            return jsonify({"ok": False, "error": str(exc)}), 503
+        return jsonify({
+            "ok": True,
+            "sent": axes,
+            "limits": ATTITUDE_LIMITS_DEG,
+            "state": state,
+            "units": "deg",
+        })
 
     @app.route("/api/debug/clear", methods=["POST"])
     def debug_clear():
@@ -333,6 +437,20 @@ def register_routes(app):
         ctrl = current_app.config.get("CONTROLLER")
         if ctrl:
             ctrl.clear_debug_override()
+
+        # Zero out the bitmask axes (slider override path)
+        bm = current_app.config.get("BITMASK")
+        if bm:
+            bm.set_from_axes(surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0)
+
+        # Clear any setpoint override on port 5007 (attitude override path)
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if client:
+            try:
+                client.clear_override()
+            except Exception:
+                pass
+
         return jsonify({"ok": True})
 
     # --- Gain endpoints ---

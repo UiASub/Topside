@@ -1,11 +1,18 @@
+from __future__ import annotations
+
 import socket
 import json
 import threading
 import time
+from pathlib import Path
+from typing import Any
+
 from lib.json_data_handler import JSONDataHandler
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5002
+LOG_DIR = Path("logs")
+IMU_LOG = LOG_DIR / "imu_raw.ndjson"
 
 # Default: identity mapping (sensor yaw/pitch/roll = ROV yaw/pitch/roll)
 DEFAULT_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
@@ -54,6 +61,7 @@ class IMUReceiver:
         # Axis remap (identity by default)
         self._remap = _build_remap(DEFAULT_AXES)
         self._accel_remap = _build_remap(DEFAULT_ACCEL_AXES, ("x", "y", "z"))
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     def set_axis_mapping(self, axes_cfg):
         """Update YPR axis mapping at runtime."""
@@ -155,25 +163,35 @@ class IMUReceiver:
     def _process_packet(self, data: bytes, addr: tuple):
         """Process incoming UDP packet with IMU data."""
         try:
-            msg = json.loads(data.decode("utf-8", errors="strict"))
+            text = data.decode("utf-8", errors="strict")
+            msg = json.loads(text)
         except Exception as e:
             print(f"IMU: Bad JSON from {addr}: {e}")
             return
 
+        self._log_raw_packet(text)
+
         imu = msg.get("imu", {})
-        sensor_yaw = imu.get("yaw", 0.0)
-        sensor_pitch = imu.get("pitch", 0.0)
-        sensor_roll = imu.get("roll", 0.0)
+        def _val(key: str, default: float = float("nan")) -> float:
+            value = imu.get(key, default)
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        sensor_yaw = _val("yaw")
+        sensor_pitch = _val("pitch")
+        sensor_roll = _val("roll")
 
         # Angular rates (deg/s) — same remap applies
-        sensor_yr = imu.get("yr", 0.0)
-        sensor_pr = imu.get("pr", 0.0)
-        sensor_rr = imu.get("rr", 0.0)
+        sensor_yr = _val("yr")
+        sensor_pr = _val("pr")
+        sensor_rr = _val("rr")
 
         # Linear acceleration (m/s^2)
-        accel_x = imu.get("ax", 0.0)
-        accel_y = imu.get("ay", 0.0)
-        accel_z = imu.get("az", 0.0)
+        accel_x = _val("ax")
+        accel_y = _val("ay")
+        accel_z = _val("az")
 
         with self._lock:
             self._packet_count += 1
@@ -214,19 +232,32 @@ class IMUReceiver:
         try:
             self.data_handler.update_data({
                 "imu": {
-                    "yaw": round(yaw, 2),
-                    "pitch": round(pitch, 2),
-                    "roll": round(roll, 2),
-                    "yr": round(raw_yr, 2),
-                    "pr": round(raw_pr, 2),
-                    "rr": round(raw_rr, 2),
-                    "ax": round(mapped_ax, 3),
-                    "ay": round(mapped_ay, 3),
-                    "az": round(mapped_az, 3),
+                    "yaw": _coerce_json_number(yaw),
+                    "pitch": _coerce_json_number(pitch),
+                    "roll": _coerce_json_number(roll),
+                    "yr": _coerce_json_number(raw_yr),
+                    "pr": _coerce_json_number(raw_pr),
+                    "rr": _coerce_json_number(raw_rr),
+                    "ax": _coerce_json_number(mapped_ax, precision=3),
+                    "ay": _coerce_json_number(mapped_ay, precision=3),
+                    "az": _coerce_json_number(mapped_az, precision=3),
                 }
             })
         except Exception as e:
             print(f"IMU: Error updating data: {e}")
+
+    def _log_raw_packet(self, text: str) -> None:
+        try:
+            with IMU_LOG.open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps({"ts": time.time(), "payload": text}) + "\n")
+        except OSError as exc:
+            print(f"IMU: failed to log packet: {exc}")
+
+
+def _coerce_json_number(value: float, precision: int = 2) -> Any:
+    if value != value:  # NaN check
+        return None
+    return round(float(value), precision)
 
 
 def init_imu_receiver(host=UDP_IP, port=UDP_PORT, data_handler=None) -> IMUReceiver:

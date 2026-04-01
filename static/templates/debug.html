@@ -4,6 +4,9 @@
 
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/debug.css') }}">
+<script>
+  window.debugAttitudeLimits = {{ attitude_limits|default({})|tojson|safe }};
+</script>
 
 <!-- IMU Live Readout -->
 <div class="row g-4">
@@ -290,6 +293,52 @@
   </div>
 </div>
 
+      <!-- Attitude Setpoint Override -->
+      <div class="row g-4 mt-1">
+        <div class="col-12">
+          <div class="card custom-card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">Attitude Setpoint Override (°)</h5>
+                <span id="attitude-status" class="badge bg-secondary">IDLE</span>
+              </div>
+              <p class="text-muted small mb-4">
+                Push exact roll, pitch, and yaw setpoints down to the flight controller. Values are clamped to ±{{ attitude_limits.roll }}° (roll/pitch)
+                and ±{{ attitude_limits.yaw }}° (yaw). Use this for heading-hold experiments without touching the raw thruster sliders.
+              </p>
+              <div class="row g-3 attitude-field-row">
+                <div class="col-md-4">
+                  <label class="form-label small text-light-muted">Roll (±{{ attitude_limits.roll }}°)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control bg-dark text-light" id="attitude-roll" step="0.1" placeholder="0.0">
+                    <span class="input-group-text">deg</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small text-light-muted">Pitch (±{{ attitude_limits.pitch }}°)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control bg-dark text-light" id="attitude-pitch" step="0.1" placeholder="0.0">
+                    <span class="input-group-text">deg</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small text-light-muted">Yaw (±{{ attitude_limits.yaw }}°)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control bg-dark text-light" id="attitude-yaw" step="0.1" placeholder="0.0">
+                    <span class="input-group-text">deg</span>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-2 flex-wrap mt-4">
+                <button id="btn-attitude-send" class="btn btn-sm btn-primary">Send Setpoints</button>
+                <button id="btn-attitude-clear" class="btn btn-sm btn-outline-secondary">Clear Attitude Override</button>
+                <div id="attitude-feedback" class="small text-light-muted ms-auto">Waiting for input…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
 <!-- PID Configuration -->
 <div class="row g-4 mt-1">
   <div class="col-12">
@@ -391,13 +440,188 @@
   </div>
 </div>
 
+<!-- Control Telemetry & Command Link -->
+<div class="row g-4 mt-1">
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Control Telemetry</h5>
+          <small class="text-light-muted">Updated <span id="control-telemetry-age">--</span> ms ago</small>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Axis</th>
+                <th>Setpoint</th>
+                <th>Output</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="control-telemetry-body">
+              <tr><td colspan="4" class="text-center text-muted">Waiting for packets…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="card-title mb-0">Command Link Health</h5>
+          <span id="uplink-status-badge" class="badge bg-secondary">IDLE</span>
+        </div>
+        <p class="text-muted small mb-2">Sequence <span id="uplink-sequence">--</span> · Last send <span id="uplink-send-age">--</span> ms · Last ack <span id="uplink-ack-age">--</span> ms</p>
+        <div class="row g-2 mb-3">
+          <div class="col-sm-6">
+            <div class="small text-light-muted">UDP RX Count</div>
+            <div class="fs-5" id="uplink-udp-rx">--</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="small text-light-muted">RX Errors</div>
+            <div class="fs-5" id="uplink-udp-errors">--</div>
+          </div>
+        </div>
+        <div class="small text-light-muted">Watchdog Resends</div>
+        <div class="fs-6 mb-3" id="uplink-resends">0</div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Override State</h6>
+          <span id="override-status-chip" class="badge bg-secondary">INACTIVE</span>
+        </div>
+        <div id="override-axes" class="small text-light"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Control Loop Visualizer -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Control Loop Visualizer</h5>
+          <small class="text-light-muted">10&nbsp;Hz history of setpoint, output, and error</small>
+        </div>
+        <div class="row g-3" id="control-chart-grid">
+          <div class="col-md-4 col-xl-2" id="chart-card-surge">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Surge</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-surge">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-surge" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-xl-2" id="chart-card-sway">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Sway</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-sway">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-sway" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-xl-2" id="chart-card-heave">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Heave</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-heave">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-heave" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-xl-2" id="chart-card-roll">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Roll</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-roll">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-roll" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-xl-2" id="chart-card-pitch">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Pitch</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-pitch">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-pitch" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4 col-xl-2" id="chart-card-yaw">
+            <div class="control-chart-card">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-uppercase text-light-muted fw-semibold small">Yaw</span>
+                <span class="badge bg-secondary axis-status" id="axis-status-yaw">--</span>
+              </div>
+              <canvas class="control-chart" id="chart-yaw" width="320" height="120"></canvas>
+              <div class="chart-legend small text-light-muted">
+                <span class="legend-swatch legend-setpoint"></span> Setpoint
+                <span class="legend-swatch legend-output ms-2"></span> Output
+                <span class="legend-swatch legend-error ms-2"></span> Error
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Live ROV Command readout -->
 <div class="row g-4 mt-1">
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">
-        <h5 class="card-title">Live ROV Command</h5>
-        <pre id="rov-status" class="text-light mb-0" style="font-size: 0.85rem;">Loading...</pre>
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Live Packages Sent from Topside</h5>
+          <small class="text-light-muted">Bitmask payload preview &amp; raw command snapshot</small>
+        </div>
+        <pre id="rov-status" class="text-light mb-0 mt-3" style="font-size: 0.85rem;">Loading...</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Log Stream -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="card-title mb-0">Zephyr Log Stream</h5>
+          <small class="text-light-muted">Latest 50 entries</small>
+        </div>
+        <div id="log-stream" class="log-stream border border-secondary rounded" style="min-height: 200px; max-height: 320px; overflow-y: auto; font-family: var(--bs-font-monospace); font-size: 0.8rem;"></div>
       </div>
     </div>
   </div>
