@@ -64,11 +64,28 @@ jobs:
             zip -r "Topside-${{ github.ref_name }}-${{ matrix.label }}.zip" Topside
           fi
 
-      - name: Upload artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: Topside-${{ matrix.label }}
           path: release/Topside-${{ github.ref_name }}-${{ matrix.label }}.zip
+          if-no-files-found: error
+
+      - name: Install Inno Setup
+        if: matrix.label == 'windows'
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile Windows installer
+        if: matrix.label == 'windows'
+        shell: cmd
+        run: iscc /DAppVersion=${{ github.ref_name }} installer\Topside.iss
+
+      - name: Upload installer artifact
+        if: matrix.label == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Topside-windows-installer
+          path: installer/output/Topside-${{ github.ref_name }}-setup.exe
           if-no-files-found: error
 
   release:
@@ -85,6 +102,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.zip
+          files: |
+            artifacts/*.zip
+            artifacts/*.exe
           generate_release_notes: true
           fail_on_unmatched_files: true
