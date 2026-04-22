@@ -1,18 +1,31 @@
-"""
-Resource Monitor Receiver - UDP telemetry from Nucleo board
+from __future__ import annotations
 
-Receives telemetry packets containing CPU usage, memory stats, thread count,
-and network statistics. Packet format matches resource_monitor.h on the Nucleo.
+"""Resource monitor telemetry receiver.
+
+Decodes the packed ``telemetry_packet_t`` struct described in
+``resource_monitor.h`` and keeps ``data/data.json`` updated with the latest
+statistics so the web UI can present CPU, memory, and UDP health dashboards.
+
+Each packet is big-endian with an IEEE 802.3 CRC appended. This module shares
+the global CRC helper plus the UDP transport scaffolding so that the receiver
+matches the embedded ``crc32_calc()`` and ``net.c`` behavior exactly.
 """
 
-import socket
+import json
 import struct
 import threading
 import time
+from pathlib import Path
+
+from lib.crc import crc32_ieee
 from lib.json_data_handler import JSONDataHandler
+from lib.net_transport import UdpConfig, UdpListener
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 12346
+LOG_DIR = Path("logs")
+RESOURCE_LOG = LOG_DIR / "resource_monitor.ndjson"
+DIAG_LOG_EVERY_SEC = 5.0
 
 # Telemetry packet format (must match resource_monitor.h)
 # typedef struct {
@@ -32,37 +45,6 @@ UDP_PORT = 12346
 TELEMETRY_FORMAT = ">IIBBHHBBIII"  # Big-endian (network byte order)
 TELEMETRY_SIZE = struct.calcsize(TELEMETRY_FORMAT)
 
-# CRC32 lookup table (IEEE 802.3 polynomial)
-CRC32_TABLE = None
-
-
-def _init_crc32_table():
-    """Initialize CRC32 lookup table."""
-    global CRC32_TABLE
-    if CRC32_TABLE is not None:
-        return
-    CRC32_TABLE = []
-    for i in range(256):
-        crc = i
-        for _ in range(8):
-            if crc & 1:
-                crc = (crc >> 1) ^ 0xEDB88320
-            else:
-                crc >>= 1
-        CRC32_TABLE.append(crc)
-
-
-def _calculate_crc32(data: bytes) -> int:
-    """Calculate CRC32 checksum matching the embedded implementation."""
-    if CRC32_TABLE is None:
-        _init_crc32_table()
-    crc = 0xFFFFFFFF
-    for byte in data:
-        index = (crc ^ byte) & 0xFF
-        crc = (crc >> 8) ^ CRC32_TABLE[index]
-    return crc ^ 0xFFFFFFFF
-
-
 class ResourceReceiver:
     """Background UDP receiver for resource telemetry from Nucleo board."""
 
@@ -72,8 +54,7 @@ class ResourceReceiver:
         self.data_handler = data_handler or JSONDataHandler()
 
         self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, name="ResourceReceiver", daemon=True)
-        self._sock = None
+        self._listener: UdpListener | None = None
 
         # Stats
         self._lock = threading.Lock()
@@ -83,31 +64,25 @@ class ResourceReceiver:
         self._packets_lost = 0
         self._last_data = {}
 
-        # Initialize CRC table
-        _init_crc32_table()
+        self._last_diag_log = 0.0
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     def start(self):
         """Start the receiver thread."""
-        if self._thread.is_alive():
+        if self._listener is not None:
             return
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._sock.bind((self.host, self.port))
-        self._sock.settimeout(1.0)  # Allow periodic stop checks
-        self._thread.start()
+        cfg = UdpConfig(host=self.host, port=self.port, broadcast=False, timeout=1.0, recv_buffer=1024)
+        self._listener = UdpListener("ResourceReceiver", cfg, self._process_packet)
+        self._stop.clear()
+        self._listener.start()
         print(f"Resource receiver started on {self.host}:{self.port}")
 
     def stop(self):
         """Stop the receiver thread."""
         self._stop.set()
-        if self._thread.is_alive():
-            self._thread.join(timeout=2.0)
-        if self._sock:
-            try:
-                self._sock.close()
-            except:
-                pass
-            self._sock = None
+        if self._listener:
+            self._listener.stop()
+            self._listener = None
         print("Resource receiver stopped")
 
     def get_stats(self) -> dict:
@@ -120,20 +95,6 @@ class ResourceReceiver:
                 "last_seq": self._last_seq,
                 "last_data": self._last_data.copy()
             }
-
-    def _run(self):
-        """Main receiver loop."""
-        while not self._stop.is_set():
-            try:
-                data, addr = self._sock.recvfrom(1024)
-                self._process_packet(data, addr)
-            except socket.timeout:
-                # Normal timeout, check stop flag
-                continue
-            except Exception as e:
-                if not self._stop.is_set():
-                    print(f"Resource receiver error: {e}")
-                time.sleep(0.1)
 
     def _process_packet(self, data: bytes, addr: tuple):
         """Process incoming UDP telemetry packet."""
@@ -152,7 +113,7 @@ class ResourceReceiver:
 
         # Validate CRC (calculated over all fields except CRC itself)
         crc_data = data[:-4]  # Everything except the last 4 bytes (CRC)
-        calculated_crc = _calculate_crc32(crc_data)
+        calculated_crc = crc32_ieee(crc_data)
 
         if calculated_crc != recv_crc:
             with self._lock:
@@ -194,6 +155,30 @@ class ResourceReceiver:
             self.data_handler.update_data({"resources": telemetry})
         except Exception as e:
             print(f"Resource: Error updating data: {e}")
+
+        self._maybe_log_diag(telemetry)
+
+    def _maybe_log_diag(self, telemetry: dict) -> None:
+        now = time.monotonic()
+        if now - self._last_diag_log < DIAG_LOG_EVERY_SEC:
+            return
+        self._last_diag_log = now
+        record = telemetry | {
+            "packets": self._packet_count,
+            "crc_errors": self._crc_errors,
+            "packets_lost": self._packets_lost,
+            "timestamp": time.time(),
+        }
+        try:
+            with RESOURCE_LOG.open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps(record) + "\n")
+        except OSError as exc:
+            print(f"Resource: failed to log telemetry: {exc}")
+
+    def get_udp_counters(self) -> tuple[int, int]:
+        with self._lock:
+            last = self._last_data or {}
+            return last.get("udp_rx_count", 0), last.get("udp_rx_errors", 0)
 
 
 def init_resource_receiver(host=UDP_IP, port=UDP_PORT, data_handler=None) -> ResourceReceiver:

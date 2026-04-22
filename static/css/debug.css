@@ -97,3 +97,66 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* Control loop visualizer */
+.control-chart-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.75rem;
+  min-height: 210px;
+}
+
+.control-chart {
+  width: 100%;
+  height: 110px;
+  display: block;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border-radius: 2px;
+  margin-right: 0.2rem;
+}
+
+.legend-setpoint { background: #0dcaf0; }
+.legend-output { background: #20c997; }
+.legend-error { background: #ffc107; }
+
+.attitude-field-row .form-control {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.attitude-field-row .form-control:focus {
+  border-color: #0dcaf0;
+  box-shadow: 0 0 0 0.1rem rgba(13, 202, 240, 0.25);
+}
+
+#attitude-feedback {
+  min-width: 200px;
+}
+
+.axis-status {
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+}
+
+.telemetry-row.override-active td {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.log-stream {
+  background: rgba(0, 0, 0, 0.4);
+  min-height: 240px;
+}

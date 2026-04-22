@@ -7,6 +7,9 @@ from lib.ninedof_receiver import init_imu_receiver
 from lib.axis_config_sender import send_axis_config
 from lib.resource_receiver import init_resource_receiver
 from lib.json_data_handler import JSONDataHandler
+from lib.control_telemetry import init_control_telemetry
+from lib.log_udp_receiver import init_log_stream
+from lib.setpoint_override import init_setpoint_override
 import atexit
 import os
 
@@ -75,6 +78,16 @@ app.config["IP_CAMERA"] = init_ip_camera(
 )
 # Start background resource monitor receiver (UDP port 12346)
 app.config["RESOURCE"] = init_resource_receiver(port=12346)
+app.config["BITMASK"].set_resource_monitor(app.config["RESOURCE"])
+
+# Initialize setpoint override client (UDP port 5007)
+app.config["SETPOINT_OVERRIDE"] = init_setpoint_override(resource_monitor=app.config["RESOURCE"])
+
+# Start control loop telemetry receiver (UDP port 5005)
+app.config["CONTROL_TELEM"] = init_control_telemetry(port=5005)
+
+# Start Zephyr log stream receiver (UDP port 5006)
+app.config["LOG_STREAM"] = init_log_stream(port=5006)
 
 register_routes(app)
 camera = init_camera()
@@ -92,6 +105,12 @@ def _shutdown():
     if ip_cam: ip_cam.stop()
     resource = app.config.get("RESOURCE")
     if resource: resource.stop()
+    ctrl_telem = app.config.get("CONTROL_TELEM")
+    if ctrl_telem: ctrl_telem.stop()
+    log_stream = app.config.get("LOG_STREAM")
+    if log_stream: log_stream.stop()
+    sp_override = app.config.get("SETPOINT_OVERRIDE")
+    if sp_override: sp_override.close()
 atexit.register(_shutdown)
 
 def run_dashboard_server():
