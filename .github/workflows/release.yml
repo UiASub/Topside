@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows
+            binary: Topside.exe
+            data_sep: ';'
+          - os: ubuntu-latest
+            label: linux
+            binary: Topside
+            data_sep: ':'
+          - os: macos-latest
+            label: macos
+            binary: Topside
+            data_sep: ':'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --onefile --name Topside --add-data "static${{ matrix.data_sep }}static" app.py
+
+      - name: Stage release contents
+        shell: bash
+        run: |
+          mkdir -p release/Topside
+          cp "dist/${{ matrix.binary }}" "release/Topside/${{ matrix.binary }}"
+          cp -r data "release/Topside/data"
+
+      - name: Create archive
+        shell: bash
+        working-directory: release
+        run: |
+          if [ "${{ matrix.label }}" = "windows" ]; then
+            7z a "Topside-${{ github.ref_name }}-${{ matrix.label }}.zip" Topside
+          else
+            zip -r "Topside-${{ github.ref_name }}-${{ matrix.label }}.zip" Topside
+          fi
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Topside-${{ matrix.label }}
+          path: release/Topside-${{ github.ref_name }}-${{ matrix.label }}.zip
+          if-no-files-found: error
+
+      - name: Install Inno Setup
+        if: matrix.label == 'windows'
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile Windows installer
+        if: matrix.label == 'windows'
+        shell: cmd
+        run: iscc /DAppVersion=${{ github.ref_name }} installer\Topside.iss
+
+      - name: Upload installer artifact
+        if: matrix.label == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Topside-windows-installer
+          path: installer/output/Topside-${{ github.ref_name }}-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.zip
+            artifacts/*.exe
+          generate_release_notes: true
+          fail_on_unmatched_files: true

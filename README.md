@@ -1,3 +1,5 @@
+> **Just want to run it?** See [docs/SETUP.md](docs/SETUP.md) for the installer and network setup instructions.
+
 **Install dependencies to run (not tested)**
 ```bash
 pip install -r requirements.txt
