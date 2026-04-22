@@ -2,7 +2,6 @@
 logs/*
 .idea/*
 debug_server/server_logs/*
-docs/superpowers/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
