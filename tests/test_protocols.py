@@ -4,7 +4,7 @@ import pytest
 
 import lib.control_telemetry as control_telem
 import lib.resource_receiver as resource_telem
-from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client
+from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
 
 
 class DummyHandler:
@@ -29,6 +29,14 @@ def test_bitmask_packet_big_endian():
     assert pkt[4:12] == struct.pack("!Q", payload)
     expected_crc = crc.crc32_ieee(struct.pack("!IQ", seq, payload))
     assert pkt[12:] == struct.pack("!I", expected_crc)
+
+
+def test_system_reset_packet_crc():
+    pkt = system_control_client.build_reset_packet(0x01020304)
+    assert pkt[:4] == b"RST1"
+    assert pkt[4:8] == struct.pack("!I", 0x01020304)
+    expected_crc = crc.crc32_ieee(pkt[:8])
+    assert pkt[8:] == struct.pack("!I", expected_crc)
 
 
 def test_network_defaults_use_current_mcu_address():

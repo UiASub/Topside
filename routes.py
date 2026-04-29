@@ -231,6 +231,17 @@ def register_routes(app):
         entries = log_stream.get_recent(limit) if log_stream else []
         return jsonify({"ok": True, "logs": entries})
 
+    @app.route("/api/system/reset", methods=["POST"])
+    def system_reset():
+        client = current_app.config.get("SYSTEM_CONTROL")
+        if not client:
+            return jsonify({"ok": False, "error": "System control client unavailable"}), 503
+        try:
+            result = client.send_reset()
+        except Exception as exc:  # pylint: disable=broad-except
+            return jsonify({"ok": False, "error": str(exc)}), 503
+        return jsonify({"ok": True, "reset": result})
+
     @app.route("/api/setpoint/status", methods=["GET"])
     def setpoint_status():
         client = current_app.config.get("SETPOINT_OVERRIDE")
