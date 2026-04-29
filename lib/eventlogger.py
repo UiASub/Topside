@@ -1,11 +1,12 @@
 import logging
-from datetime import datetime
 import os
+from datetime import datetime
 
-MAX_IMPORTANT_LOGS = 10 # Maximum number of important logs to store for GUI display
+MAX_IMPORTANT_LOGS = 10  # Maximum number of important logs to store for GUI display
 LOG_FILE = f"logs/log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 
-os.makedirs('logs', exist_ok=True)
+os.makedirs("logs", exist_ok=True)
+
 
 class Logger:
     def __init__(self, log_file=LOG_FILE, max_important_logs=MAX_IMPORTANT_LOGS):
@@ -17,14 +18,12 @@ class Logger:
 
         # Create the log file if it doesn't exist
         if not os.path.isfile(self.log_file):
-            with open(self.log_file, 'w') as f:
-                f.write('')
+            with open(self.log_file, "w") as f:
+                f.write("")
 
         # Configure the logging module
         logging.basicConfig(
-            filename=self.log_file,
-            level=logging.DEBUG,
-            format='%(asctime)s - %(levelname)s - %(message)s'
+            filename=self.log_file, level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
     def _add_to_info_list(self, message):
@@ -62,8 +61,8 @@ class Logger:
         log_message = f"{timestamp} - {event_type} - {message}"
 
         # Write to file directly for custom events
-        with open(self.log_file, 'a') as f:
-            f.write(log_message + '\n')
+        with open(self.log_file, "a") as f:
+            f.write(log_message + "\n")
 
         self._add_to_error_list(f"{event_type}: {message}")
 
@@ -78,6 +77,7 @@ class Logger:
     def get_error_logs(self):
         """Returns a list of important logs for GUI display."""
         return self.error_logs_list
+
 
 logger = Logger()
 

@@ -2,9 +2,8 @@ import struct
 
 import pytest
 
-from lib import bitmask
-from lib import crc
 import lib.control_telemetry as control_telem
+from lib import bitmask, crc
 
 
 class DummyHandler:

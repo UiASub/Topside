@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Control loop telemetry receiver.
 
 Consumes the packed struct emitted by ``control_telemetry.c`` and exposes the
@@ -14,6 +12,8 @@ latest setpoint/output/error triplets for each axis so the debug UI can render
 
 The CRC covers the bytes up to but excluding the CRC field.
 """
+
+from __future__ import annotations
 
 import json
 import struct
@@ -37,7 +37,9 @@ CONTROL_LOG = LOG_DIR / "control_telemetry.ndjson"
 
 
 class ControlTelemetryReceiver:
-    def __init__(self, host: str = "0.0.0.0", port: int = CONTROL_TELEM_PORT, data_handler: JSONDataHandler | None = None):
+    def __init__(
+        self, host: str = "0.0.0.0", port: int = CONTROL_TELEM_PORT, data_handler: JSONDataHandler | None = None
+    ):
         self.host = host
         self.port = port
         self.data_handler = data_handler or JSONDataHandler()
@@ -123,7 +125,9 @@ class ControlTelemetryReceiver:
             print(f"Control telemetry: failed to log snapshot: {exc}")
 
 
-def init_control_telemetry(host: str = "0.0.0.0", port: int = CONTROL_TELEM_PORT, data_handler: JSONDataHandler | None = None) -> ControlTelemetryReceiver:
+def init_control_telemetry(
+    host: str = "0.0.0.0", port: int = CONTROL_TELEM_PORT, data_handler: JSONDataHandler | None = None
+) -> ControlTelemetryReceiver:
     receiver = ControlTelemetryReceiver(host=host, port=port, data_handler=data_handler)
     receiver.start()
     return receiver

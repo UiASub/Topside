@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import socket
 import json
+import socket
 import threading
 import time
 from pathlib import Path
@@ -172,6 +172,7 @@ class IMUReceiver:
         self._log_raw_packet(text)
 
         imu = msg.get("imu", {})
+
         def _val(key: str, default: float = float("nan")) -> float:
             value = imu.get(key, default)
             try:
@@ -198,17 +199,11 @@ class IMUReceiver:
             self._last_recv_time = time.monotonic()
 
             # Remap sensor axes to ROV frame
-            raw_yaw, raw_pitch, raw_roll = self._apply_remap(
-                sensor_yaw, sensor_pitch, sensor_roll
-            )
-            raw_yr, raw_pr, raw_rr = self._apply_remap(
-                sensor_yr, sensor_pr, sensor_rr
-            )
+            raw_yaw, raw_pitch, raw_roll = self._apply_remap(sensor_yaw, sensor_pitch, sensor_roll)
+            raw_yr, raw_pr, raw_rr = self._apply_remap(sensor_yr, sensor_pr, sensor_rr)
 
             # Remap accelerometer axes to ROV frame
-            mapped_ax, mapped_ay, mapped_az = self._apply_accel_remap(
-                accel_x, accel_y, accel_z
-            )
+            mapped_ax, mapped_ay, mapped_az = self._apply_accel_remap(accel_x, accel_y, accel_z)
 
             # Apply tare offset
             yaw = raw_yaw - self._tare_offset["yaw"]
@@ -230,19 +225,21 @@ class IMUReceiver:
 
         # Update data.json
         try:
-            self.data_handler.update_data({
-                "imu": {
-                    "yaw": _coerce_json_number(yaw),
-                    "pitch": _coerce_json_number(pitch),
-                    "roll": _coerce_json_number(roll),
-                    "yr": _coerce_json_number(raw_yr),
-                    "pr": _coerce_json_number(raw_pr),
-                    "rr": _coerce_json_number(raw_rr),
-                    "ax": _coerce_json_number(mapped_ax, precision=3),
-                    "ay": _coerce_json_number(mapped_ay, precision=3),
-                    "az": _coerce_json_number(mapped_az, precision=3),
+            self.data_handler.update_data(
+                {
+                    "imu": {
+                        "yaw": _coerce_json_number(yaw),
+                        "pitch": _coerce_json_number(pitch),
+                        "roll": _coerce_json_number(roll),
+                        "yr": _coerce_json_number(raw_yr),
+                        "pr": _coerce_json_number(raw_pr),
+                        "rr": _coerce_json_number(raw_rr),
+                        "ax": _coerce_json_number(mapped_ax, precision=3),
+                        "ay": _coerce_json_number(mapped_ay, precision=3),
+                        "az": _coerce_json_number(mapped_az, precision=3),
+                    }
                 }
-            })
+            )
         except Exception as e:
             print(f"IMU: Error updating data: {e}")
 

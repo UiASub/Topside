@@ -60,17 +60,29 @@ def build_axis_packet(imu_axes: dict, accel_axes: dict, offset: dict) -> bytes:
     body = struct.pack(
         "<BBBBBBB BBBBBB x fff",
         AXIS_PKT_SET,
-        yaw_src, yaw_sign, pitch_src, pitch_sign, roll_src, roll_sign,
-        ax_src, ax_sign, ay_src, ay_sign, az_src, az_sign,
-        off_x, off_y, off_z,
+        yaw_src,
+        yaw_sign,
+        pitch_src,
+        pitch_sign,
+        roll_src,
+        roll_sign,
+        ax_src,
+        ax_sign,
+        ay_src,
+        ay_sign,
+        az_src,
+        az_sign,
+        off_x,
+        off_y,
+        off_z,
     )
     crc = zlib.crc32(body) & 0xFFFFFFFF
     return body + struct.pack("<I", crc)
 
 
-def send_axis_config(imu_axes: dict = None, accel_axes: dict = None,
-                     offset: dict = None,
-                     host=NUCLEO_HOST, port=AXIS_CONFIG_PORT):
+def send_axis_config(
+    imu_axes: dict = None, accel_axes: dict = None, offset: dict = None, host=NUCLEO_HOST, port=AXIS_CONFIG_PORT
+):
     """Send full axis configuration to the microcontroller.
 
     All three dicts are optional; defaults are identity mapping / zero offset.

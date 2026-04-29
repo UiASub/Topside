@@ -2,11 +2,13 @@ import json
 import os
 import re
 
-from flask import render_template, jsonify, Response, request, current_app
-from lib.json_data_handler import JSONDataHandler
-from lib.camera import init_camera, generate_frames, generate_rpi_frames, generate_ip_camera_frames
+from flask import Response, current_app, jsonify, render_template, request
+
 from lib.axis_config_sender import send_axis_config
-from lib.pid_config_client import send_pid_gains, request_pid_gains, AXES as PID_AXES
+from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames, init_camera
+from lib.json_data_handler import JSONDataHandler
+from lib.pid_config_client import AXES as PID_AXES
+from lib.pid_config_client import request_pid_gains, send_pid_gains
 
 PID_CONFIGS_FILE = os.path.join(os.path.dirname(__file__), "data", "pid_configs.json")
 
@@ -21,6 +23,7 @@ def _load_pid_configs():
 def _save_pid_configs(configs):
     with open(PID_CONFIGS_FILE, "w") as f:
         json.dump(configs, f, indent=2)
+
 
 # Initialize required components
 data_handler = JSONDataHandler()
@@ -49,6 +52,7 @@ def _send_full_axis_config():
     offset = config_handler.get_section("imu_offset") or _DEFAULT_OFFSET
     send_axis_config(imu_axes=imu_axes, accel_axes=accel_axes, offset=offset)
 
+
 # Default resource data (used when no telemetry received)
 DEFAULT_RESOURCES = {
     "sequence": 0,
@@ -59,7 +63,7 @@ DEFAULT_RESOURCES = {
     "heap_total_kb": 0,
     "thread_count": 0,
     "udp_rx_count": 0,
-    "udp_rx_errors": 0
+    "udp_rx_errors": 0,
 }
 
 
@@ -194,13 +198,15 @@ def register_routes(app):
         uplink = bm.get_uplink_status() if bm else {}
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
         state = override.get_state() if override else {}
-        return jsonify({
-            "ok": True,
-            "uplink": uplink,
-            "udp_rx_count": udp_rx,
-            "udp_rx_errors": udp_err,
-            "override": state,
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "uplink": uplink,
+                "udp_rx_count": udp_rx,
+                "udp_rx_errors": udp_err,
+                "override": state,
+            }
+        )
 
     @app.route("/api/control/telemetry", methods=["GET"])
     def control_telemetry():
@@ -248,8 +254,8 @@ def register_routes(app):
             bm.set_from_axes(**axes)
 
         # allow raw fields
-        allowed = {"surge","sway","heave","roll","pitch","yaw","light","manip"}
-        raw = {k:int(v) for k,v in data.items() if k in allowed}
+        allowed = {"surge", "sway", "heave", "roll", "pitch", "yaw", "light", "manip"}
+        raw = {k: int(v) for k, v in data.items() if k in allowed}
         if raw:
             bm.set_command(**raw)
 
@@ -268,15 +274,17 @@ def register_routes(app):
         bm = current_app.config["BITMASK"]
         resource = current_app.config.get("RESOURCE")
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
-        return jsonify({
-            "ok": True,
-            "command": bm.get_command(),
-            "uplink": bm.get_uplink_status(),
-            "resource": {
-                "udp_rx_count": udp_rx,
-                "udp_rx_errors": udp_err,
-            },
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "command": bm.get_command(),
+                "uplink": bm.get_uplink_status(),
+                "resource": {
+                    "udp_rx_count": udp_rx,
+                    "udp_rx_errors": udp_err,
+                },
+            }
+        )
 
     @app.route("/api/imu/status", methods=["GET"])
     def get_imu_status():
@@ -423,13 +431,15 @@ def register_routes(app):
         except Exception as exc:  # pylint: disable=broad-except
             client.set_error(str(exc))
             return jsonify({"ok": False, "error": str(exc)}), 503
-        return jsonify({
-            "ok": True,
-            "sent": axes,
-            "limits": ATTITUDE_LIMITS_DEG,
-            "state": state,
-            "units": "deg",
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "sent": axes,
+                "limits": ATTITUDE_LIMITS_DEG,
+                "state": state,
+                "units": "deg",
+            }
+        )
 
     @app.route("/api/debug/clear", methods=["POST"])
     def debug_clear():
@@ -514,7 +524,7 @@ def register_routes(app):
         """Save current PID fields as a named configuration."""
         data = request.get_json(force=True, silent=True) or {}
         name = (data.get("name") or "").strip()
-        if not name or not re.match(r'^[\w\s\-\.]+$', name):
+        if not name or not re.match(r"^[\w\s\-\.]+$", name):
             return jsonify({"ok": False, "error": "Invalid config name"}), 400
         gains = data.get("gains")
         if not isinstance(gains, dict):

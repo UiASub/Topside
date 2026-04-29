@@ -1,30 +1,32 @@
+import shutil
+import subprocess
+import threading
+import time
+
 import cv2
 import numpy as np
-import threading
-import subprocess
-import shutil
-import time
+
 
 # Dummy ArUco detector to keep code functional after removing autonomous
 class DummyArUcoMarkerDetector:
     def __init__(self, camera_matrix=None, dist_coeffs=None):
         pass
+
     def detect_markers(self, frame):
         return [], [], []
+
     def draw_detected_markers(self, frame, corners, ids):
         return frame
+
 
 def init_camera():
     """Initialize and return the default webcam."""
     camera = cv2.VideoCapture(0)
     return camera
 
+
 def generate_frames(camera):
-    camera_matrix = np.array([
-        [900, 0, 640],
-        [0, 900, 360],
-        [0, 0, 1]
-    ], dtype=np.float32)
+    camera_matrix = np.array([[900, 0, 640], [0, 900, 360], [0, 0, 1]], dtype=np.float32)
     dist_coeffs = np.zeros((5, 1), dtype=np.float32)
 
     detector = DummyArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
@@ -35,10 +37,9 @@ def generate_frames(camera):
             break
         corners, ids, rejected = detector.detect_markers(frame)
         frame = detector.draw_detected_markers(frame, corners, ids)
-        ret, buffer = cv2.imencode('.jpg', frame)
+        ret, buffer = cv2.imencode(".jpg", frame)
         frame = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
 class RPiCameraReceiver:
@@ -127,7 +128,7 @@ class RPiCameraReceiver:
         }
 
     def _set_frame(self, frame):
-        ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ok:
             return
         self._set_jpeg_bytes(buf.tobytes())
@@ -142,9 +143,17 @@ class RPiCameraReceiver:
 
     def _build_placeholder_jpeg(self):
         blank = np.zeros((720, 1280, 3), dtype=np.uint8)
-        cv2.putText(blank, "WAITING FOR RPI CAMERA STREAM", (280, 360),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 222, 255), 2, cv2.LINE_AA)
-        ok, buf = cv2.imencode('.jpg', blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        cv2.putText(
+            blank,
+            "WAITING FOR RPI CAMERA STREAM",
+            (280, 360),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (0, 222, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        ok, buf = cv2.imencode(".jpg", blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         return buf.tobytes() if ok else b""
 
     def _run(self):
@@ -213,26 +222,55 @@ class RPiCameraReceiver:
 
         # Decode RTP/H264 and stream concatenated JPEGs to stdout.
         cmd = [
-            "gst-launch-1.0", "-q", "-e",
-            "udpsrc", f"address={self.host}", f"port={self.port}",
+            "gst-launch-1.0",
+            "-q",
+            "-e",
+            "udpsrc",
+            f"address={self.host}",
+            f"port={self.port}",
             "caps=application/x-rtp,media=video,encoding-name=H264,payload=96,clock-rate=90000",
-            "!", "rtpjitterbuffer", f"latency={self.latency_ms}", "drop-on-latency=true",
-            "!", "rtph264depay",
-            "!", "h264parse",
-            "!", "decodebin",
-            "!", "videoconvert",
+            "!",
+            "rtpjitterbuffer",
+            f"latency={self.latency_ms}",
+            "drop-on-latency=true",
+            "!",
+            "rtph264depay",
+            "!",
+            "h264parse",
+            "!",
+            "decodebin",
+            "!",
+            "videoconvert",
         ]
 
         if self.flip_180:
             cmd += ["!", "videoflip", "method=rotate-180"]
 
         cmd += [
-            "!", "videoscale",
-            "!", f"video/x-raw,width={self.out_width},height={self.out_height}",
-            "!", "queue", "max-size-buffers=1", "max-size-bytes=0", "max-size-time=0", "leaky=downstream",
-            "!", "jpegenc", f"quality={self.jpeg_quality}",
-            "!", "queue", "max-size-buffers=1", "max-size-bytes=0", "max-size-time=0", "leaky=downstream",
-            "!", "fdsink", "fd=1", "sync=false", "async=false",
+            "!",
+            "videoscale",
+            "!",
+            f"video/x-raw,width={self.out_width},height={self.out_height}",
+            "!",
+            "queue",
+            "max-size-buffers=1",
+            "max-size-bytes=0",
+            "max-size-time=0",
+            "leaky=downstream",
+            "!",
+            "jpegenc",
+            f"quality={self.jpeg_quality}",
+            "!",
+            "queue",
+            "max-size-buffers=1",
+            "max-size-bytes=0",
+            "max-size-time=0",
+            "leaky=downstream",
+            "!",
+            "fdsink",
+            "fd=1",
+            "sync=false",
+            "async=false",
         ]
 
         print(f"[RPi Camera]   Listening on UDP port {self.port} …")
@@ -279,8 +317,8 @@ class RPiCameraReceiver:
                         del buffer[:start]
                     break
 
-                jpg = bytes(buffer[start:end + 2])
-                del buffer[:end + 2]
+                jpg = bytes(buffer[start : end + 2])
+                del buffer[: end + 2]
 
                 if not had_frame:
                     print("[RPi Camera] ✓ Receiving frames")
@@ -369,8 +407,7 @@ def generate_rpi_frames(rpi_camera):
 
         last_seq = seq
 
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
 class IPCameraReceiver:
@@ -456,7 +493,8 @@ class IPCameraReceiver:
 
     def _set_frame(self, frame):
         ok, buf = cv2.imencode(
-            '.jpg', frame,
+            ".jpg",
+            frame,
             [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality],
         )
         if not ok:
@@ -471,10 +509,16 @@ class IPCameraReceiver:
     def _build_placeholder_jpeg(self):
         blank = np.zeros((720, 1280, 3), dtype=np.uint8)
         cv2.putText(
-            blank, "WAITING FOR IP CAMERA STREAM", (280, 360),
-            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 222, 255), 2, cv2.LINE_AA,
+            blank,
+            "WAITING FOR IP CAMERA STREAM",
+            (280, 360),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (0, 222, 255),
+            2,
+            cv2.LINE_AA,
         )
-        ok, buf = cv2.imencode('.jpg', blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        ok, buf = cv2.imencode(".jpg", blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         return buf.tobytes() if ok else b""
 
     def _open_stream(self):
@@ -567,5 +611,4 @@ def generate_ip_camera_frames(ip_camera):
         elif seq == last_seq:
             continue
         last_seq = seq
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")

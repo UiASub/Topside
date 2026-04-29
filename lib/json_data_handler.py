@@ -21,6 +21,7 @@ class JSONDataHandler:
         except (FileNotFoundError, json.JSONDecodeError) as e:
             # Avoid spamming logs on high-frequency polling.
             import time
+
             now = time.monotonic()
             if now - self._last_error_log_ts > 5.0:
                 print(f"Error reading JSON file: {e}")

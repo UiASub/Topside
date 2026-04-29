@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Setpoint override client for the control firmware."""
+
+from __future__ import annotations
 
 import struct
 import threading
@@ -58,7 +58,7 @@ class SetpointOverrideClient:
             if axis not in AXIS_BITS:
                 continue
             idx = AXIS_BITS[axis]
-            axis_mask |= (1 << idx)
+            axis_mask |= 1 << idx
             values[idx] = float(value)
         if axis_mask == 0:
             raise ValueError("No valid axes provided for override")
@@ -106,5 +106,7 @@ class SetpointOverrideClient:
             }
 
 
-def init_setpoint_override(host: str = DEFAULT_ROV_HOST, port: int = SETPOINT_OVERRIDE_PORT, resource_monitor=None) -> SetpointOverrideClient:
+def init_setpoint_override(
+    host: str = DEFAULT_ROV_HOST, port: int = SETPOINT_OVERRIDE_PORT, resource_monitor=None
+) -> SetpointOverrideClient:
     return SetpointOverrideClient(host=host, port=port, resource_monitor=resource_monitor)

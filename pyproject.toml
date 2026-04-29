@@ -19,10 +19,20 @@ dev = [
 build = [
     "pyinstaller>=6.11,<7",
 ]
+lint = [
+    "ruff>=0.14,<1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.uv]
 package = false
