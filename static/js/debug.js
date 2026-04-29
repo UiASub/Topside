@@ -46,6 +46,8 @@
   const btnAttitudeClear = document.getElementById("btn-attitude-clear");
   const attitudeFeedback = document.getElementById("attitude-feedback");
   const attitudeStatus = document.getElementById("attitude-status");
+  const btnSystemReset = document.getElementById("btn-system-reset");
+  const systemResetStatus = document.getElementById("system-reset-status");
 
   // --- Slider helpers ---
   function getSliderValue(axis) {
@@ -523,6 +525,36 @@
 
   pollIMU();
   setInterval(pollIMU, 200);
+
+  if (btnSystemReset) {
+    btnSystemReset.addEventListener("click", async () => {
+      if (!window.confirm("Restart the MCU now?")) return;
+      systemResetStatus.textContent = "SENDING";
+      systemResetStatus.className = "badge bg-warning text-dark";
+      btnSystemReset.disabled = true;
+      try {
+        const res = await fetch("/api/system/reset", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+          systemResetStatus.textContent = "RESET SENT";
+          systemResetStatus.className = "badge bg-success";
+        } else {
+          systemResetStatus.textContent = data.error || "FAILED";
+          systemResetStatus.className = "badge bg-danger";
+        }
+      } catch (e) {
+        systemResetStatus.textContent = "ERROR";
+        systemResetStatus.className = "badge bg-danger";
+        console.error("MCU reset failed:", e);
+      } finally {
+        setTimeout(() => {
+          systemResetStatus.textContent = "READY";
+          systemResetStatus.className = "badge bg-secondary";
+          btnSystemReset.disabled = false;
+        }, 3000);
+      }
+    });
+  }
 
   // IMU Offset from Mass Center
   const offsetX = document.getElementById("offset-x");

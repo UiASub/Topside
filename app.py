@@ -14,6 +14,7 @@ from lib.net_transport import DEFAULT_ROV_HOST
 from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
 from lib.setpoint_override import init_setpoint_override
+from lib.system_control_client import SystemControlClient
 from routes import register_routes
 
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
@@ -93,6 +94,9 @@ app.config["CONTROL_TELEM"] = init_control_telemetry(port=5005)
 # Start Zephyr log stream receiver (UDP port 5006)
 app.config["LOG_STREAM"] = init_log_stream(port=5006)
 
+# Initialize system control client (UDP port 5008)
+app.config["SYSTEM_CONTROL"] = SystemControlClient()
+
 register_routes(app)
 camera = init_camera()
 
@@ -125,6 +129,9 @@ def _shutdown():
     sp_override = app.config.get("SETPOINT_OVERRIDE")
     if sp_override:
         sp_override.close()
+    system_control = app.config.get("SYSTEM_CONTROL")
+    if system_control:
+        system_control.close()
 
 
 atexit.register(_shutdown)
