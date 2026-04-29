@@ -6,6 +6,18 @@ uv sync --frozen
 uv run python app.py
 ```
 
+**One-command launch**
+```bash
+./run.sh
+```
+
+On Windows, run:
+```powershell
+.\run.ps1
+```
+
+To leave the launcher terminal free, use `./run.sh --new-terminal` or `.\run.ps1 -NewTerminal`.
+
 **Run tests**
 ```bash
 uv run --frozen --group dev pytest
