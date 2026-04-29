@@ -3,7 +3,8 @@ import struct
 import pytest
 
 import lib.control_telemetry as control_telem
-from lib import bitmask, crc
+import lib.resource_receiver as resource_telem
+from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client
 
 
 class DummyHandler:
@@ -28,6 +29,14 @@ def test_bitmask_packet_big_endian():
     assert pkt[4:12] == struct.pack("!Q", payload)
     expected_crc = crc.crc32_ieee(struct.pack("!IQ", seq, payload))
     assert pkt[12:] == struct.pack("!I", expected_crc)
+
+
+def test_network_defaults_use_current_mcu_address():
+    assert net_transport.DEFAULT_ROV_HOST == "10.77.0.2"
+    assert net_transport.DEFAULT_BROADCAST == "10.77.0.255"
+    assert bitmask.NUCLEO_HOST == net_transport.DEFAULT_ROV_HOST
+    assert axis_config_sender.NUCLEO_HOST == net_transport.DEFAULT_ROV_HOST
+    assert pid_config_client.MCU_IP == net_transport.DEFAULT_ROV_HOST
 
 
 def test_control_telemetry_history(monkeypatch, tmp_path):
@@ -55,3 +64,42 @@ def test_control_telemetry_history(monkeypatch, tmp_path):
     assert len(history) == 1
     assert history[0]["sequence"] == sequence
     assert handler.last_update is not None
+
+
+def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
+    monkeypatch.setattr(resource_telem, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(resource_telem, "RESOURCE_LOG", tmp_path / "resource_monitor.ndjson")
+    handler = DummyHandler()
+    receiver = resource_telem.ResourceReceiver(data_handler=handler)
+
+    body = struct.pack(
+        ">IIBBHHBBII",
+        7,  # sequence
+        1234,  # uptime_ms
+        4,  # cpu_percent
+        1,  # heap_used_percent
+        502,  # heap_free_kb
+        512,  # heap_total_kb
+        19,  # thread_count
+        0,  # reserved
+        84,  # udp_rx_count
+        0,  # udp_rx_errors
+    )
+    packet = body + struct.pack(">I", crc.crc32_ieee(body))
+
+    receiver._process_packet(packet, ("10.77.0.2", 12346))  # pylint: disable=protected-access
+
+    assert handler.last_update == {
+        "resources": {
+            "sequence": 7,
+            "uptime_ms": 1234,
+            "cpu_percent": 4,
+            "heap_used_percent": 1,
+            "heap_free_kb": 502,
+            "heap_total_kb": 512,
+            "thread_count": 19,
+            "udp_rx_count": 84,
+            "udp_rx_errors": 0,
+        }
+    }
+    assert receiver.get_udp_counters() == (84, 0)

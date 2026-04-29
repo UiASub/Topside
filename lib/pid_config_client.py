@@ -13,7 +13,9 @@ import socket
 import struct
 import zlib
 
-MCU_IP = "192.168.1.100"
+from lib.net_transport import DEFAULT_ROV_HOST
+
+MCU_IP = DEFAULT_ROV_HOST
 PID_CONFIG_PORT = 5003
 
 PID_PKT_SET = 0x01
@@ -75,7 +77,7 @@ def _gains_match(sent, received):
     return True
 
 
-def send_pid_gains(gains, timeout=1.0, max_retries=3):
+def send_pid_gains(gains, timeout=1.0, max_retries=3, host=MCU_IP):
     """Send PID gains to MCU, verify the reply matches, retry if lost.
 
     Returns (confirmed_gains, attempts) on success, or (None, attempts) if
@@ -87,7 +89,7 @@ def send_pid_gains(gains, timeout=1.0, max_retries=3):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(timeout)
         try:
-            sock.sendto(packet, (MCU_IP, PID_CONFIG_PORT))
+            sock.sendto(packet, (host, PID_CONFIG_PORT))
             data, _ = sock.recvfrom(1024)
             confirmed = _parse_packet(data)
             if confirmed is not None and _gains_match(gains, confirmed):
@@ -101,14 +103,14 @@ def send_pid_gains(gains, timeout=1.0, max_retries=3):
     return None, max_retries
 
 
-def request_pid_gains(timeout=2.0):
+def request_pid_gains(timeout=2.0, host=MCU_IP):
     """Request current PID gains from MCU (REQUEST). Returns gains dict or None."""
     empty = {axis: {"kp": 0.0, "ki": 0.0, "kd": 0.0} for axis in AXES}
     packet = _build_packet(PID_PKT_REQUEST, empty)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(timeout)
     try:
-        sock.sendto(packet, (MCU_IP, PID_CONFIG_PORT))
+        sock.sendto(packet, (host, PID_CONFIG_PORT))
         data, _ = sock.recvfrom(1024)
         return _parse_packet(data)
     except socket.timeout:

@@ -20,7 +20,9 @@ import socket
 import struct
 import zlib
 
-NUCLEO_HOST = "192.168.1.100"
+from lib.net_transport import DEFAULT_ROV_HOST
+
+NUCLEO_HOST = DEFAULT_ROV_HOST
 AXIS_CONFIG_PORT = 5004
 
 AXIS_PKT_SET = 0x01
