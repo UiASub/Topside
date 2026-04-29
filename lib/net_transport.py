@@ -9,14 +9,15 @@ as monotonically increasing sequence counters.
 
 from __future__ import annotations
 
+import os
 import socket
 import threading
 import time
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-DEFAULT_ROV_HOST = "192.168.1.100"
-DEFAULT_BROADCAST = "192.168.1.255"
+DEFAULT_ROV_HOST = os.getenv("ROV_HOST", "10.77.0.2")
+DEFAULT_BROADCAST = os.getenv("ROV_BROADCAST", "10.77.0.255")
 BUFFER_SIZE = 4096
 
 Handler = Callable[[bytes, tuple[str, int]], None]

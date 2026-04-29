@@ -29,9 +29,9 @@ The Topside PC must be on the **same subnet as the onboard device**, otherwise n
 
 | Role            | Address              |
 |-----------------|----------------------|
-| Onboard device  | `192.168.1.100`      |
+| Onboard device  | `10.77.0.2`          |
 | IP camera       | `192.168.1.168`      |
-| Topside PC      | any unused address in `192.168.1.0/24`, e.g. `192.168.1.10` |
+| Topside PC      | `10.77.0.1/24` on the MCU Ethernet adapter |
 
 ### Setting a static IP on Windows
 
@@ -39,13 +39,15 @@ The Topside PC must be on the **same subnet as the onboard device**, otherwise n
 2. Click the active adapter (the one connected to the device, usually **Ethernet**).
 3. Next to **IP assignment**, click **Edit** → choose **Manual** → toggle **IPv4** on.
 4. Enter:
-   - **IP address:** `192.168.1.10`
+   - **IP address:** `10.77.0.1`
    - **Subnet mask:** `255.255.255.0`
    - **Gateway:** leave blank
    - **DNS:** leave blank
 5. Save.
 
-To verify, open a Command Prompt and run `ping 192.168.1.100`. You should see replies.
+To verify, open a Command Prompt and run `ping 10.77.0.2`. You should see replies.
+
+By default Topside sends MCU traffic to `10.77.0.2`. For a nonstandard setup, set `ROV_HOST` before launching Topside. Broadcast helpers default to `10.77.0.255` and can be overridden with `ROV_BROADCAST`.
 
 ### Ports used
 
@@ -61,6 +63,6 @@ If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002
 
 ## Troubleshooting
 
-- **No video / no telemetry** — verify the static IP, then `ping 192.168.1.100`. If the ping fails, the network is the problem, not the app.
+- **No video / no telemetry** — verify the static IP, then `ping 10.77.0.2`. If the ping fails, the network is the problem, not the app.
 - **Settings don't persist between launches** — the config lives at `%LOCALAPPDATA%\Topside\data\config.json`. The installer only writes a starter file if it doesn't exist, so reinstalling won't wipe your settings.
 - **App window closes immediately** — launch from the Start Menu (not by double-clicking inside Program Files). If the console flashes and disappears, run `Topside.exe` from `cmd.exe` to see the error.

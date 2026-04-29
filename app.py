@@ -10,6 +10,7 @@ from lib.control_telemetry import init_control_telemetry
 from lib.controller import Controller
 from lib.json_data_handler import JSONDataHandler
 from lib.log_udp_receiver import init_log_stream
+from lib.net_transport import DEFAULT_ROV_HOST
 from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
 from lib.setpoint_override import init_setpoint_override
@@ -18,7 +19,7 @@ from routes import register_routes
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
 
 # Start background UDP sender (20 Hz)
-app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host="192.168.1.100", port=12345)
+app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host=DEFAULT_ROV_HOST, port=12345)
 
 # Initialize and start controller handler (60 Hz)
 app.config["CONTROLLER"] = Controller(bitmask_client=app.config["BITMASK"], rate_hz=60.0)
@@ -44,6 +45,7 @@ send_axis_config(
     imu_axes=_saved_axes,
     accel_axes=_saved_accel_axes,
     offset=_saved_offset,
+    host=DEFAULT_ROV_HOST,
 )
 
 # Initialize RPi camera stream receiver.
