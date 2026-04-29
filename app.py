@@ -1,17 +1,19 @@
-from flask import Flask
-from lib.camera import init_camera, init_rpi_camera, init_ip_camera
-from lib.controller import Controller
-from routes import register_routes
-from lib.bitmask import init_bitmask
-from lib.ninedof_receiver import init_imu_receiver
-from lib.axis_config_sender import send_axis_config
-from lib.resource_receiver import init_resource_receiver
-from lib.json_data_handler import JSONDataHandler
-from lib.control_telemetry import init_control_telemetry
-from lib.log_udp_receiver import init_log_stream
-from lib.setpoint_override import init_setpoint_override
 import atexit
 import os
+
+from flask import Flask
+
+from lib.axis_config_sender import send_axis_config
+from lib.bitmask import init_bitmask
+from lib.camera import init_camera, init_ip_camera, init_rpi_camera
+from lib.control_telemetry import init_control_telemetry
+from lib.controller import Controller
+from lib.json_data_handler import JSONDataHandler
+from lib.log_udp_receiver import init_log_stream
+from lib.ninedof_receiver import init_imu_receiver
+from lib.resource_receiver import init_resource_receiver
+from lib.setpoint_override import init_setpoint_override
+from routes import register_routes
 
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
 
@@ -92,30 +94,44 @@ app.config["LOG_STREAM"] = init_log_stream(port=5006)
 register_routes(app)
 camera = init_camera()
 
+
 def _shutdown():
     ctrl = app.config.get("CONTROLLER")
-    if ctrl: ctrl.stop()
+    if ctrl:
+        ctrl.stop()
     bm = app.config.get("BITMASK")
-    if bm: bm.stop()
+    if bm:
+        bm.stop()
     imu = app.config.get("IMU")
-    if imu: imu.stop()
+    if imu:
+        imu.stop()
     rpi_cam = app.config.get("RPI_CAMERA")
-    if rpi_cam: rpi_cam.stop()
+    if rpi_cam:
+        rpi_cam.stop()
     ip_cam = app.config.get("IP_CAMERA")
-    if ip_cam: ip_cam.stop()
+    if ip_cam:
+        ip_cam.stop()
     resource = app.config.get("RESOURCE")
-    if resource: resource.stop()
+    if resource:
+        resource.stop()
     ctrl_telem = app.config.get("CONTROL_TELEM")
-    if ctrl_telem: ctrl_telem.stop()
+    if ctrl_telem:
+        ctrl_telem.stop()
     log_stream = app.config.get("LOG_STREAM")
-    if log_stream: log_stream.stop()
+    if log_stream:
+        log_stream.stop()
     sp_override = app.config.get("SETPOINT_OVERRIDE")
-    if sp_override: sp_override.close()
+    if sp_override:
+        sp_override.close()
+
+
 atexit.register(_shutdown)
+
 
 def run_dashboard_server():
     print("Starting dashboard server on port 5000...")
     app.run(debug=True, port=5000, use_reloader=False, threaded=True)
+
 
 if __name__ == "__main__":
     run_dashboard_server()

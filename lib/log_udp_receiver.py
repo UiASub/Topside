@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Listener for Zephyr's UDP log backend.
 
 The firmware forwards human-readable log lines over UDP broadcast on
@@ -8,6 +6,8 @@ no reply/acknowledgement channel. This module buffers the most recent entries so
 the debug page can show live logs while also writing everything to disk for
 post-mission correlation.
 """
+
+from __future__ import annotations
 
 import json
 import re
@@ -62,7 +62,7 @@ class LogStreamReceiver:
         match = SEVERITY_RE.match(text)
         if match:
             level = match.group("level")
-            text = text[match.end():]
+            text = text[match.end() :]
         entry = {
             "ts": time.time(),
             "level": level,
@@ -71,7 +71,7 @@ class LogStreamReceiver:
         with self._lock:
             self._buffer.append(entry)
             if len(self._buffer) > self.max_entries:
-                self._buffer = self._buffer[-self.max_entries:]
+                self._buffer = self._buffer[-self.max_entries :]
         self._append_log(entry)
 
     def _append_log(self, entry: dict) -> None:

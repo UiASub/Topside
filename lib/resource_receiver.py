@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Resource monitor telemetry receiver.
 
 Decodes the packed ``telemetry_packet_t`` struct described in
@@ -10,6 +8,8 @@ Each packet is big-endian with an IEEE 802.3 CRC appended. This module shares
 the global CRC helper plus the UDP transport scaffolding so that the receiver
 matches the embedded ``crc32_calc()`` and ``net.c`` behavior exactly.
 """
+
+from __future__ import annotations
 
 import json
 import struct
@@ -44,6 +44,7 @@ DIAG_LOG_EVERY_SEC = 5.0
 
 TELEMETRY_FORMAT = ">IIBBHHBBIII"  # Big-endian (network byte order)
 TELEMETRY_SIZE = struct.calcsize(TELEMETRY_FORMAT)
+
 
 class ResourceReceiver:
     """Background UDP receiver for resource telemetry from Nucleo board."""
@@ -93,7 +94,7 @@ class ResourceReceiver:
                 "crc_errors": self._crc_errors,
                 "packets_lost": self._packets_lost,
                 "last_seq": self._last_seq,
-                "last_data": self._last_data.copy()
+                "last_data": self._last_data.copy(),
             }
 
     def _process_packet(self, data: bytes, addr: tuple):
@@ -104,9 +105,19 @@ class ResourceReceiver:
 
         # Unpack the data
         try:
-            (sequence, uptime_ms, cpu_percent, heap_used_percent,
-             heap_free_kb, heap_total_kb, thread_count, reserved,
-             udp_rx_count, udp_rx_errors, recv_crc) = struct.unpack(TELEMETRY_FORMAT, data)
+            (
+                sequence,
+                uptime_ms,
+                cpu_percent,
+                heap_used_percent,
+                heap_free_kb,
+                heap_total_kb,
+                thread_count,
+                reserved,
+                udp_rx_count,
+                udp_rx_errors,
+                recv_crc,
+            ) = struct.unpack(TELEMETRY_FORMAT, data)
         except struct.error as e:
             print(f"Resource: Unpack error from {addr}: {e}")
             return
@@ -131,7 +142,7 @@ class ResourceReceiver:
             "heap_total_kb": heap_total_kb,
             "thread_count": thread_count,
             "udp_rx_count": udp_rx_count,
-            "udp_rx_errors": udp_rx_errors
+            "udp_rx_errors": udp_rx_errors,
         }
 
         # Update stats

@@ -10,7 +10,7 @@ checksum a packet.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Optional
 
 # Ethernet / IEEE 802.3 parameters
 _POLY_REFLECTED = 0xEDB88320

@@ -1,20 +1,22 @@
 import os
 
 # fix for error 'NSInternalInconsistencyException', reason: 'nextEventMatchingMask should only be called from the Main Thread on posix systems
-if os.name == 'posix':
-    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-    os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Run pygame without video/window on Linux/MacOS
+if os.name == "posix":
+    os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+    os.environ["SDL_VIDEODRIVER"] = "dummy"  # Run pygame without video/window on Linux/MacOS
 
-import pygame
-from lib.bitmask import BitmaskClient
 import threading
 import time
+
+import pygame
+
+from lib.bitmask import BitmaskClient
 
 
 class Controller:
     AXIS_THRESHOLDS = {
-        "leftx":  (0, 0.1),
-        "lefty":  (1, 0.1),
+        "leftx": (0, 0.1),
+        "lefty": (1, 0.1),
         "rightx": (2, 0.1),
         "righty": (3, 0.1),
     }
@@ -29,23 +31,27 @@ class Controller:
         self.joystick = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.light = 0  # Initial light value
-        self._prev_dpad_up = False   # For edge detection of light increase (D-pad up)
+        self._prev_dpad_up = False  # For edge detection of light increase (D-pad up)
         self._prev_dpad_down = False  # For edge detection of light decrease (D-pad down)
         self._stop = threading.Event()
         self._thread = None
         self._reconnect_delay = 0  # Counter for reconnect attempts
         # Debug override state
-        self._debug_override = None   # None = no override; dict of axes when active
+        self._debug_override = None  # None = no override; dict of axes when active
         self._debug_lock = threading.Lock()
         # Gain settings (per-axis and master)
         self._gain_lock = threading.Lock()
         self._master_gain = 1.0
         self._axis_gains = {
-            "surge": 1.0, "sway": 1.0, "heave": 1.0,
-            "roll": 1.0, "pitch": 1.0, "yaw": 1.0,
+            "surge": 1.0,
+            "sway": 1.0,
+            "heave": 1.0,
+            "roll": 1.0,
+            "pitch": 1.0,
+            "yaw": 1.0,
         }
         self._try_connect()
-        
+
     def _try_connect(self):
         """Try to connect to first available joystick without reinitializing subsystem."""
         if pygame.joystick.get_count() > 0:
@@ -107,15 +113,19 @@ class Controller:
         """Multiply a value by its per-axis gain and the master gain."""
         with self._gain_lock:
             return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
-    
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
         if self.bm:
             self.bm.set_from_axes(
-                surge=0, sway=0, heave=0,
-                roll=0, pitch=0, yaw=0,
+                surge=0,
+                sway=0,
+                heave=0,
+                roll=0,
+                pitch=0,
+                yaw=0,
                 light=self.light,  # Keep light at current level
-                manip=0
+                manip=0,
             )
 
     # --- Debug override API ---
@@ -159,7 +169,7 @@ class Controller:
                 elif event.type == pygame.JOYDEVICEREMOVED:
                     print("Joystick device removed!")
                     self.joystick = None
-                    self._reset_command() # Stop movement if disconnected
+                    self._reset_command()  # Stop movement if disconnected
         except SystemError:
             # pygame event system can error during hotplug, just continue
             pass
@@ -171,7 +181,7 @@ class Controller:
                 self._reconnect_delay = 0
                 self._try_connect()
             return
-        
+
         # Check if joystick is still connected
         try:
             _ = self.joystick.get_axis(0)
@@ -179,65 +189,58 @@ class Controller:
             print("Controller disconnected!")
             self.joystick = None
             self._reconnect_delay = 0
-            self._reset_command() # Stop movement if disconnected
+            self._reset_command()  # Stop movement if disconnected
             return
 
         # --- BITMASK OUTPUT ----
         # Read axes
-        heave = -self.get_calibrated_axis(3)   # Right Y (inverted)
-        yaw = self.get_calibrated_axis(2)      # Right X
+        heave = -self.get_calibrated_axis(3)  # Right Y (inverted)
+        yaw = self.get_calibrated_axis(2)  # Right X
         # manip is r2 axis minus l2 axis
         # Triggers: convert from -1..1 to 0..1
         r2 = (self.joystick.get_axis(5) + 1) / 2  # R2 trigger
         l2 = (self.joystick.get_axis(4) + 1) / 2  # L2 trigger
         manip = r2 - l2
 
-        # This runs while button 9 is held down L1 to make 
+        # This runs while button 9 is held down L1 to make
         # surge and sway controls toggleable to pitch and roll
         if self.joystick.get_button(9):  # Pitch and roll control
             pitch = -self.get_calibrated_axis(1)  # Left Y (inverted)
-            roll = self.get_calibrated_axis(0)    # Left X
+            roll = self.get_calibrated_axis(0)  # Left X
             surge = 0.0
             sway = 0.0
         else:  # Surge and sway control
             surge = -self.get_calibrated_axis(1)  # Right Y (inverted)
-            sway = self.get_calibrated_axis(0)    # Right X
+            sway = self.get_calibrated_axis(0)  # Right X
             pitch = 0.0
             roll = 0.0
-        
+
         # Light control with edge detection via D-pad hat (up/down)
         hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
         dpad_up = hat[1] > 0
         dpad_down = hat[1] < 0
 
-        if dpad_up and not self._prev_dpad_up:    # Just pressed
+        if dpad_up and not self._prev_dpad_up:  # Just pressed
             self.light = min(1.0, self.light + 0.1)  # +10% per press
         if dpad_down and not self._prev_dpad_down:  # Just pressed
-            self.light = max(0, self.light - 0.1)    # -10% per press
+            self.light = max(0, self.light - 0.1)  # -10% per press
 
         self._prev_dpad_up = dpad_up
         self._prev_dpad_down = dpad_down
 
         # Apply gain to each axis
         surge = self._apply_gain("surge", surge)
-        sway   = self._apply_gain("sway",  sway)
-        heave  = self._apply_gain("heave", heave)
-        roll   = self._apply_gain("roll",  roll)
-        pitch  = self._apply_gain("pitch", pitch)
-        yaw    = self._apply_gain("yaw",   yaw)
+        sway = self._apply_gain("sway", sway)
+        heave = self._apply_gain("heave", heave)
+        roll = self._apply_gain("roll", roll)
+        pitch = self._apply_gain("pitch", pitch)
+        yaw = self._apply_gain("yaw", yaw)
 
         # Send to ROV!
         self.bm.set_from_axes(
-            surge=surge,
-            sway=sway,
-            yaw=yaw,
-            pitch=pitch,
-            heave=heave,
-            roll=roll,
-            light=self.light,
-            manip=manip
+            surge=surge, sway=sway, yaw=yaw, pitch=pitch, heave=heave, roll=roll, light=self.light, manip=manip
         )
- 
+
     def run_loop(self):
         """Blocking loop that polls controller at ~60 Hz."""
         while not self._stop.is_set():

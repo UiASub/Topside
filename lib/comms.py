@@ -1,9 +1,11 @@
-import requests
 import json
-from lib import eventlogger
-import time
 import socket
 import threading
+import time
+
+import requests
+
+from lib import eventlogger
 
 url = "127.0.0.1:5000"  # Raspberry Pi IP and port for HTTP server
 urlGet = f"http://{url}/data"  # URL for retrieving data
@@ -17,6 +19,7 @@ TIME_INTERVAL = 1.0 / UPDATE_RATE  # Time interval per send cycle
 UDP_IP = "127.0.0.1"  # Replace with the receiver's IP
 UDP_PORT = 5001  # Receiver port
 CONTROLS_JSON_PATH = "data/controls.json"  # Path to controls JSON file
+
 
 def get_data():
     try:
@@ -196,7 +199,7 @@ def send_udp_data():
         udp_socket.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run UDP sender in a separate thread to keep sending data
     udp_thread = threading.Thread(target=send_udp_data, daemon=True)
     udp_thread.start()
