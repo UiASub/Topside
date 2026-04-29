@@ -1,8 +1,14 @@
 > **Just want to run it?** See [docs/SETUP.md](docs/SETUP.md) for the installer and network setup instructions.
 
-**Install dependencies to run (not tested)**
+**Run from source**
 ```bash
-pip install -r requirements.txt
+uv sync --frozen
+uv run python app.py
+```
+
+**Run tests**
+```bash
+uv run --frozen --group dev pytest
 ```
 
 How to use git:
@@ -64,4 +70,3 @@ If you want to checkout another branch whith uncommited changes
 git stash
 ```
 NB: This will discard your local changes
-
