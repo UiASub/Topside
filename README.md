@@ -18,6 +18,18 @@ On Windows, run:
 
 To leave the launcher terminal free, use `./run.sh --new-terminal` or `.\run.ps1 -NewTerminal`.
 
+**Set up MCU Ethernet**
+```bash
+./tools/k2-ethernet.sh up
+```
+
+On Windows, run from an Administrator PowerShell:
+```powershell
+.\tools\k2-ethernet.ps1 up
+```
+
+See [docs/SETUP.md](docs/SETUP.md) for manual network setup and troubleshooting.
+
 **Run tests**
 ```bash
 uv run --frozen --group dev pytest
