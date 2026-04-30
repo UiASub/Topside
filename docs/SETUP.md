@@ -56,10 +56,13 @@ By default Topside sends MCU traffic to `10.77.0.2`. For a nonstandard setup, se
 | `5000/tcp` | local     | Dashboard (browser → app)     |
 | `12345/udp`| outbound  | Control commands → device     |
 | `5002/udp` | inbound   | IMU telemetry                 |
+| `5005/udp` | inbound   | MCU control telemetry         |
+| `5006/udp` | inbound   | MCU log stream                |
+| `5008/udp` | outbound  | MCU reset/system control      |
 | `12346/udp`| inbound   | Resource monitor              |
 | `6969/udp` | inbound   | RPi camera stream             |
 
-If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002`, `12346`, and `6969`.
+If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002`, `5005`, `5006`, `12346`, and `6969`.
 
 ## Troubleshooting
 
