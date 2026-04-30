@@ -7,6 +7,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$StateDir = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "Topside"
+$StatePath = Join-Path $StateDir "k2-ethernet-state.json"
 
 function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -79,6 +81,75 @@ function Select-K2Adapter {
     return $adapters[$index].Adapter
 }
 
+function Get-AdapterKey {
+    param($Adapter)
+
+    if ($Adapter.InterfaceGuid) {
+        return $Adapter.InterfaceGuid.ToString()
+    }
+    if ($Adapter.PnPDeviceID) {
+        return $Adapter.PnPDeviceID
+    }
+    return "$($Adapter.Name)|$($Adapter.MacAddress)"
+}
+
+function Get-K2State {
+    if (-not (Test-Path $StatePath)) {
+        return $null
+    }
+
+    try {
+        return Get-Content -Raw -Path $StatePath | ConvertFrom-Json
+    } catch {
+        Write-Warning "Could not read saved K2 Ethernet state from $StatePath."
+        return $null
+    }
+}
+
+function Save-K2State {
+    param($Adapter)
+
+    $adapterKey = Get-AdapterKey $Adapter
+    $existing = Get-K2State
+    if ($existing -and $existing.AdapterKey -eq $adapterKey) {
+        return
+    }
+
+    $ipInterface = Get-NetIPInterface -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv4 -ErrorAction Stop
+    New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+    [pscustomobject]@{
+        AdapterKey = $adapterKey
+        Name = $Adapter.Name
+        Dhcp = $ipInterface.Dhcp.ToString()
+        SavedAt = (Get-Date).ToString("o")
+    } | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $StatePath
+}
+
+function Restore-K2State {
+    param($Adapter)
+
+    $state = Get-K2State
+    if (-not $state) {
+        Write-Warning "No saved K2 Ethernet state found. Leaving DHCP/static configuration unchanged."
+        return
+    }
+
+    $adapterKey = Get-AdapterKey $Adapter
+    if ($state.AdapterKey -ne $adapterKey) {
+        Write-Warning "Saved K2 Ethernet state is for '$($state.Name)', not '$($Adapter.Name)'. Leaving DHCP/static configuration unchanged."
+        return
+    }
+
+    if ($state.Dhcp -eq "Enabled") {
+        Set-NetIPInterface -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv4 -Dhcp Enabled | Out-Null
+        Write-Host "Restored DHCP on $($Adapter.Name)."
+    } else {
+        Write-Host "Leaving DHCP disabled on $($Adapter.Name), matching the state before K2 setup."
+    }
+
+    Remove-Item -Path $StatePath -ErrorAction SilentlyContinue
+}
+
 function Remove-K2Address {
     param($Adapter)
 
@@ -94,6 +165,7 @@ function Set-K2Link {
 
     $adapter = Select-K2Adapter
 
+    Save-K2State $adapter
     Remove-K2Address $adapter
     Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled | Out-Null
     New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $HostIp -PrefixLength $PrefixLength | Out-Null
@@ -110,8 +182,8 @@ function Clear-K2Link {
 
     $adapter = Select-K2Adapter
     Remove-K2Address $adapter
-    Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Enabled | Out-Null
     Write-Host "Removed $HostIp from $($adapter.Name)."
+    Restore-K2State $adapter
 }
 
 function Show-K2Status {
