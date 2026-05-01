@@ -69,7 +69,7 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
 )
 
 # Initialize IP camera (SMTSEC SIP-K327GS) via RTSP
-ip_cam_url = os.getenv("IP_CAMERA_URL", "rtsp://192.168.1.168:554/stream1")
+ip_cam_url = os.getenv("IP_CAMERA_URL", "rtsp://10.77.0.3:554/stream1")
 ip_cam_out_width = int(os.getenv("IP_CAMERA_OUT_WIDTH", "960"))
 ip_cam_out_height = int(os.getenv("IP_CAMERA_OUT_HEIGHT", "540"))
 ip_cam_jpeg_quality = int(os.getenv("IP_CAMERA_JPEG_QUALITY", "70"))
