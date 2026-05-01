@@ -15,9 +15,10 @@ Get the latest release from the [Releases page](../../releases).
 
 1. Run the installer.
 2. Windows SmartScreen will likely show **"Windows protected your PC"**. Click **More info → Run anyway**. The installer is not code-signed; this is expected.
-3. After install, launch **Topside** from the Start Menu.
-4. A console window appears and the dashboard server starts on port 5000.
-5. Open a web browser and go to <http://localhost:5000>.
+3. On the installer task page, select **Configure MCU Ethernet adapter to 10.77.0.1/24** if this PC is connected directly to the MCU network. Windows will ask for administrator approval for this step.
+4. After install, launch **Topside** from the Start Menu.
+5. A console window appears and the dashboard server starts on port 5000.
+6. Open a web browser and go to <http://localhost:5000>.
 
 To stop the app, close the console window.
 
@@ -34,6 +35,20 @@ The Topside PC must be on the **same subnet as the onboard device**, otherwise n
 | Topside PC      | `10.77.0.1/24` on the MCU Ethernet adapter |
 
 ### Setting a static IP on Windows
+
+The Windows installer can do this automatically if you select **Configure MCU Ethernet adapter to 10.77.0.1/24** during install. The portable Windows zip also includes the same helper script:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\configure_ethernet.ps1
+```
+
+Run the command from an Administrator PowerShell. By default it targets an adapter named `Ethernet`; if that does not exist, it uses the only active wired adapter. To choose a specific adapter:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\configure_ethernet.ps1 -InterfaceAlias "Ethernet 2"
+```
+
+Manual setup:
 
 1. Open **Settings → Network & internet**.
 2. Click the active adapter (the one connected to the device, usually **Ethernet**).

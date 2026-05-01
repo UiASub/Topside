@@ -1,6 +1,6 @@
 import json
-import os
 import re
+from pathlib import Path
 
 from flask import Response, current_app, jsonify, render_template, request
 
@@ -10,17 +10,18 @@ from lib.json_data_handler import JSONDataHandler
 from lib.pid_config_client import AXES as PID_AXES
 from lib.pid_config_client import request_pid_gains, send_pid_gains
 
-PID_CONFIGS_FILE = os.path.join(os.path.dirname(__file__), "data", "pid_configs.json")
+PID_CONFIGS_FILE = Path("data/pid_configs.json")
 
 
 def _load_pid_configs():
-    if os.path.exists(PID_CONFIGS_FILE):
+    if PID_CONFIGS_FILE.exists():
         with open(PID_CONFIGS_FILE, "r") as f:
             return json.load(f)
     return {}
 
 
 def _save_pid_configs(configs):
+    PID_CONFIGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PID_CONFIGS_FILE, "w") as f:
         json.dump(configs, f, indent=2)
 
