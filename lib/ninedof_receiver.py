@@ -4,15 +4,15 @@ import json
 import socket
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 from lib.json_data_handler import JSONDataHandler
+from lib.runtime_paths import log_path, logs_dir
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 5002
-LOG_DIR = Path("logs")
-IMU_LOG = LOG_DIR / "imu_raw.ndjson"
+LOG_DIR = logs_dir()
+IMU_LOG = log_path("imu_raw.ndjson")
 
 # Default: identity mapping (sensor yaw/pitch/roll = ROV yaw/pitch/roll)
 DEFAULT_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}

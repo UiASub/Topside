@@ -20,20 +20,20 @@ import struct
 import threading
 import time
 from collections import deque
-from pathlib import Path
 from typing import Deque, Dict, List
 
 from lib.crc import crc32_ieee
 from lib.json_data_handler import JSONDataHandler
 from lib.net_transport import UdpConfig, UdpListener
+from lib.runtime_paths import log_path, logs_dir
 
 CONTROL_TELEM_PORT = 5005
 AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"]
 FLOAT_COUNT = len(AXES) * 3
 PACKET_SIZE = 4 + FLOAT_COUNT * 4 + 4
 HISTORY_CAPACITY = 240  # 24 seconds @ 10 Hz
-LOG_DIR = Path("logs")
-CONTROL_LOG = LOG_DIR / "control_telemetry.ndjson"
+LOG_DIR = logs_dir()
+CONTROL_LOG = log_path("control_telemetry.ndjson")
 
 
 class ControlTelemetryReceiver:
