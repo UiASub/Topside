@@ -13,6 +13,7 @@ from lib.log_udp_receiver import init_log_stream
 from lib.net_transport import DEFAULT_ROV_HOST
 from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
+from lib.runtime_paths import data_dir, data_path
 from lib.setpoint_override import init_setpoint_override
 from lib.system_control_client import SystemControlClient
 from routes import register_routes
@@ -30,7 +31,7 @@ app.config["CONTROLLER"].start()
 app.config["IMU"] = init_imu_receiver(port=5002)
 
 # Load saved IMU axis mapping from config
-_config = JSONDataHandler(file_path="data/config.json")
+_config = JSONDataHandler(file_path=data_path("config.json"))
 _saved_axes = _config.get_section("imu_axes")
 if _saved_axes:
     app.config["IMU"].set_axis_mapping(_saved_axes)
@@ -138,6 +139,7 @@ atexit.register(_shutdown)
 
 
 def run_dashboard_server():
+    print(f"Using data directory: {data_dir()}")
     print("Starting dashboard server on port 5000...")
     app.run(debug=True, port=5000, use_reloader=False, threaded=True)
 

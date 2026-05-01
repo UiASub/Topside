@@ -15,16 +15,16 @@ import json
 import struct
 import threading
 import time
-from pathlib import Path
 
 from lib.crc import crc32_ieee
 from lib.json_data_handler import JSONDataHandler
 from lib.net_transport import UdpConfig, UdpListener
+from lib.runtime_paths import log_path, logs_dir
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 12346
-LOG_DIR = Path("logs")
-RESOURCE_LOG = LOG_DIR / "resource_monitor.ndjson"
+LOG_DIR = logs_dir()
+RESOURCE_LOG = log_path("resource_monitor.ndjson")
 DIAG_LOG_EVERY_SEC = 5.0
 
 # Telemetry packet format (must match resource_monitor.h)

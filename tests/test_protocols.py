@@ -5,6 +5,7 @@ import pytest
 import lib.control_telemetry as control_telem
 import lib.resource_receiver as resource_telem
 from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
+from lib.json_data_handler import JSONDataHandler
 
 
 class DummyHandler:
@@ -111,3 +112,14 @@ def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
         }
     }
     assert receiver.get_udp_counters() == (84, 0)
+
+
+def test_json_data_handler_creates_parent_and_preserves_sections(tmp_path):
+    data_file = tmp_path / "nested" / "data.json"
+    handler = JSONDataHandler(file_path=data_file)
+
+    handler.update_data({"imu": {"yaw": 12.5}})
+    handler.update_data({"resources": {"cpu_percent": 4}})
+
+    assert handler.get_section("imu") == {"yaw": 12.5}
+    assert handler.get_section("resources") == {"cpu_percent": 4}

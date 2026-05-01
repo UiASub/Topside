@@ -6,6 +6,7 @@ import time
 import requests
 
 from lib import eventlogger
+from lib.runtime_paths import data_path
 
 url = "127.0.0.1:5000"  # Raspberry Pi IP and port for HTTP server
 urlGet = f"http://{url}/data"  # URL for retrieving data
@@ -18,7 +19,7 @@ TIME_INTERVAL = 1.0 / UPDATE_RATE  # Time interval per send cycle
 # UDP configurations
 UDP_IP = "127.0.0.1"  # Replace with the receiver's IP
 UDP_PORT = 5001  # Receiver port
-CONTROLS_JSON_PATH = "data/controls.json"  # Path to controls JSON file
+CONTROLS_JSON_PATH = data_path("controls.json")  # Path to controls JSON file
 
 
 def get_data():

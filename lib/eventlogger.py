@@ -1,23 +1,25 @@
 import logging
-import os
 from datetime import datetime
+from pathlib import Path
+
+from lib.runtime_paths import log_path, logs_dir
 
 MAX_IMPORTANT_LOGS = 10  # Maximum number of important logs to store for GUI display
-LOG_FILE = f"logs/log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+LOG_FILE = log_path(f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt")
 
-os.makedirs("logs", exist_ok=True)
+logs_dir().mkdir(parents=True, exist_ok=True)
 
 
 class Logger:
     def __init__(self, log_file=LOG_FILE, max_important_logs=MAX_IMPORTANT_LOGS):
-        self.log_file = log_file
+        self.log_file = Path(log_file)
         self.max_important_logs = max_important_logs
         self.info_logs_list = []
         self.warn_logs_list = []
         self.error_logs_list = []
 
         # Create the log file if it doesn't exist
-        if not os.path.isfile(self.log_file):
+        if not self.log_file.is_file():
             with open(self.log_file, "w") as f:
                 f.write("")
 

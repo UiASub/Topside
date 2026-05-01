@@ -1,6 +1,5 @@
 import json
 import re
-from pathlib import Path
 
 from flask import Response, current_app, jsonify, render_template, request
 
@@ -9,8 +8,9 @@ from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_
 from lib.json_data_handler import JSONDataHandler
 from lib.pid_config_client import AXES as PID_AXES
 from lib.pid_config_client import request_pid_gains, send_pid_gains
+from lib.runtime_paths import data_path
 
-PID_CONFIGS_FILE = Path("data/pid_configs.json")
+PID_CONFIGS_FILE = data_path("pid_configs.json")
 
 
 def _load_pid_configs():
@@ -28,7 +28,7 @@ def _save_pid_configs(configs):
 
 # Initialize required components
 data_handler = JSONDataHandler()
-config_handler = JSONDataHandler(file_path="data/config.json")
+config_handler = JSONDataHandler(file_path=data_path("config.json"))
 camera = init_camera()
 
 # Defaults for axis configs

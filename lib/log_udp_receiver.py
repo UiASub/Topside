@@ -13,14 +13,14 @@ import json
 import re
 import threading
 import time
-from pathlib import Path
 from typing import List
 
 from lib.net_transport import UdpConfig, UdpListener
+from lib.runtime_paths import log_path, logs_dir
 
 LOG_PORT = 5006
-LOG_DIR = Path("logs")
-LOG_FILE = LOG_DIR / "zephyr.log"
+LOG_DIR = logs_dir()
+LOG_FILE = log_path("zephyr.log")
 SEVERITY_RE = re.compile(r"^\[(?P<level>[IWRD])\]\s*")
 
 
