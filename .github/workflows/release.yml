@@ -55,6 +55,8 @@ jobs:
           mkdir -p release/Topside
           cp "dist/${{ matrix.binary }}" "release/Topside/${{ matrix.binary }}"
           cp -r data "release/Topside/data"
+          mkdir -p release/Topside/tools
+          cp tools/configure_ethernet.ps1 release/Topside/tools/configure_ethernet.ps1
 
       - name: Create archive
         shell: bash
