@@ -1,4 +1,5 @@
 import json
+import math
 import re
 
 from flask import Response, current_app, jsonify, render_template, request
@@ -35,7 +36,9 @@ camera = init_camera()
 _DEFAULT_IMU_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
 _DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
 _DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
-ATTITUDE_LIMITS_DEG = {"roll": 45.0, "pitch": 45.0, "yaw": 180.0}
+ATTITUDE_LIMITS_DEG = {"roll": 180.0, "pitch": 90.0, "yaw": 180.0}
+CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
+ATTITUDE_AXES = ("roll", "pitch", "yaw")
 
 
 def _clamp(value, lower, upper):
@@ -44,6 +47,51 @@ def _clamp(value, lower, upper):
     if value > upper:
         return upper
     return value
+
+
+def _normalize_angle_deg(value):
+    wrapped = ((float(value) + 180.0) % 360.0) - 180.0
+    if wrapped == -180.0 and float(value) > 0:
+        return 180.0
+    return wrapped
+
+
+def _neutral_axis_values():
+    return {axis: 0.0 for axis in CONTROL_AXES}
+
+
+def _zero_pid_gains():
+    return {axis: {"kp": 0.0, "ki": 0.0, "kd": 0.0} for axis in PID_AXES}
+
+
+def _coerce_attitude_setpoints(data):
+    axes = {}
+    for axis in ATTITUDE_AXES:
+        if axis not in data:
+            continue
+        try:
+            value = float(data[axis])
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(value):
+            continue
+        limit = ATTITUDE_LIMITS_DEG[axis]
+        if axis in ("roll", "yaw"):
+            value = _normalize_angle_deg(value)
+        axes[axis] = _clamp(value, -limit, limit)
+    return axes
+
+
+def _neutralize_thruster_command():
+    """Force topside manual command output to neutral axes."""
+    neutral = _neutral_axis_values()
+    ctrl = current_app.config.get("CONTROLLER")
+    if ctrl:
+        ctrl.set_debug_override(neutral)
+    bm = current_app.config.get("BITMASK")
+    if bm:
+        bm.set_from_axes(**neutral)
+    return neutral
 
 
 def _send_full_axis_config():
@@ -94,6 +142,11 @@ def register_routes(app):
     def debug():
         """Render the debug slider page."""
         return render_template("debug.html", attitude_limits=ATTITUDE_LIMITS_DEG)
+
+    @app.route("/pid-tuning")
+    def pid_tuning():
+        """Render the PID tuning page."""
+        return render_template("pid_tuning.html", attitude_limits=ATTITUDE_LIMITS_DEG)
 
     @app.route("/graphs")
     def graphs():
@@ -408,7 +461,8 @@ def register_routes(app):
         axes = {}
         for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
             if key in data:
-                axes[key] = max(-1.0, min(1.0, float(data[key])))
+                value = max(-1.0, min(1.0, float(data[key])))
+                axes[key] = -value if key == "yaw" else value
         if not axes:
             return jsonify({"ok": False, "error": "No axes supplied"}), 400
 
@@ -427,15 +481,7 @@ def register_routes(app):
         client = current_app.config.get("SETPOINT_OVERRIDE")
         if not client:
             return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
-        axes = {}
-        for axis, limit in ATTITUDE_LIMITS_DEG.items():
-            if axis not in data:
-                continue
-            try:
-                value = float(data[axis])
-            except (TypeError, ValueError):
-                continue
-            axes[axis] = _clamp(value, -limit, limit)
+        axes = _coerce_attitude_setpoints(data)
         if not axes:
             return jsonify({"ok": False, "error": "No valid attitude axes supplied"}), 400
         try:
@@ -474,6 +520,111 @@ def register_routes(app):
                 pass
 
         return jsonify({"ok": True})
+
+    @app.route("/api/pid/start", methods=["POST"])
+    def start_pid_hold():
+        """Start PID tuning from the current attitude and neutral manual command axes."""
+        imu = current_app.config.get("IMU")
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if not imu:
+            return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
+        if not client:
+            return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+
+        stats = imu.get_stats()
+        age_ms = stats.get("age_ms")
+        if age_ms is None or age_ms > 2000:
+            return jsonify({"ok": False, "error": "IMU data is stale; PID start was blocked"}), 503
+
+        attitude = stats.get("last_data") or {}
+        try:
+            attitude_setpoints = _coerce_attitude_setpoints(
+                {axis: float(attitude[axis]) for axis in ATTITUDE_AXES}
+            )
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
+        if len(attitude_setpoints) != len(ATTITUDE_AXES):
+            return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
+
+        neutral = _neutralize_thruster_command()
+        setpoints = {**neutral, **attitude_setpoints}
+        try:
+            client.clear_override()
+            state = client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
+        except Exception as exc:  # pylint: disable=broad-except
+            client.set_error(str(exc))
+            return jsonify({"ok": False, "error": str(exc), "neutralized": True}), 503
+
+        return jsonify(
+            {
+                "ok": True,
+                "setpoints": setpoints,
+                "state": state,
+                "neutralized": True,
+                "units": "deg",
+            }
+        )
+
+    @app.route("/api/pid/setpoints", methods=["POST"])
+    def set_pid_attitude_setpoints():
+        """Send roll/pitch/yaw PID attitude setpoints in VN-100 degrees."""
+        data = request.get_json(force=True, silent=True) or {}
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if not client:
+            return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+        axes = _coerce_attitude_setpoints(data)
+        if not axes:
+            return jsonify({"ok": False, "error": "No valid attitude setpoints supplied"}), 400
+        try:
+            state = client.send_override(axes, replay_attempts=5, replay_delay=0.1)
+        except Exception as exc:  # pylint: disable=broad-except
+            client.set_error(str(exc))
+            return jsonify({"ok": False, "error": str(exc)}), 503
+        return jsonify(
+            {
+                "ok": True,
+                "sent": axes,
+                "limits": ATTITUDE_LIMITS_DEG,
+                "state": state,
+                "units": "deg",
+            }
+        )
+
+    @app.route("/api/pid/zero_all", methods=["POST"])
+    def zero_all_pid():
+        """Force neutral manual command axes and send zero PID gains to the MCU."""
+        neutral = _neutralize_thruster_command()
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if client:
+            try:
+                client.clear_override()
+            except Exception:
+                pass
+
+        zeros = _zero_pid_gains()
+        confirmed, attempts = send_pid_gains(zeros, timeout=1.0, max_retries=3)
+        if confirmed is None:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "Thruster axes neutralized, but no PID zero confirmation from MCU after %d attempts"
+                        % attempts,
+                        "neutralized": True,
+                        "override": neutral,
+                    }
+                ),
+                504,
+            )
+        return jsonify(
+            {
+                "ok": True,
+                "gains": confirmed,
+                "attempts": attempts,
+                "neutralized": True,
+                "override": neutral,
+            }
+        )
 
     # --- Gain endpoints ---
     @app.route("/api/controller/gains", methods=["GET"])

@@ -52,6 +52,30 @@
     font-size: 0.75rem;
     color: #888;
   }
+  .series-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: #adb5bd;
+  }
+  .series-legend span::before {
+    content: "";
+    display: inline-block;
+    width: 18px;
+    height: 3px;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    border-radius: 2px;
+  }
+  .legend-imu::before {
+    background: var(--imu-color);
+  }
+  .legend-setpoint::before {
+    background: #ff4d6d;
+  }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -75,6 +99,7 @@
 </div>
 <p class="graph-help mb-2">
   Scroll to zoom time axis. Shift+scroll to zoom Y-axis. Click+drag to pan. Double-click to reset zoom. Set min/max to lock Y-axis. Hover for readout.
+  Yaw, pitch, and roll include the active PID setpoint.
 </p>
 
 <div class="row g-3" id="graph-grid">
@@ -91,6 +116,10 @@
         </div>
       </div>
       <canvas id="chart-yaw"></canvas>
+      <div class="series-legend" style="--imu-color: #0dcaf0;">
+        <span class="legend-imu">IMU yaw</span>
+        <span class="legend-setpoint">Setpoint</span>
+      </div>
     </div>
   </div>
   <div class="col-md-6" data-key="yr">
@@ -121,6 +150,10 @@
         </div>
       </div>
       <canvas id="chart-pitch"></canvas>
+      <div class="series-legend" style="--imu-color: #ffc107;">
+        <span class="legend-imu">IMU pitch</span>
+        <span class="legend-setpoint">Setpoint</span>
+      </div>
     </div>
   </div>
   <div class="col-md-6" data-key="pr">
@@ -151,6 +184,10 @@
         </div>
       </div>
       <canvas id="chart-roll"></canvas>
+      <div class="series-legend" style="--imu-color: #198754;">
+        <span class="legend-imu">IMU roll</span>
+        <span class="legend-setpoint">Setpoint</span>
+      </div>
     </div>
   </div>
   <div class="col-md-6" data-key="rr">

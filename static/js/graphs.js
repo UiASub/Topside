@@ -69,24 +69,41 @@
 
   // Store all raw samples for CSV export: { key: [{ x, y }, ...] }
   const allData = {};
+  const setpointData = {};
 
-  function makeChart(canvasId, label, unit, color, key) {
+  function makeChart(canvasId, label, unit, color, key, showSetpoint) {
     yLocks[key] = { min: null, max: null };
     allData[key] = [];
+    if (showSetpoint) setpointData[key] = [];
 
     var ctx = document.getElementById(canvasId).getContext("2d");
+    var datasets = [{
+      label: label,
+      data: allData[key],
+      borderColor: color,
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.2,
+      fill: false,
+    }];
+
+    if (showSetpoint) {
+      datasets.push({
+        label: label + " Setpoint",
+        data: setpointData[key],
+        borderColor: "#ff4d6d",
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.08,
+        borderDash: [8, 4],
+        fill: false,
+      });
+    }
+
     return new Chart(ctx, {
       type: "line",
       data: {
-        datasets: [{
-          label: label,
-          data: allData[key],
-          borderColor: color,
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.2,
-          fill: false,
-        }],
+        datasets: datasets,
       },
       options: {
         responsive: true,
@@ -119,10 +136,10 @@
                 return "t = " + items[0].parsed.x.toFixed(1) + " s";
               },
               label: function (item) {
-                return label + ": " + item.parsed.y.toFixed(2) + " " + unit;
+                return item.dataset.label + ": " + item.parsed.y.toFixed(2) + " " + unit;
               },
             },
-            displayColors: false,
+            displayColors: true,
             backgroundColor: "rgba(0,0,0,0.8)",
             titleFont: { size: 11 },
             bodyFont: { size: 11 },
@@ -153,9 +170,9 @@
 
   var charts = {};
   var chartDefs = {
-    yaw:   { canvas: "chart-yaw",   label: "Yaw",        unit: "deg",   color: "#0dcaf0" },
-    pitch: { canvas: "chart-pitch", label: "Pitch",       unit: "deg",   color: "#ffc107" },
-    roll:  { canvas: "chart-roll",  label: "Roll",        unit: "deg",   color: "#198754" },
+    yaw:   { canvas: "chart-yaw",   label: "Yaw",        unit: "deg",   color: "#0dcaf0", setpoint: true },
+    pitch: { canvas: "chart-pitch", label: "Pitch",       unit: "deg",   color: "#ffc107", setpoint: true },
+    roll:  { canvas: "chart-roll",  label: "Roll",        unit: "deg",   color: "#198754", setpoint: true },
     yr:    { canvas: "chart-yr",    label: "Yaw Rate",    unit: "deg/s", color: "#0dcaf0" },
     pr:    { canvas: "chart-pr",    label: "Pitch Rate",  unit: "deg/s", color: "#ffc107" },
     rr:    { canvas: "chart-rr",    label: "Roll Rate",   unit: "deg/s", color: "#198754" },
@@ -163,7 +180,7 @@
 
   for (var key in chartDefs) {
     var d = chartDefs[key];
-    charts[key] = makeChart(d.canvas, d.label, d.unit, d.color, key);
+    charts[key] = makeChart(d.canvas, d.label, d.unit, d.color, key, d.setpoint);
   }
 
   var startTime = Date.now();
@@ -182,14 +199,25 @@
     while (ds.length > 0 && ds[0].x < cutoff) {
       ds.shift();
     }
+    var setpointSeries = setpointData[key];
+    if (setpointSeries) {
+      while (setpointSeries.length > 0 && setpointSeries[0].x < cutoff) {
+        setpointSeries.shift();
+      }
+    }
   }
 
   async function poll() {
     if (paused) return;
     try {
-      var res = await fetch("/api/sensors");
-      if (!res.ok) return;
-      var d = await res.json();
+      var responses = await Promise.all([
+        fetch("/api/sensors"),
+        fetch("/api/control/telemetry"),
+      ]);
+      if (!responses[0].ok) return;
+      var d = await responses[0].json();
+      var telemetry = responses[1].ok ? await responses[1].json() : {};
+      var setpoints = telemetry.ok && telemetry.telemetry ? telemetry.telemetry.setpoint || {} : {};
       var t = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
 
       var values = {
@@ -199,6 +227,10 @@
 
       for (var k in charts) {
         allData[k].push({ x: t, y: values[k] });
+        if (setpointData[k]) {
+          var setpoint = typeof setpoints[k] === "number" ? setpoints[k] : null;
+          setpointData[k].push({ x: t, y: setpoint });
+        }
         trimData(k);
         applyYLocks(k);
         charts[k].update("none");
@@ -211,6 +243,7 @@
   function clearAll() {
     for (var k in charts) {
       allData[k].length = 0;
+      if (setpointData[k]) setpointData[k].length = 0;
       charts[k].resetZoom();
       charts[k].update();
     }
@@ -230,6 +263,9 @@
     for (var k in allData) {
       allData[k].forEach(function (pt) { timeSet[pt.x] = true; });
     }
+    for (var spKey in setpointData) {
+      setpointData[spKey].forEach(function (pt) { timeSet[pt.x] = true; });
+    }
     var times = Object.keys(timeSet).map(Number).sort(function (a, b) { return a - b; });
 
     if (times.length === 0) {
@@ -244,14 +280,27 @@
       lookup[k] = {};
       allData[k].forEach(function (pt) { lookup[k][pt.x] = pt.y; });
     });
+    var setpointLookup = {};
+    ["yaw", "pitch", "roll"].forEach(function (k) {
+      setpointLookup[k] = {};
+      (setpointData[k] || []).forEach(function (pt) { setpointLookup[k][pt.x] = pt.y; });
+    });
 
-    var header = "time_s,yaw_deg,pitch_deg,roll_deg,yaw_rate_dps,pitch_rate_dps,roll_rate_dps";
+    var header = "time_s,yaw_deg,yaw_setpoint_deg,pitch_deg,pitch_setpoint_deg,roll_deg,roll_setpoint_deg,yaw_rate_dps,pitch_rate_dps,roll_rate_dps";
     var rows = [header];
     times.forEach(function (t) {
       var row = t.toFixed(2);
-      keys.forEach(function (k) {
-        var v = lookup[k][t];
-        row += "," + (v !== undefined ? v.toFixed(3) : "");
+      var yaw = lookup.yaw[t];
+      var yawSet = setpointLookup.yaw[t];
+      var pitch = lookup.pitch[t];
+      var pitchSet = setpointLookup.pitch[t];
+      var roll = lookup.roll[t];
+      var rollSet = setpointLookup.roll[t];
+      var yr = lookup.yr[t];
+      var pr = lookup.pr[t];
+      var rr = lookup.rr[t];
+      [yaw, yawSet, pitch, pitchSet, roll, rollSet, yr, pr, rr].forEach(function (v) {
+        row += "," + (v !== undefined && v !== null ? v.toFixed(3) : "");
       });
       rows.push(row);
     });

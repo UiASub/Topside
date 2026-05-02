@@ -17,8 +17,6 @@
           <h5 class="card-title mb-0">IMU – VN-100S</h5>
           <div>
             <span id="imu-status" class="badge bg-secondary me-2">NO DATA</span>
-            <button id="btn-tare" class="btn btn-sm btn-outline-info me-1">Tare (Zero)</button>
-            <button id="btn-clear-tare" class="btn btn-sm btn-outline-secondary">Clear Tare</button>
           </div>
         </div>
 
@@ -47,8 +45,7 @@
           <div class="col-12">
             <small class="text-light-muted">
               Packets: <span id="imu-pkt-count">0</span> |
-              Age: <span id="imu-age">--</span> ms |
-              Tare: <span id="imu-tare-info">none</span>
+              Age: <span id="imu-age">--</span> ms
             </small>
           </div>
         </div>
@@ -321,8 +318,8 @@
                 <span id="attitude-status" class="badge bg-secondary">IDLE</span>
               </div>
               <p class="text-muted small mb-4">
-                Push exact roll, pitch, and yaw setpoints down to the flight controller. Values are clamped to ±{{ attitude_limits.roll }}° (roll/pitch)
-                and ±{{ attitude_limits.yaw }}° (yaw). Use this for heading-hold experiments without touching the raw thruster sliders.
+                Push exact roll, pitch, and yaw setpoints down to the flight controller. Values are clamped to the configured VN-100 angle ranges.
+                Use this for heading-hold experiments without touching the raw thruster sliders.
               </p>
               <div class="row g-3 attitude-field-row">
                 <div class="col-md-4">
