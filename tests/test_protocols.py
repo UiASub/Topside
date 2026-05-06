@@ -1,8 +1,10 @@
+import json
 import struct
 
 import pytest
 
 import lib.control_telemetry as control_telem
+import lib.ninedof_receiver as imu_telem
 import lib.resource_receiver as resource_telem
 from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
 from lib.json_data_handler import JSONDataHandler
@@ -112,6 +114,70 @@ def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
         }
     }
     assert receiver.get_udp_counters() == (84, 0)
+
+
+def test_imu_receiver_accepts_crc_trailer(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(imu_telem, "IMU_LOG", tmp_path / "imu_raw.ndjson")
+    handler = DummyHandler()
+    receiver = imu_telem.IMUReceiver(data_handler=handler)
+    body = json.dumps(
+        {
+            "imu": {
+                "yaw": 1.25,
+                "pitch": -2.5,
+                "roll": 3.75,
+                "yr": 0.1,
+                "pr": 0.2,
+                "rr": 0.3,
+                "ax": 4.0,
+                "ay": 5.0,
+                "az": 6.0,
+            }
+        },
+        separators=(",", ":"),
+    ).encode()
+    packet = body + struct.pack("!I", crc.crc32_ieee(body))
+
+    receiver._process_packet(packet, ("10.77.0.2", 5002))  # pylint: disable=protected-access
+
+    assert capsys.readouterr().out == ""
+    assert handler.last_update["imu"]["yaw"] == 1.25
+    assert handler.last_update["imu"]["pitch"] == -2.5
+    assert handler.last_update["imu"]["roll"] == 3.75
+    assert receiver.get_stats()["packet_count"] == 1
+    assert receiver.get_stats()["crc_errors"] == 0
+
+
+def test_imu_receiver_keeps_legacy_json_without_crc(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(imu_telem, "IMU_LOG", tmp_path / "imu_raw.ndjson")
+    handler = DummyHandler()
+    receiver = imu_telem.IMUReceiver(data_handler=handler)
+    packet = json.dumps({"imu": {"yaw": 4.0, "pitch": 5.0, "roll": 6.0}}, separators=(",", ":")).encode()
+
+    receiver._process_packet(packet, ("10.77.0.2", 5002))  # pylint: disable=protected-access
+
+    assert capsys.readouterr().out == ""
+    assert handler.last_update["imu"]["yaw"] == 4.0
+    assert handler.last_update["imu"]["pitch"] == 5.0
+    assert handler.last_update["imu"]["roll"] == 6.0
+    assert receiver.get_stats()["packet_count"] == 1
+    assert receiver.get_stats()["crc_errors"] == 0
+
+
+def test_imu_receiver_discards_bad_crc(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(imu_telem, "IMU_LOG", tmp_path / "imu_raw.ndjson")
+    handler = DummyHandler()
+    receiver = imu_telem.IMUReceiver(data_handler=handler)
+    body = json.dumps({"imu": {"yaw": 10.0, "pitch": 20.0, "roll": 30.0}}, separators=(",", ":")).encode()
+    packet = body + struct.pack("!I", crc.crc32_ieee(body) ^ 0xFFFFFFFF)
+
+    receiver._process_packet(packet, ("10.77.0.2", 5002))  # pylint: disable=protected-access
+
+    assert handler.last_update is None
+    stats = receiver.get_stats()
+    assert stats["packet_count"] == 0
+    assert stats["crc_errors"] == 1
+    assert "IMU: CRC mismatch" in capsys.readouterr().out
 
 
 def test_json_data_handler_creates_parent_and_preserves_sections(tmp_path):
