@@ -34,7 +34,35 @@ The Topside PC must be on the **same subnet as the onboard device**, otherwise n
 | IP camera       | `192.168.1.168`      |
 | Topside PC      | `10.77.0.1/24` on the MCU Ethernet adapter |
 
-### Setting a static IP on Windows
+### Automated MCU Ethernet setup
+
+Topside includes helper scripts that configure the selected Ethernet adapter as `10.77.0.1/24`, then try to ping the MCU at `10.77.0.2`. If the ping fails, the scripts warn and continue so setup can still finish before the cable or MCU is connected.
+
+On Fedora/Linux with NetworkManager:
+
+```bash
+./tools/k2-ethernet.sh up
+```
+
+On Windows, run from an Administrator PowerShell:
+
+```powershell
+.\tools\k2-ethernet.ps1 up
+```
+
+Both scripts show a menu of Ethernet adapters and mark the most likely USB Ethernet adapter as recommended. Use `status` to inspect the current setup and `down` to remove the direct-link configuration:
+
+```bash
+./tools/k2-ethernet.sh status
+./tools/k2-ethernet.sh down
+```
+
+```powershell
+.\tools\k2-ethernet.ps1 status
+.\tools\k2-ethernet.ps1 down
+```
+
+### Manual static IP on Windows
 
 The Windows installer can do this automatically if you select **Configure MCU Ethernet adapter to 10.77.0.1/24** during install. The portable Windows zip also includes the same helper script:
 
