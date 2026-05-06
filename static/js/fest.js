@@ -64,7 +64,6 @@
       backgroundColor: color,
       borderRadius: shape,
       opacity: "1",
-      animation: `fest-fall ${DURATION_MS}ms ${delay}ms ease-in forwards`,
       transform: `rotate(${Math.random() * 360}deg)`,
     });
 
