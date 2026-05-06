@@ -6,6 +6,7 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 import pytest
 
+import lib.controller as controller_module
 from lib.controller import Controller
 
 
@@ -40,6 +41,9 @@ class FakeJoystick:
         self.buttons = buttons or set()
         self.hat = hat
 
+    def init(self):
+        pass
+
     def get_axis(self, axis):
         return self.axes.get(axis, 0.0)
 
@@ -48,6 +52,9 @@ class FakeJoystick:
 
     def get_numbuttons(self):
         return max(self.buttons, default=-1) + 1
+
+    def get_numaxes(self):
+        return max(self.axes, default=-1) + 1
 
     def get_name(self):
         return "fake joystick"
@@ -169,3 +176,24 @@ def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypa
     status = ctrl.get_input_status()
     assert status["source"] == "raw_joystick"
     assert status["buttons"][7] == 1.0
+
+
+def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):
+    class FailingSdlController:
+        @staticmethod
+        def is_controller(index):
+            raise AssertionError(f"unexpected SDL controller probe for joystick {index}")
+
+    joystick = FakeJoystick()
+    ctrl = build_controller(joystick=None)
+
+    monkeypatch.setattr(controller_module.sys, "platform", "win32")
+    monkeypatch.setattr(controller_module, "sdl_controller", FailingSdlController)
+    monkeypatch.setattr(pygame.joystick, "get_count", lambda: 1)
+    monkeypatch.setattr(pygame.joystick, "Joystick", lambda index: joystick)
+    monkeypatch.setattr(pygame.event, "pump", lambda: None)
+
+    assert ctrl._try_connect() is True
+    assert ctrl.controller is None
+    assert ctrl.joystick is joystick
+    assert ctrl.get_input_status()["source"] == "raw_joystick"

@@ -1,4 +1,5 @@
 import os
+import sys
 
 # fix for error 'NSInternalInconsistencyException', reason: 'nextEventMatchingMask should only be called from the Main Thread on posix systems
 if os.name == "posix":
@@ -9,10 +10,26 @@ import threading
 import time
 
 import pygame
-from pygame._sdl2 import controller as sdl_controller
-from pygame._sdl2 import sdl2
+
+if sys.platform.startswith("linux"):
+    from pygame._sdl2 import controller as sdl_controller
+    from pygame._sdl2 import sdl2
+else:
+    sdl_controller = None
+    sdl2 = None
 
 from lib.bitmask import BitmaskClient
+
+
+def _use_sdl_gamecontroller():
+    return sys.platform.startswith("linux") and sdl_controller is not None
+
+
+def _controller_errors():
+    errors = [pygame.error]
+    if sdl2 is not None:
+        errors.append(sdl2.error)
+    return tuple(errors)
 
 
 class Controller:
@@ -33,7 +50,8 @@ class Controller:
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
         pygame.init()
         pygame.joystick.init()
-        sdl_controller.init()
+        if _use_sdl_gamecontroller():
+            sdl_controller.init()
         self.joystick = None
         self.controller = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
@@ -64,7 +82,8 @@ class Controller:
     def _try_connect(self):
         """Try to connect to first available joystick without reinitializing subsystem."""
         device_indices = range(pygame.joystick.get_count())
-        for prefer_controller in (True, False):
+        mapping_preferences = (True, False) if _use_sdl_gamecontroller() else (False,)
+        for prefer_controller in mapping_preferences:
             if self._try_connect_matching(device_indices, prefer_controller):
                 return True
         return False
@@ -72,7 +91,7 @@ class Controller:
     def _try_connect_matching(self, device_indices, prefer_controller):
         for index in device_indices:
             try:
-                is_controller = bool(sdl_controller.is_controller(index))
+                is_controller = bool(sdl_controller.is_controller(index)) if _use_sdl_gamecontroller() else False
                 if is_controller != prefer_controller:
                     continue
 
@@ -94,7 +113,7 @@ class Controller:
                     self.calibrate_axes()
                 self._update_input_status([0.0] * self.VISUALIZER_BUTTON_COUNT)
                 return True
-            except (pygame.error, sdl2.error) as e:
+            except _controller_errors() as e:
                 print(f"Failed to init joystick {index}: {e}")
                 self.controller = None
                 self.joystick = None
@@ -105,7 +124,7 @@ class Controller:
         if self.controller:
             try:
                 self.controller.quit()
-            except (pygame.error, sdl2.error):
+            except _controller_errors():
                 pass
         self.controller = None
         self.joystick = None
@@ -354,7 +373,7 @@ class Controller:
                     raise pygame.error("controller detached")
             else:
                 _ = self.joystick.get_axis(0)
-        except (pygame.error, sdl2.error):
+        except _controller_errors():
             print("Controller disconnected!")
             self._reconnect_delay = 0
             self._disconnect_controller()
