@@ -9,6 +9,8 @@ import threading
 import time
 
 import pygame
+from pygame._sdl2 import controller as sdl_controller
+from pygame._sdl2 import sdl2
 
 from lib.bitmask import BitmaskClient
 
@@ -22,13 +24,18 @@ class Controller:
     }
 
     DEADZONE = 0.05  # Axes within +/- this value are treated as 0
+    CONTROLLER_AXIS_MAX = 32767.0
+    CONTROLLER_AXIS_MIN = 32768.0
+    VISUALIZER_BUTTON_COUNT = 16
 
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
         pygame.init()
         pygame.joystick.init()
+        sdl_controller.init()
         self.joystick = None
+        self.controller = None
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.light = 0  # Initial light value
         self._prev_dpad_up = False  # For edge detection of light increase (D-pad up)
@@ -39,6 +46,8 @@ class Controller:
         # Debug override state
         self._debug_override = None  # None = no override; dict of axes when active
         self._debug_lock = threading.Lock()
+        self._input_status_lock = threading.Lock()
+        self._input_status = self._empty_input_status()
         # Gain settings (per-axis and master)
         self._gain_lock = threading.Lock()
         self._master_gain = 1.0
@@ -54,22 +63,75 @@ class Controller:
 
     def _try_connect(self):
         """Try to connect to first available joystick without reinitializing subsystem."""
-        if pygame.joystick.get_count() > 0:
+        device_indices = range(pygame.joystick.get_count())
+        for prefer_controller in (True, False):
+            if self._try_connect_matching(device_indices, prefer_controller):
+                return True
+        return False
+
+    def _try_connect_matching(self, device_indices, prefer_controller):
+        for index in device_indices:
             try:
-                self.joystick = pygame.joystick.Joystick(0)
-                self.joystick.init()
-                print(f"Controller connected: {self.joystick.get_name()}")
+                is_controller = bool(sdl_controller.is_controller(index))
+                if is_controller != prefer_controller:
+                    continue
+
+                if is_controller:
+                    self.controller = sdl_controller.Controller(index)
+                    self.joystick = self.controller.as_joystick()
+                    print(f"Controller connected: {self.controller.name} (SDL game controller mapping)")
+                else:
+                    self.controller = None
+                    self.joystick = pygame.joystick.Joystick(index)
+                    self.joystick.init()
+                    print(f"Controller connected: {self.joystick.get_name()} (raw joystick mapping)")
+
                 print(f"  Buttons: {self.joystick.get_numbuttons()}")
                 print(f"  Axes: {self.joystick.get_numaxes()}")
                 print(f"  Hats: {self.joystick.get_numhats()}")
                 self.axis_offsets = {}  # Reset calibration
-                self.calibrate_axes()
+                if not self.controller:
+                    self.calibrate_axes()
+                self._update_input_status([0.0] * self.VISUALIZER_BUTTON_COUNT)
                 return True
-            except pygame.error as e:
-                print(f"Failed to init joystick: {e}")
+            except (pygame.error, sdl2.error) as e:
+                print(f"Failed to init joystick {index}: {e}")
+                self.controller = None
                 self.joystick = None
-                return False
         return False
+
+    def _disconnect_controller(self):
+        """Forget the active input device and stop movement."""
+        if self.controller:
+            try:
+                self.controller.quit()
+            except (pygame.error, sdl2.error):
+                pass
+        self.controller = None
+        self.joystick = None
+        self._reset_command()
+        self._set_input_status(self._empty_input_status())
+
+    def _empty_input_status(self):
+        return {
+            "connected": False,
+            "source": "none",
+            "name": None,
+            "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+        }
+
+    def _set_input_status(self, status):
+        with self._input_status_lock:
+            self._input_status = status
+
+    def get_input_status(self):
+        with self._input_status_lock:
+            return {
+                "connected": self._input_status["connected"],
+                "source": self._input_status["source"],
+                "name": self._input_status["name"],
+                "buttons": list(self._input_status["buttons"]),
+            }
 
     def calibrate_axes(self):
         """Capture initial axis values to use as offsets (fixes stuck axes)."""
@@ -93,6 +155,94 @@ class Controller:
         if abs(calibrated) < self.DEADZONE:
             return 0.0
         return calibrated
+
+    def _normalize_controller_axis(self, axis_id):
+        """Read an SDL GameController axis as a normalized -1.0..1.0 value."""
+        raw = self.controller.get_axis(axis_id)
+        divisor = self.CONTROLLER_AXIS_MIN if raw < 0 else self.CONTROLLER_AXIS_MAX
+        value = max(-1.0, min(1.0, raw / divisor))
+        if abs(value) < self.DEADZONE:
+            return 0.0
+        return value
+
+    def _normalize_controller_trigger(self, axis_id):
+        """Read an SDL GameController trigger as a normalized 0.0..1.0 value."""
+        raw = self.controller.get_axis(axis_id)
+        return max(0.0, min(1.0, raw / self.CONTROLLER_AXIS_MAX))
+
+    def _read_axis(self, controller_axis, joystick_axis):
+        if self.controller:
+            return self._normalize_controller_axis(controller_axis)
+        return self.get_calibrated_axis(joystick_axis)
+
+    def _read_trigger(self, controller_axis, joystick_axis):
+        if self.controller:
+            return self._normalize_controller_trigger(controller_axis)
+        return (self.joystick.get_axis(joystick_axis) + 1) / 2
+
+    def _read_button(self, controller_button, joystick_button):
+        if self.controller:
+            return bool(self.controller.get_button(controller_button))
+        return bool(self.joystick.get_button(joystick_button))
+
+    def _read_dpad_up_down(self):
+        if self.controller:
+            return (
+                bool(self.controller.get_button(pygame.CONTROLLER_BUTTON_DPAD_UP)),
+                bool(self.controller.get_button(pygame.CONTROLLER_BUTTON_DPAD_DOWN)),
+            )
+
+        hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
+        return hat[1] > 0, hat[1] < 0
+
+    def _read_visualizer_buttons(self, l2=0.0, r2=0.0):
+        buttons = [0.0] * self.VISUALIZER_BUTTON_COUNT
+
+        if self.controller:
+            mapping = {
+                0: pygame.CONTROLLER_BUTTON_A,
+                1: pygame.CONTROLLER_BUTTON_B,
+                2: pygame.CONTROLLER_BUTTON_X,
+                3: pygame.CONTROLLER_BUTTON_Y,
+                4: pygame.CONTROLLER_BUTTON_LEFTSHOULDER,
+                5: pygame.CONTROLLER_BUTTON_RIGHTSHOULDER,
+                8: pygame.CONTROLLER_BUTTON_BACK,
+                9: pygame.CONTROLLER_BUTTON_START,
+                10: pygame.CONTROLLER_BUTTON_LEFTSTICK,
+                11: pygame.CONTROLLER_BUTTON_RIGHTSTICK,
+                12: pygame.CONTROLLER_BUTTON_DPAD_UP,
+                13: pygame.CONTROLLER_BUTTON_DPAD_DOWN,
+                14: pygame.CONTROLLER_BUTTON_DPAD_LEFT,
+                15: pygame.CONTROLLER_BUTTON_DPAD_RIGHT,
+            }
+            for visualizer_index, controller_button in mapping.items():
+                buttons[visualizer_index] = 1.0 if self.controller.get_button(controller_button) else 0.0
+        elif self.joystick:
+            for index in range(min(self.VISUALIZER_BUTTON_COUNT, self.joystick.get_numbuttons())):
+                buttons[index] = 1.0 if self.joystick.get_button(index) else 0.0
+
+        buttons[6] = max(buttons[6], l2)
+        buttons[7] = max(buttons[7], r2)
+        return buttons
+
+    def _update_input_status(self, buttons):
+        name = None
+        source = "none"
+        if self.controller:
+            name = self.controller.name
+            source = "sdl_gamecontroller"
+        elif self.joystick:
+            name = self.joystick.get_name()
+            source = "raw_joystick"
+
+        self._set_input_status(
+            {
+                "connected": self.joystick is not None,
+                "source": source,
+                "name": name,
+                "buttons": buttons,
+            }
+        )
 
     # --- Gain API ---
     def set_gains(self, master=None, **axis_gains):
@@ -157,6 +307,14 @@ class Controller:
                     light=self.light,
                     manip=0,
                 )
+            self._set_input_status(
+                {
+                    "connected": self.joystick is not None,
+                    "source": "debug_override",
+                    "name": self.joystick.get_name() if self.joystick else None,
+                    "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+                }
+            )
             return  # Skip all joystick processing
 
         # Process pygame events (needed for hotplug detection)
@@ -168,8 +326,14 @@ class Controller:
                         self._try_connect()
                 elif event.type == pygame.JOYDEVICEREMOVED:
                     print("Joystick device removed!")
-                    self.joystick = None
-                    self._reset_command()  # Stop movement if disconnected
+                    self._disconnect_controller()
+                elif event.type == pygame.CONTROLLERDEVICEADDED:
+                    print("Controller device added!")
+                    if not self.joystick:
+                        self._try_connect()
+                elif event.type == pygame.CONTROLLERDEVICEREMOVED:
+                    print("Controller device removed!")
+                    self._disconnect_controller()
         except SystemError:
             # pygame event system can error during hotplug, just continue
             pass
@@ -180,45 +344,48 @@ class Controller:
             if self._reconnect_delay >= 60:  # Try every ~1 second
                 self._reconnect_delay = 0
                 self._try_connect()
+            self._set_input_status(self._empty_input_status())
             return
 
         # Check if joystick is still connected
         try:
-            _ = self.joystick.get_axis(0)
-        except pygame.error:
+            if self.controller:
+                if not self.controller.attached():
+                    raise pygame.error("controller detached")
+            else:
+                _ = self.joystick.get_axis(0)
+        except (pygame.error, sdl2.error):
             print("Controller disconnected!")
-            self.joystick = None
             self._reconnect_delay = 0
-            self._reset_command()  # Stop movement if disconnected
+            self._disconnect_controller()
             return
 
         # --- BITMASK OUTPUT ----
         # Read axes
-        heave = -self.get_calibrated_axis(3)  # Right Y (inverted)
-        yaw = self.get_calibrated_axis(2)  # Right X
+        heave = -self._read_axis(pygame.CONTROLLER_AXIS_RIGHTY, 3)  # Right Y (inverted)
+        yaw = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTX, 2)  # Right X
         # manip is r2 axis minus l2 axis
-        # Triggers: convert from -1..1 to 0..1
-        r2 = (self.joystick.get_axis(5) + 1) / 2  # R2 trigger
-        l2 = (self.joystick.get_axis(4) + 1) / 2  # L2 trigger
+        r2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERRIGHT, 5)  # R2 trigger
+        l2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERLEFT, 4)  # L2 trigger
         manip = r2 - l2
 
         # This runs while button 9 is held down L1 to make
         # surge and sway controls toggleable to pitch and roll
-        if self.joystick.get_button(9):  # Pitch and roll control
-            pitch = -self.get_calibrated_axis(1)  # Left Y (inverted)
-            roll = self.get_calibrated_axis(0)  # Left X
+        left_shoulder = self._read_button(pygame.CONTROLLER_BUTTON_LEFTSHOULDER, 9)
+        if left_shoulder:  # Pitch and roll control
+            pitch = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
+            roll = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
             surge = 0.0
             sway = 0.0
         else:  # Surge and sway control
-            surge = -self.get_calibrated_axis(1)  # Right Y (inverted)
-            sway = self.get_calibrated_axis(0)  # Right X
+            surge = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
+            sway = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
             pitch = 0.0
             roll = 0.0
 
-        # Light control with edge detection via D-pad hat (up/down)
-        hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
-        dpad_up = hat[1] > 0
-        dpad_down = hat[1] < 0
+        # Light control with edge detection via D-pad up/down
+        dpad_up, dpad_down = self._read_dpad_up_down()
+        buttons = self._read_visualizer_buttons(l2=l2, r2=r2)
 
         if dpad_up and not self._prev_dpad_up:  # Just pressed
             self.light = min(1.0, self.light + 0.1)  # +10% per press
@@ -227,6 +394,7 @@ class Controller:
 
         self._prev_dpad_up = dpad_up
         self._prev_dpad_down = dpad_down
+        self._update_input_status(buttons)
 
         # Apply gain to each axis
         surge = self._apply_gain("surge", surge)
@@ -237,9 +405,10 @@ class Controller:
         yaw = self._apply_gain("yaw", yaw)
 
         # Send to ROV!
-        self.bm.set_from_axes(
-            surge=surge, sway=sway, yaw=yaw, pitch=pitch, heave=heave, roll=roll, light=self.light, manip=manip
-        )
+        if self.bm:
+            self.bm.set_from_axes(
+                surge=surge, sway=sway, yaw=yaw, pitch=pitch, heave=heave, roll=roll, light=self.light, manip=manip
+            )
 
     def run_loop(self):
         """Blocking loop that polls controller at ~60 Hz."""

@@ -358,6 +358,8 @@ body {
 #controller-b10.stick-active,
 #controller-b11.stick-active {
     fill: #dc3545 !important;
+}
+
 /* ==========================================
    Resource Monitor SVG Gauges
    ========================================== */
