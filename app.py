@@ -13,12 +13,13 @@ from lib.log_udp_receiver import init_log_stream
 from lib.net_transport import DEFAULT_ROV_HOST
 from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
-from lib.runtime_paths import data_dir, data_path
+from lib.runtime_paths import data_dir, data_path, ensure_data_dir
 from lib.setpoint_override import init_setpoint_override
 from lib.system_control_client import SystemControlClient
 from routes import register_routes
 
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
+ensure_data_dir()
 
 # Start background UDP sender (20 Hz)
 app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host=DEFAULT_ROV_HOST, port=12345)

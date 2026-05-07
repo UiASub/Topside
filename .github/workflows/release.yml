@@ -47,7 +47,7 @@ jobs:
         run: uv sync --frozen --no-default-groups --group build
 
       - name: Build with PyInstaller
-        run: uv run --frozen --no-default-groups --group build pyinstaller --onefile --name Topside --add-data "static${{ matrix.data_sep }}static" app.py
+        run: uv run --frozen --no-default-groups --group build pyinstaller --onefile --name Topside --add-data "static${{ matrix.data_sep }}static" --add-data "data${{ matrix.data_sep }}data" app.py
 
       - name: Stage release contents
         shell: bash
