@@ -19,27 +19,175 @@ class DummyArUcoMarkerDetector:
         return frame
 
 
-def init_camera():
-    """Initialize and return the default webcam."""
-    camera = cv2.VideoCapture(0)
-    return camera
+class DefaultCameraReceiver:
+    """Reads the default local camera in the background and exposes latest JPEG frame."""
+
+    RECONNECT_DELAY = 3.0
+
+    def __init__(self, device_index=0, jpeg_quality=70):
+        self.device_index = int(device_index)
+        self.jpeg_quality = min(95, max(40, int(jpeg_quality)))
+        self.is_connected = False
+        self.is_listening = False
+        self.last_error = None
+
+        self._stop_event = threading.Event()
+        self._thread = None
+        self._cap = None
+
+        self._frame_lock = threading.Lock()
+        self._frame_cond = threading.Condition(self._frame_lock)
+        self._latest_jpeg = None
+        self._frame_seq = 0
+        self._last_frame_ts = 0.0
+        self._placeholder_jpeg = self._build_placeholder_jpeg()
+        camera_matrix = np.array([[900, 0, 640], [0, 900, 360], [0, 0, 1]], dtype=np.float32)
+        dist_coeffs = np.zeros((5, 1), dtype=np.float32)
+        self._detector = DummyArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3.0)
+        self._release_cap()
+
+    def get_latest_jpeg(self):
+        with self._frame_lock:
+            return self._latest_jpeg
+
+    def get_latest_jpeg_and_seq(self):
+        with self._frame_lock:
+            return self._latest_jpeg, self._frame_seq
+
+    def wait_for_next_frame(self, last_seq, timeout=0.25):
+        with self._frame_cond:
+            if self._frame_seq == last_seq:
+                self._frame_cond.wait(timeout=timeout)
+            return self._latest_jpeg, self._frame_seq
+
+    def get_placeholder_jpeg(self):
+        return self._placeholder_jpeg
+
+    def get_status(self):
+        age_ms = None
+        if self._last_frame_ts > 0:
+            age_ms = int((time.monotonic() - self._last_frame_ts) * 1000)
+        return {
+            "connected": bool(self.is_connected),
+            "listening": bool(self.is_listening),
+            "device_index": self.device_index,
+            "jpeg_quality": self.jpeg_quality,
+            "last_frame_age_ms": age_ms,
+            "last_error": self.last_error,
+        }
+
+    def _set_frame(self, frame):
+        corners, ids, _rejected = self._detector.detect_markers(frame)
+        frame = self._detector.draw_detected_markers(frame, corners, ids)
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
+        if not ok:
+            return
+        with self._frame_cond:
+            self._latest_jpeg = buf.tobytes()
+            self._frame_seq += 1
+            self._frame_cond.notify_all()
+        self._last_frame_ts = time.monotonic()
+        self.is_connected = True
+
+    def _build_placeholder_jpeg(self):
+        blank = np.zeros((720, 1280, 3), dtype=np.uint8)
+        cv2.putText(
+            blank,
+            "WAITING FOR DEFAULT CAMERA",
+            (330, 360),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (0, 222, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        ok, buf = cv2.imencode(".jpg", blank, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        return buf.tobytes() if ok else b""
+
+    def _open_camera(self):
+        cap = cv2.VideoCapture(self.device_index)
+        if not cap.isOpened():
+            cap.release()
+            return False
+        self._cap = cap
+        return True
+
+    def _release_cap(self):
+        self.is_connected = False
+        self.is_listening = False
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+
+    def _run_loop(self):
+        while not self._stop_event.is_set():
+            print(f"[Default Camera] Opening device {self.device_index} ...")
+            self.is_listening = True
+            if not self._open_camera():
+                self.last_error = f"Failed to open camera device {self.device_index}"
+                print(f"[Default Camera] {self.last_error}")
+                self._release_cap()
+                if self._stop_event.wait(self.RECONNECT_DELAY):
+                    break
+                continue
+
+            print("[Default Camera] Stream connected")
+            self.last_error = None
+            had_frame = False
+
+            while not self._stop_event.is_set():
+                ok, frame = self._cap.read()
+                if not ok or frame is None:
+                    self.last_error = "Camera read failed"
+                    print("[Default Camera] Lost connection, will reconnect ...")
+                    self._release_cap()
+                    break
+
+                if not had_frame:
+                    print("[Default Camera] Receiving frames")
+                    had_frame = True
+                self._set_frame(frame)
+
+            if not self._stop_event.is_set():
+                self._stop_event.wait(self.RECONNECT_DELAY)
+
+        self._release_cap()
 
 
 def generate_frames(camera):
-    camera_matrix = np.array([[900, 0, 640], [0, 900, 360], [0, 0, 1]], dtype=np.float32)
-    dist_coeffs = np.zeros((5, 1), dtype=np.float32)
-
-    detector = DummyArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
-
+    """Flask MJPEG generator for the default camera receiver."""
+    last_seq = -1
     while True:
-        success, frame = camera.read()
-        if not success:
-            break
-        corners, ids, rejected = detector.detect_markers(frame)
-        frame = detector.draw_detected_markers(frame, corners, ids)
-        ret, buffer = cv2.imencode(".jpg", frame)
-        frame = buffer.tobytes()
+        frame, seq = camera.wait_for_next_frame(last_seq, timeout=0.25)
+        if frame is None:
+            frame = camera.get_placeholder_jpeg()
+        elif seq == last_seq:
+            continue
+
+        last_seq = seq
         yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+
+
+def init_camera(device_index=0, jpeg_quality=70):
+    """Initialize and start the default local camera receiver."""
+    receiver = DefaultCameraReceiver(device_index=device_index, jpeg_quality=jpeg_quality)
+    receiver.start()
+    return receiver
 
 
 class RPiCameraReceiver:

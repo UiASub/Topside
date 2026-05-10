@@ -83,6 +83,16 @@ app.config["IP_CAMERA"] = init_ip_camera(
     jpeg_quality=ip_cam_jpeg_quality,
     flip_180=ip_cam_flip_180,
 )
+
+# Initialize default local camera for the legacy Camera 1 feed.
+# Opening and reconnecting happen in the receiver thread so app startup can continue.
+default_cam_device = int(os.getenv("DEFAULT_CAMERA_DEVICE", "0"))
+default_cam_jpeg_quality = int(os.getenv("DEFAULT_CAMERA_JPEG_QUALITY", "70"))
+app.config["DEFAULT_CAMERA"] = init_camera(
+    device_index=default_cam_device,
+    jpeg_quality=default_cam_jpeg_quality,
+)
+
 # Start background resource monitor receiver (UDP port 12346)
 app.config["RESOURCE"] = init_resource_receiver(port=12346)
 app.config["BITMASK"].set_resource_monitor(app.config["RESOURCE"])
@@ -100,7 +110,6 @@ app.config["LOG_STREAM"] = init_log_stream(port=5006)
 app.config["SYSTEM_CONTROL"] = SystemControlClient()
 
 register_routes(app)
-camera = init_camera()
 
 
 def _shutdown():
@@ -119,6 +128,9 @@ def _shutdown():
     ip_cam = app.config.get("IP_CAMERA")
     if ip_cam:
         ip_cam.stop()
+    default_cam = app.config.get("DEFAULT_CAMERA")
+    if default_cam:
+        default_cam.stop()
     resource = app.config.get("RESOURCE")
     if resource:
         resource.stop()
