@@ -196,13 +196,16 @@ def register_routes(app):
         bm = current_app.config.get("BITMASK")
         resource = current_app.config.get("RESOURCE")
         override = current_app.config.get("SETPOINT_OVERRIDE")
+        controller = current_app.config.get("CONTROLLER")
         uplink = bm.get_uplink_status() if bm else {}
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
         state = override.get_state() if override else {}
+        controller_state = controller.get_input_status() if controller else {}
         return jsonify(
             {
                 "ok": True,
                 "uplink": uplink,
+                "controller": controller_state,
                 "udp_rx_count": udp_rx,
                 "udp_rx_errors": udp_err,
                 "override": state,
