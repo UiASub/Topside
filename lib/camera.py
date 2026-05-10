@@ -91,6 +91,8 @@ class RPiCameraReceiver:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)
         self._cleanup()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
 
     def get_latest_jpeg(self):
         with self._frame_lock:
@@ -275,19 +277,21 @@ class RPiCameraReceiver:
 
         print(f"[RPi Camera]   Listening on UDP port {self.port} …")
         self.is_listening = True
-        self._gst_proc = subprocess.Popen(
+        proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
         )
+        self._gst_proc = proc
 
-        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, args=(proc,), daemon=True)
         self._stderr_thread.start()
 
-        stream = self._gst_proc.stdout
+        stream = proc.stdout
         if stream is None:
             self.is_connected = False
+            self._cleanup_gst(proc)
             return
 
         had_frame = False
@@ -295,9 +299,9 @@ class RPiCameraReceiver:
         while not self._stop_event.is_set():
             chunk = stream.read(8192)
             if not chunk:
-                if self._gst_proc.poll() is not None:
-                    if self._gst_proc.returncode not in (0, None):
-                        self.last_error = f"gst-launch exited with code {self._gst_proc.returncode}"
+                if proc.poll() is not None:
+                    if proc.returncode not in (0, None):
+                        self.last_error = f"gst-launch exited with code {proc.returncode}"
                     break
                 time.sleep(0.01)
                 continue
@@ -329,15 +333,15 @@ class RPiCameraReceiver:
             if self._is_stream_stale():
                 self.is_connected = False
 
-        self._cleanup_gst()
+        self._cleanup_gst(proc)
 
     def _is_stream_stale(self, timeout_s=2.0):
         return (time.monotonic() - self._last_frame_ts) > timeout_s
 
-    def _drain_stderr(self):
+    def _drain_stderr(self, proc):
         try:
-            if self._gst_proc and self._gst_proc.stderr:
-                for raw in self._gst_proc.stderr:
+            if proc.stderr:
+                for raw in proc.stderr:
                     line = raw.decode(errors="ignore").strip()
                     if line and ("ERROR" in line.upper() or "not found" in line.lower()):
                         self.last_error = line
@@ -346,19 +350,30 @@ class RPiCameraReceiver:
         except Exception:
             pass
 
-    def _cleanup_gst(self):
-        proc = self._gst_proc
-        self._gst_proc = None
+    def _cleanup_gst(self, proc=None):
+        proc = proc or self._gst_proc
+        if self._gst_proc is proc:
+            self._gst_proc = None
         if not proc:
             return
         try:
-            proc.terminate()
+            if proc.poll() is None:
+                proc.terminate()
             proc.wait(timeout=1.5)
         except Exception:
             try:
                 proc.kill()
             except Exception:
                 pass
+            try:
+                proc.wait(timeout=1.5)
+            except Exception:
+                pass
+        stderr_thread = self._stderr_thread
+        if stderr_thread and stderr_thread.is_alive() and stderr_thread is not threading.current_thread():
+            stderr_thread.join(timeout=1.0)
+        if self._stderr_thread is stderr_thread:
+            self._stderr_thread = None
 
     def _cleanup(self):
         self.is_connected = False
