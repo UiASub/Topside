@@ -3,7 +3,37 @@ async function updateDepth() {
         const response = await fetch("/api/depth");
         const data = await response.json();
         const depthStatus = document.getElementById("depth-status");
-        depthStatus.textContent = `Depth: ${data.dpt}m / Target: ${data.dptSet}m`;
+        const depthTarget = document.getElementById("depth-target");
+        const depthTemperature = document.getElementById("depth-temperature");
+        const depthHealth = document.getElementById("depth-health");
+        const depth = Number.parseFloat(data.dpt);
+        const target = Number.parseFloat(data.dptSet);
+        const temperature = Number.parseFloat(data.temperature_c);
+
+        if (depthStatus) {
+            depthStatus.textContent = Number.isFinite(depth) ? `${depth.toFixed(2)} m` : "--.-- m";
+        }
+        if (depthTarget) {
+            depthTarget.textContent = Number.isFinite(target) ? `${target.toFixed(2)} m` : "-";
+        }
+        if (depthTemperature) {
+            depthTemperature.textContent = Number.isFinite(temperature) ? `${temperature.toFixed(2)} °C` : "-";
+        }
+        if (depthHealth) {
+            const addr = Number(data.addr);
+            const lastProbeAddr = Number(data.last_probe_addr);
+            const shownAddr = Number.isFinite(addr) && addr > 0 ? addr : lastProbeAddr;
+            const addrText = Number.isFinite(shownAddr) && shownAddr > 0 ? `0x${shownAddr.toString(16).padStart(2, "0")}` : "--";
+            if (data.valid) {
+                depthHealth.textContent = `VALID age ${data.age_ms ?? "--"} ms addr ${addrText}`;
+                depthHealth.className = "text-success mt-auto";
+            } else {
+                depthHealth.textContent =
+                    `INVALID err ${data.last_error ?? "--"} 0x76=${data.probe_error_0x76 ?? "--"} ` +
+                    `0x77=${data.probe_error_0x77 ?? "--"} tries ${data.init_attempts ?? "--"} last ${addrText}`;
+                depthHealth.className = "text-warning mt-auto";
+            }
+        }
     } catch (error) {
         console.error("Error fetching depth:", error);
     }

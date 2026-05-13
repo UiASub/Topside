@@ -151,8 +151,18 @@
       const d = await res.json();
       const el = document.getElementById("hud-depth");
       const tgt = document.getElementById("hud-depth-target");
+      const temp = document.getElementById("hud-depth-temp");
+      const health = document.getElementById("hud-depth-health");
       if (el) el.textContent = d.dpt != null ? parseFloat(d.dpt).toFixed(1) : "--.-";
       if (tgt) tgt.textContent = d.dptSet != null ? parseFloat(d.dptSet).toFixed(1) : "--.-";
+      if (temp) temp.textContent = d.temperature_c != null ? parseFloat(d.temperature_c).toFixed(1) : "--.-";
+      if (health) {
+        const addr = Number(d.addr);
+        const lastProbeAddr = Number(d.last_probe_addr);
+        const shownAddr = Number.isFinite(addr) && addr > 0 ? addr : lastProbeAddr;
+        const addrText = Number.isFinite(shownAddr) && shownAddr > 0 ? `0x${shownAddr.toString(16).padStart(2, "0")}` : "--";
+        health.textContent = d.valid ? `VALID ${d.age_ms ?? "--"}ms ${addrText}` : `ERR ${d.last_error ?? "--"} ${addrText}`;
+      }
     } catch (_) { /* silent */ }
   }
 

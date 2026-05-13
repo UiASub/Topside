@@ -179,7 +179,7 @@
   align-items: flex-start;
   gap: 12px;
 }
-.hud-depth { min-width: 120px; }
+.hud-depth { min-width: 140px; }
 .hud-heading {
   flex: 0 1 280px;
   text-align: center;

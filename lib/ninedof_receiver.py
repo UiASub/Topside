@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Any
 
+from lib.depth_receiver import DepthTelemetryReceiver
 from lib.json_data_handler import JSONDataHandler
 from lib.runtime_paths import log_path, logs_dir
 
@@ -40,10 +41,11 @@ def _build_remap(axes_cfg, valid_keys=("yaw", "pitch", "roll")):
 class IMUReceiver:
     """Background UDP receiver for VN-100S IMU data (yaw/pitch/roll) from Nucleo board."""
 
-    def __init__(self, host=UDP_IP, port=UDP_PORT, data_handler=None):
+    def __init__(self, host=UDP_IP, port=UDP_PORT, data_handler=None, depth_receiver=None):
         self.host = host
         self.port = port
         self.data_handler = data_handler or JSONDataHandler()
+        self.depth_receiver = depth_receiver or DepthTelemetryReceiver(data_handler=self.data_handler)
 
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="IMUReceiver", daemon=True)
@@ -172,6 +174,8 @@ class IMUReceiver:
         self._log_raw_packet(text)
 
         imu = msg.get("imu", {})
+        if not isinstance(imu, dict):
+            imu = {}
 
         def _val(key: str, default: float = float("nan")) -> float:
             value = imu.get(key, default)
@@ -243,6 +247,11 @@ class IMUReceiver:
         except Exception as e:
             print(f"IMU: Error updating data: {e}")
 
+        try:
+            self.depth_receiver.process_payload(msg.get("depth"))
+        except Exception as e:
+            print(f"Depth: Error updating data: {e}")
+
     def _log_raw_packet(self, text: str) -> None:
         try:
             with IMU_LOG.open("a", encoding="utf-8") as fp:
@@ -257,8 +266,8 @@ def _coerce_json_number(value: float, precision: int = 2) -> Any:
     return round(float(value), precision)
 
 
-def init_imu_receiver(host=UDP_IP, port=UDP_PORT, data_handler=None) -> IMUReceiver:
+def init_imu_receiver(host=UDP_IP, port=UDP_PORT, data_handler=None, depth_receiver=None) -> IMUReceiver:
     """Initialize and start the IMU receiver."""
-    receiver = IMUReceiver(host=host, port=port, data_handler=data_handler)
+    receiver = IMUReceiver(host=host, port=port, data_handler=data_handler, depth_receiver=depth_receiver)
     receiver.start()
     return receiver
