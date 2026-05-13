@@ -1,8 +1,11 @@
+import json
 import struct
 
 import pytest
 
 import lib.control_telemetry as control_telem
+import lib.depth_receiver as depth_telem
+import lib.ninedof_receiver as ninedof
 import lib.resource_receiver as resource_telem
 from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
 from lib.json_data_handler import JSONDataHandler
@@ -14,6 +17,14 @@ class DummyHandler:
 
     def update_data(self, payload):
         self.last_update = payload
+
+
+class DummyDepthReceiver:
+    def __init__(self):
+        self.last_payload = None
+
+    def process_payload(self, payload):
+        self.last_payload = payload
 
 
 def test_crc32_ieee_standard_vector():
@@ -112,6 +123,110 @@ def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
         }
     }
     assert receiver.get_udp_counters() == (84, 0)
+
+
+def test_depth_receiver_normalizes_ms5837_payload():
+    handler = DummyHandler()
+    receiver = depth_telem.DepthTelemetryReceiver(data_handler=handler)
+
+    result = receiver.process_payload(
+        {
+            "dpt": "1.234",
+            "dptSet": 2,
+            "pressure_mbar": 1013.26,
+            "temperature_c": "18.5",
+            "valid": "true",
+            "age_ms": 42.4,
+            "addr": 118,
+            "last_probe_addr": 118,
+            "last_error": -5,
+            "probe_error_0x76": 0,
+            "probe_error_0x77": -5,
+            "scl_idle": 1,
+            "sda_idle": 1,
+            "transport_error": 4,
+            "transport_mode": 1,
+            "fw_depth_rev": 202605139,
+            "scan_count": 1,
+            "scan_first_addr": 118,
+            "scan_last_addr": 118,
+            "scan_has_0x76": 1,
+            "scan_has_0x77": 0,
+            "init_attempts": 3,
+            "read_errors": 1,
+        }
+    )
+
+    assert result == {
+        "dpt": 1.23,
+        "dptSet": 2.0,
+        "pressure_mbar": 1013.3,
+        "temperature_c": 18.5,
+        "valid": True,
+        "age_ms": 42.0,
+        "addr": 118.0,
+        "last_probe_addr": 118.0,
+        "last_error": -5.0,
+        "probe_error_0x76": 0.0,
+        "probe_error_0x77": -5.0,
+        "scl_idle": 1.0,
+        "sda_idle": 1.0,
+        "transport_error": 4.0,
+        "transport_mode": 1.0,
+        "fw_depth_rev": 202605139.0,
+        "scan_count": 1.0,
+        "scan_first_addr": 118.0,
+        "scan_last_addr": 118.0,
+        "scan_has_0x76": 1.0,
+        "scan_has_0x77": 0.0,
+        "init_attempts": 3.0,
+        "read_errors": 1.0,
+    }
+    assert handler.last_update == {"depth": result}
+
+
+def test_imu_receiver_delegates_depth_payload(monkeypatch, tmp_path):
+    monkeypatch.setattr(ninedof, "IMU_LOG", tmp_path / "imu_raw.ndjson")
+    handler = DummyHandler()
+    depth_receiver = DummyDepthReceiver()
+    receiver = ninedof.IMUReceiver(data_handler=handler, depth_receiver=depth_receiver)
+
+    depth_payload = {
+        "dpt": 0.0,
+        "dptSet": 0.0,
+        "pressure_mbar": 0.0,
+        "temperature_c": 0.0,
+        "valid": False,
+        "age_ms": -1,
+        "addr": 0,
+        "last_probe_addr": 119,
+        "last_error": -5,
+        "probe_error_0x76": -5,
+        "probe_error_0x77": -5,
+        "init_attempts": 39,
+        "read_errors": 0,
+    }
+    packet = json.dumps(
+        {
+            "imu": {
+                "yaw": -126.98,
+                "pitch": -5.45,
+                "roll": 179.55,
+                "yr": 0.03,
+                "pr": 0.0,
+                "rr": 0.1,
+                "ax": -0.002,
+                "ay": 0.001,
+                "az": -0.002,
+            },
+            "depth": depth_payload,
+        }
+    ).encode("utf-8")
+
+    receiver._process_packet(packet, ("10.77.0.2", 5002))  # pylint: disable=protected-access
+
+    assert handler.last_update["imu"]["yaw"] == -126.98
+    assert depth_receiver.last_payload == depth_payload
 
 
 def test_json_data_handler_creates_parent_and_preserves_sections(tmp_path):
