@@ -3,6 +3,7 @@ logs/*
 data/data.json
 .idea/*
 debug_server/server_logs/*
+agent.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
