@@ -34,7 +34,35 @@ The Topside PC must be on the **same subnet as the onboard device**, otherwise n
 | IP camera       | `192.168.1.168`      |
 | Topside PC      | `10.77.0.1/24` on the MCU Ethernet adapter |
 
-### Setting a static IP on Windows
+### Automated MCU Ethernet setup
+
+Topside includes helper scripts that configure the selected Ethernet adapter as `10.77.0.1/24`, then try to ping the MCU at `10.77.0.2`. If the ping fails, the scripts warn and continue so setup can still finish before the cable or MCU is connected.
+
+On Fedora/Linux with NetworkManager:
+
+```bash
+./tools/k2-ethernet.sh up
+```
+
+On Windows, run from an Administrator PowerShell:
+
+```powershell
+.\tools\k2-ethernet.ps1 up
+```
+
+Both scripts show a menu of Ethernet adapters and mark the most likely USB Ethernet adapter as recommended. Use `status` to inspect the current setup and `down` to remove the direct-link configuration:
+
+```bash
+./tools/k2-ethernet.sh status
+./tools/k2-ethernet.sh down
+```
+
+```powershell
+.\tools\k2-ethernet.ps1 status
+.\tools\k2-ethernet.ps1 down
+```
+
+### Manual static IP on Windows
 
 The Windows installer can do this automatically if you select **Configure MCU Ethernet adapter to 10.77.0.1/24** during install. The portable Windows zip also includes the same helper script:
 
@@ -71,14 +99,17 @@ By default Topside sends MCU traffic to `10.77.0.2`. For a nonstandard setup, se
 | `5000/tcp` | local     | Dashboard (browser → app)     |
 | `12345/udp`| outbound  | Control commands → device     |
 | `5002/udp` | inbound   | IMU telemetry                 |
+| `5005/udp` | inbound   | MCU control telemetry         |
+| `5006/udp` | inbound   | MCU log stream                |
+| `5008/udp` | outbound  | MCU reset/system control      |
 | `12346/udp`| inbound   | Resource monitor              |
 | `6969/udp` | inbound   | RPi camera stream             |
 
-If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002`, `12346`, and `6969`.
+If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002`, `5005`, `5006`, `12346`, and `6969`.
 
 ## Troubleshooting
 
 - **No video / no telemetry** — verify the static IP, then `ping 10.77.0.2`. If the ping fails, the network is the problem, not the app.
-- **Settings don't persist between launches** — the config lives at `%LOCALAPPDATA%\Topside\data\config.json`. The installer only writes a starter file if it doesn't exist, so reinstalling won't wipe your settings.
-- **Live data doesn't update** — launch from the Start Menu and check the console line that starts with `Using data directory:`. For the installer it should be `%LOCALAPPDATA%\Topside\data`; `data.json` in that folder should update as UDP telemetry arrives.
+- **Settings don't persist between launches** — on Windows packaged builds, the config lives at `%LOCALAPPDATA%\Topside\data\config.json`. Source runs use the repository `data` folder. Starter files are copied only if missing, and the packaged `data/data.json` is used to initialize or fill missing AppData fields, so reinstalling won't wipe your settings.
+- **Live data doesn't update** — launch from the Start Menu and check the console line that starts with `Using data directory:`. For Windows packaged builds it should be `%LOCALAPPDATA%\Topside\data`; `data.json` in that folder should update as UDP telemetry arrives.
 - **App window closes immediately** — launch from the Start Menu (not by double-clicking inside Program Files). If the console flashes and disappears, run `Topside.exe` from `cmd.exe` to see the error.

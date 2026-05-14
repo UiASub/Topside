@@ -5,7 +5,7 @@ import re
 from flask import Response, current_app, jsonify, render_template, request
 
 from lib.axis_config_sender import send_axis_config
-from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames, init_camera
+from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames
 from lib.json_data_handler import JSONDataHandler
 from lib.pid_config_client import AXES as PID_AXES
 from lib.pid_config_client import request_pid_gains, send_pid_gains
@@ -30,7 +30,6 @@ def _save_pid_configs(configs):
 # Initialize required components
 data_handler = JSONDataHandler()
 config_handler = JSONDataHandler(file_path=data_path("config.json"))
-camera = init_camera()
 
 # Defaults for axis configs
 _DEFAULT_IMU_AXES = {"yaw": "+yaw", "pitch": "+pitch", "roll": "+roll"}
@@ -182,10 +181,26 @@ def register_routes(app):
     @app.route("/video_feed")
     def video_feed():
         """Return a streaming MJPEG response from the camera."""
-        return Response(
-            generate_frames(camera),
+        default_cam = current_app.config.get("DEFAULT_CAMERA")
+        if default_cam is None:
+            return "Default camera not initialized", 503
+        resp = Response(
+            generate_frames(default_cam),
             mimetype="multipart/x-mixed-replace; boundary=frame",
         )
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["X-Accel-Buffering"] = "no"
+        return resp
+
+    @app.route("/api/camera/status")
+    def camera_status():
+        """Return default camera connection status."""
+        default_cam = current_app.config.get("DEFAULT_CAMERA")
+        if default_cam:
+            return jsonify(default_cam.get_status())
+        return jsonify({"connected": False, "listening": False})
 
     @app.route("/ip_video_feed")
     def ip_video_feed():
@@ -249,13 +264,16 @@ def register_routes(app):
         bm = current_app.config.get("BITMASK")
         resource = current_app.config.get("RESOURCE")
         override = current_app.config.get("SETPOINT_OVERRIDE")
+        controller = current_app.config.get("CONTROLLER")
         uplink = bm.get_uplink_status() if bm else {}
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
         state = override.get_state() if override else {}
+        controller_state = controller.get_input_status() if controller else {}
         return jsonify(
             {
                 "ok": True,
                 "uplink": uplink,
+                "controller": controller_state,
                 "udp_rx_count": udp_rx,
                 "udp_rx_errors": udp_err,
                 "override": state,

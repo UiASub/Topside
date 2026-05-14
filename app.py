@@ -13,12 +13,13 @@ from lib.log_udp_receiver import init_log_stream
 from lib.net_transport import DEFAULT_ROV_HOST
 from lib.ninedof_receiver import init_imu_receiver
 from lib.resource_receiver import init_resource_receiver
-from lib.runtime_paths import data_dir, data_path
+from lib.runtime_paths import data_dir, data_path, ensure_data_dir
 from lib.setpoint_override import init_setpoint_override
 from lib.system_control_client import SystemControlClient
 from routes import register_routes
 
 app = Flask(__name__, static_folder="static", template_folder="static/templates")
+ensure_data_dir()
 
 # Start background UDP sender (20 Hz)
 app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host=DEFAULT_ROV_HOST, port=12345)
@@ -82,6 +83,16 @@ app.config["IP_CAMERA"] = init_ip_camera(
     jpeg_quality=ip_cam_jpeg_quality,
     flip_180=ip_cam_flip_180,
 )
+
+# Initialize default local camera for the legacy Camera 1 feed.
+# Opening and reconnecting happen in the receiver thread so app startup can continue.
+default_cam_device = int(os.getenv("DEFAULT_CAMERA_DEVICE", "0"))
+default_cam_jpeg_quality = int(os.getenv("DEFAULT_CAMERA_JPEG_QUALITY", "70"))
+app.config["DEFAULT_CAMERA"] = init_camera(
+    device_index=default_cam_device,
+    jpeg_quality=default_cam_jpeg_quality,
+)
+
 # Start background resource monitor receiver (UDP port 12346)
 app.config["RESOURCE"] = init_resource_receiver(port=12346)
 app.config["BITMASK"].set_resource_monitor(app.config["RESOURCE"])
@@ -99,7 +110,6 @@ app.config["LOG_STREAM"] = init_log_stream(port=5006)
 app.config["SYSTEM_CONTROL"] = SystemControlClient()
 
 register_routes(app)
-camera = init_camera()
 
 
 def _shutdown():
@@ -118,6 +128,9 @@ def _shutdown():
     ip_cam = app.config.get("IP_CAMERA")
     if ip_cam:
         ip_cam.stop()
+    default_cam = app.config.get("DEFAULT_CAMERA")
+    if default_cam:
+        default_cam.stop()
     resource = app.config.get("RESOURCE")
     if resource:
         resource.stop()

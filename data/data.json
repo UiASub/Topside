@@ -1,24 +1,126 @@
 {
     "imu": {
-        "yaw": 136.61,
-        "pitch": 1.13,
-        "roll": -4.16,
-        "yr": -0.02,
-        "pr": -0.16,
-        "rr": -0.37,
-        "ax": 0.003,
-        "ay": 0.016,
-        "az": -0.003
+        "yaw": 0.0,
+        "pitch": 0.0,
+        "roll": 0.0,
+        "yr": 0.0,
+        "pr": 0.0,
+        "rr": 0.0,
+        "ax": 0.0,
+        "ay": 0.0,
+        "az": 0.0
+    },
+    "9dof": {
+        "acceleration": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "gyroscope": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "magnetometer": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        }
+    },
+    "thrusters": {
+        "U_FWD_P": {
+            "power": 0,
+            "temp": 20
+        },
+        "U_FWD_S": {
+            "power": 0,
+            "temp": 20
+        },
+        "U_AFT_P": {
+            "power": 0,
+            "temp": 20
+        },
+        "U_AFT_S": {
+            "power": 0,
+            "temp": 20
+        },
+        "L_FWD_P": {
+            "power": 0,
+            "temp": 20
+        },
+        "L_FWD_S": {
+            "power": 0,
+            "temp": 20
+        },
+        "L_AFT_P": {
+            "power": 0,
+            "temp": 20
+        },
+        "L_AFT_S": {
+            "power": 0,
+            "temp": 20
+        }
+    },
+    "lights": {
+        "level": 0,
+        "Light1": 0,
+        "Light2": 0,
+        "Light3": 0,
+        "Light4": 0
+    },
+    "battery": 0,
+    "depth": {
+        "dpt": 0.0,
+        "dptSet": 0.0
     },
     "resources": {
-        "sequence": 13648,
-        "uptime_ms": 13656555,
-        "cpu_percent": 3,
-        "heap_used_percent": 1,
-        "heap_free_kb": 502,
-        "heap_total_kb": 512,
-        "thread_count": 20,
-        "udp_rx_count": 218096,
+        "sequence": 0,
+        "uptime_ms": 0,
+        "cpu_percent": 0,
+        "heap_used_percent": 0,
+        "heap_free_kb": 0,
+        "heap_total_kb": 0,
+        "thread_count": 0,
+        "udp_rx_count": 0,
         "udp_rx_errors": 0
+    },
+    "control_telemetry": {
+        "sequence": 0,
+        "timestamp": 0,
+        "setpoint": {
+            "surge": 0.0,
+            "sway": 0.0,
+            "heave": 0.0,
+            "roll": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0
+        },
+        "output": {
+            "surge": 0.0,
+            "sway": 0.0,
+            "heave": 0.0,
+            "roll": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0
+        },
+        "error": {
+            "surge": 0.0,
+            "sway": 0.0,
+            "heave": 0.0,
+            "roll": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0
+        }
+    },
+    "Thrust": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+    ],
+    "Buttons": {
+        "button_surface": 0
     }
 }
