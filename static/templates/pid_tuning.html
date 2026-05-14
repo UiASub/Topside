@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}PID Tuning{% endblock %}
+
+{% block content %}
+{% set translational_axes = [("surge", "Surge"), ("sway", "Sway"), ("heave", "Heave")] %}
+{% set rotational_axes = [("roll", "Roll"), ("pitch", "Pitch"), ("yaw", "Yaw")] %}
+{% set all_axes = translational_axes + rotational_axes %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pid_tuning.css') }}">
+<script>
+  window.pidTuningAttitudeLimits = {{ attitude_limits|default({})|tojson|safe }};
+</script>
+
+<div class="pid-page-shell">
+  <div class="pid-action-bar">
+    <div class="pid-action-status">
+      <span class="pid-kicker">PID Tuning</span>
+      <span id="pid-page-status" class="badge bg-secondary">READY</span>
+      <span id="pid-link-status" class="badge bg-secondary">LINK IDLE</span>
+      <span class="pid-muted">IMU <span id="pid-imu-age">--</span> ms</span>
+    </div>
+    <div class="pid-action-controls">
+      <button type="button" class="btn btn-sm btn-primary js-start-pid">Start PID</button>
+      <button type="button" class="btn btn-sm btn-danger pid-zero-btn js-zero-all-pid">ZERO PID + THRUST</button>
+    </div>
+  </div>
+
+  <div class="pid-layout-grid">
+    <div class="pid-left-stack">
+      <section class="card custom-card pid-panel">
+        <div class="card-body">
+          <div class="pid-panel-header">
+            <h5 class="card-title mb-0">Override Controls</h5>
+            <span id="debug-status" class="badge bg-secondary">INACTIVE</span>
+          </div>
+          <div class="pid-button-row">
+            <button type="button" id="btn-enable" class="btn btn-sm btn-success">Enable Override</button>
+            <button type="button" id="btn-disable" class="btn btn-sm btn-danger" disabled>Disable Override</button>
+            <button type="button" id="btn-reset-all" class="btn btn-sm btn-outline-warning">Reset Sliders</button>
+          </div>
+          <div class="pid-slider-grid" id="slider-container">
+            {% for axis, label in all_axes %}
+            <div class="pid-slider-card">
+              <div class="pid-slider-header">
+                <label for="slider-{{ axis }}">{{ label }}</label>
+                <span class="slider-value" id="val-{{ axis }}">0.00</span>
+              </div>
+              <input type="range" class="form-range debug-slider" id="slider-{{ axis }}" min="-100" max="100" value="0" data-axis="{{ axis }}">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="card custom-card pid-panel">
+        <div class="card-body">
+          <div class="pid-panel-header">
+            <h5 class="card-title mb-0">Angle Setpoints</h5>
+            <span id="setpoint-status" class="badge bg-secondary">IDLE</span>
+          </div>
+          <div class="pid-note">
+            VN-100 YPR degrees: roll and yaw use -180 to +180. Pitch uses -90 to +90.
+          </div>
+          <div class="pid-setpoint-grid">
+            {% for axis, label in rotational_axes %}
+            <div class="pid-setpoint-row" data-axis="{{ axis }}">
+              <label for="setpoint-{{ axis }}">{{ label }}</label>
+              <div class="input-group input-group-sm">
+                <input
+                  id="setpoint-{{ axis }}"
+                  class="form-control bg-dark text-light setpoint-input"
+                  type="number"
+                  step="0.1"
+                  min="-{{ attitude_limits[axis] }}"
+                  max="{{ attitude_limits[axis] }}"
+                  placeholder="0.0">
+                <span class="input-group-text">deg</span>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-info js-use-current" data-axis="{{ axis }}">Use Current</button>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="pid-button-row">
+            <button type="button" id="btn-send-setpoints" class="btn btn-sm btn-success">Send Setpoints</button>
+            <button type="button" class="btn btn-sm btn-primary js-start-pid">Start PID from IMU</button>
+            <button type="button" id="btn-clear-setpoints" class="btn btn-sm btn-outline-secondary">Clear Setpoints</button>
+          </div>
+          <div id="setpoint-feedback" class="pid-feedback">Waiting for input.</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="pid-right-stack">
+      <section class="card custom-card pid-panel">
+        <div class="card-body">
+          <div class="pid-panel-header">
+            <h5 class="card-title mb-0">PID Values</h5>
+            <span id="pid-status" class="badge bg-secondary">READY</span>
+          </div>
+          <div class="pid-button-row">
+            <button type="button" id="btn-pid-request" class="btn btn-sm btn-info">Request Current</button>
+            <button type="button" id="btn-pid-send" class="btn btn-sm btn-success">Send to MCU</button>
+            <button type="button" class="btn btn-sm btn-danger js-zero-all-pid">ZERO PID + THRUST</button>
+          </div>
+
+          <div class="pid-gain-box">
+            <div class="pid-box-title">Roll, Pitch, Yaw</div>
+            <div class="pid-gain-grid">
+              <div class="pid-gain-head">Axis</div>
+              <div class="pid-gain-head">P</div>
+              <div class="pid-gain-head">I</div>
+              <div class="pid-gain-head">D</div>
+              {% for axis, label in rotational_axes %}
+              <label class="pid-axis-label" for="pid-{{ axis }}-kp">{{ label }}</label>
+              <input id="pid-{{ axis }}-kp" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              <input id="pid-{{ axis }}-ki" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              <input id="pid-{{ axis }}-kd" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="pid-gain-box">
+            <div class="pid-box-title">Surge, Sway, Heave</div>
+            <div class="pid-gain-grid">
+              <div class="pid-gain-head">Axis</div>
+              <div class="pid-gain-head">P</div>
+              <div class="pid-gain-head">I</div>
+              <div class="pid-gain-head">D</div>
+              {% for axis, label in translational_axes %}
+              <label class="pid-axis-label" for="pid-{{ axis }}-kp">{{ label }}</label>
+              <input id="pid-{{ axis }}-kp" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              <input id="pid-{{ axis }}-ki" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              <input id="pid-{{ axis }}-kd" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="pid-config-row">
+            <input type="text" class="form-control form-control-sm bg-dark text-light" id="pid-config-name" placeholder="Tune name">
+            <button type="button" id="btn-pid-save" class="btn btn-sm btn-outline-success">Save</button>
+            <select class="form-select form-select-sm bg-dark text-light" id="pid-config-select">
+              <option value="">Load tune</option>
+            </select>
+            <button type="button" id="btn-pid-load" class="btn btn-sm btn-outline-info">Load</button>
+            <button type="button" id="btn-pid-delete" class="btn btn-sm btn-outline-danger">Delete</button>
+            <span id="pid-config-status" class="badge bg-secondary">-</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card custom-card pid-panel">
+        <div class="card-body">
+          <div class="pid-panel-header">
+            <h5 class="card-title mb-0">Telemetry and Link</h5>
+            <span id="telemetry-age" class="badge bg-secondary">NO TELEMETRY</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-dark table-sm align-middle pid-telemetry-table mb-0">
+              <thead>
+                <tr>
+                  <th>Axis</th>
+                  <th>Setpoint</th>
+                  <th>Position</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody id="pid-telemetry-body">
+                <tr><td colspan="4" class="text-center text-muted">Waiting for packets...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <pre id="rov-status" class="pid-command-preview">Loading...</pre>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/pid_tuning.js"></script>
+{% endblock %}

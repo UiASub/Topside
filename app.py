@@ -146,8 +146,6 @@ def _shutdown():
     system_control = app.config.get("SYSTEM_CONTROL")
     if system_control:
         system_control.close()
-    if camera:
-        camera.release()
 
 
 atexit.register(_shutdown)
