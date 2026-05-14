@@ -111,6 +111,9 @@ body {
   color: #0dcaf0;
   font-weight: bold;
 }
+.custom-card .text-muted {
+  color: #adb5bd !important;
+}
 
 /* Custom Table */
 .custom-table {

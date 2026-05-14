@@ -17,20 +17,16 @@ async function updateDepth() {
             depthTarget.textContent = Number.isFinite(target) ? `${target.toFixed(2)} m` : "-";
         }
         if (depthTemperature) {
-            depthTemperature.textContent = Number.isFinite(temperature) ? `${temperature.toFixed(2)} °C` : "-";
+            depthTemperature.textContent = Number.isFinite(temperature) ? `${temperature.toFixed(2)} °C` : "--.-- °C";
         }
         if (depthHealth) {
             const addr = Number(data.addr);
-            const lastProbeAddr = Number(data.last_probe_addr);
-            const shownAddr = Number.isFinite(addr) && addr > 0 ? addr : lastProbeAddr;
-            const addrText = Number.isFinite(shownAddr) && shownAddr > 0 ? `0x${shownAddr.toString(16).padStart(2, "0")}` : "--";
+            const addrText = Number.isFinite(addr) && addr > 0 ? `0x${addr.toString(16).padStart(2, "0")}` : "--";
             if (data.valid) {
                 depthHealth.textContent = `VALID age ${data.age_ms ?? "--"} ms addr ${addrText}`;
                 depthHealth.className = "text-success mt-auto";
             } else {
-                depthHealth.textContent =
-                    `INVALID err ${data.last_error ?? "--"} 0x76=${data.probe_error_0x76 ?? "--"} ` +
-                    `0x77=${data.probe_error_0x77 ?? "--"} tries ${data.init_attempts ?? "--"} last ${addrText}`;
+                depthHealth.textContent = `INVALID err ${data.last_error ?? "--"} tries ${data.init_attempts ?? "--"} addr ${addrText}`;
                 depthHealth.className = "text-warning mt-auto";
             }
         }
