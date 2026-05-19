@@ -556,9 +556,7 @@ def register_routes(app):
 
         attitude = stats.get("last_data") or {}
         try:
-            attitude_setpoints = _coerce_attitude_setpoints(
-                {axis: float(attitude[axis]) for axis in ATTITUDE_AXES}
-            )
+            attitude_setpoints = _coerce_attitude_setpoints({axis: float(attitude[axis]) for axis in ATTITUDE_AXES})
         except (KeyError, TypeError, ValueError):
             return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
         if len(attitude_setpoints) != len(ATTITUDE_AXES):
