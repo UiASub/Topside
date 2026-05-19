@@ -1,7 +1,6 @@
 import json
 import math
 import re
-
 from pathlib import Path
 
 from flask import Response, current_app, jsonify, render_template, request, send_from_directory
