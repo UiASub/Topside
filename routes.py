@@ -1,8 +1,9 @@
 import json
 import math
 import re
+from pathlib import Path
 
-from flask import Response, current_app, jsonify, render_template, request
+from flask import Response, current_app, jsonify, render_template, request, send_from_directory
 
 from lib.axis_config_sender import send_axis_config
 from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames
@@ -12,6 +13,7 @@ from lib.pid_config_client import request_pid_gains, send_pid_gains
 from lib.runtime_paths import data_path
 
 PID_CONFIGS_FILE = data_path("pid_configs.json")
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def _load_pid_configs():
@@ -151,6 +153,17 @@ def register_routes(app):
     def graphs():
         """Render the IMU graphs page."""
         return render_template("graphs.html")
+
+    @app.route("/docs")
+    def api_documentation():
+        """Render the interactive API documentation."""
+        return render_template("swagger_docs.html")
+
+    @app.route("/docs/swagger.yml")
+    def api_spec():
+        """Serve the Swagger specification."""
+        docs_dir = PROJECT_ROOT / "docs"
+        return send_from_directory(docs_dir, "swagger.yml", mimetype="application/yaml")
 
     @app.route("/rpi_video_feed")
     def rpi_video_feed():

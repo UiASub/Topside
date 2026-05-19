@@ -1,0 +1,1356 @@
+swagger: "2.0"
+
+info:
+  title: Topside ROV API
+  description: >
+    REST and streaming endpoints exposed by the Topside ROV Flask application.
+    The API provides camera status and feeds, telemetry, command/uplink status,
+    IMU configuration, debug overrides, controller gains, and PID tuning.
+  version: "1.0.0"
+
+host: localhost:5000
+basePath: /
+schemes:
+  - http
+consumes:
+  - application/json
+produces:
+  - application/json
+
+tags:
+  - name: Camera
+    description: Camera status and MJPEG streams
+  - name: Telemetry
+    description: ROV telemetry, sensors, logs, and live control data
+  - name: ROV Command
+    description: Manual command output and uplink state
+  - name: IMU
+    description: IMU receiver status, tare, offsets, and axis mappings
+  - name: Debug
+    description: Manual debug overrides and attitude setpoints
+  - name: Controller
+    description: Gamepad controller input and gain settings
+  - name: PID
+    description: PID gain tuning, setpoints, and saved presets
+  - name: System
+    description: System-level MCU commands
+
+paths:
+  /api/camera/status:
+    get:
+      tags: [Camera]
+      summary: Get legacy local camera status
+      responses:
+        200:
+          description: Local camera status
+          schema:
+            $ref: "#/definitions/LocalCameraStatus"
+
+  /api/rpi_camera/status:
+    get:
+      tags: [Camera]
+      summary: Get Raspberry Pi camera receiver status
+      responses:
+        200:
+          description: RPi camera status
+          schema:
+            $ref: "#/definitions/RpiCameraStatus"
+
+  /api/ip_camera/status:
+    get:
+      tags: [Camera]
+      summary: Get IP camera status
+      responses:
+        200:
+          description: IP camera status
+          schema:
+            $ref: "#/definitions/IpCameraStatus"
+
+  /video_feed:
+    get:
+      tags: [Camera]
+      summary: Stream the legacy local camera as MJPEG
+      produces:
+        - multipart/x-mixed-replace
+      responses:
+        200:
+          description: MJPEG stream with boundary "frame"
+          schema:
+            type: file
+        503:
+          description: Default camera not initialized
+
+  /rpi_video_feed:
+    get:
+      tags: [Camera]
+      summary: Stream the Raspberry Pi camera receiver as MJPEG
+      produces:
+        - multipart/x-mixed-replace
+      responses:
+        200:
+          description: MJPEG stream with boundary "frame"
+          schema:
+            type: file
+        503:
+          description: RPi camera not initialized
+
+  /ip_video_feed:
+    get:
+      tags: [Camera]
+      summary: Stream the IP camera as MJPEG
+      produces:
+        - multipart/x-mixed-replace
+      responses:
+        200:
+          description: MJPEG stream with boundary "frame"
+          schema:
+            type: file
+        503:
+          description: IP camera not initialized
+
+  /api/thrusters:
+    get:
+      tags: [Telemetry]
+      summary: Get thruster telemetry
+      responses:
+        200:
+          description: Thruster power and temperature values keyed by thruster name
+          schema:
+            type: object
+            additionalProperties:
+              $ref: "#/definitions/ThrusterTelemetry"
+
+  /api/sensors:
+    get:
+      tags: [Telemetry]
+      summary: Get IMU sensor data
+      description: Returns yaw, pitch, roll, rotation rates, and accelerometer readings.
+      responses:
+        200:
+          description: Current IMU readings
+          schema:
+            $ref: "#/definitions/ImuTelemetry"
+
+  /api/lights:
+    get:
+      tags: [Telemetry]
+      summary: Get light telemetry
+      responses:
+        200:
+          description: Current light levels
+          schema:
+            $ref: "#/definitions/LightsTelemetry"
+
+  /api/battery:
+    get:
+      tags: [Telemetry]
+      summary: Get battery status
+      responses:
+        200:
+          description: Battery level
+          schema:
+            type: object
+            properties:
+              battery:
+                type: number
+                example: 85
+
+  /api/depth:
+    get:
+      tags: [Telemetry]
+      summary: Get depth telemetry
+      responses:
+        200:
+          description: Current and target depth
+          schema:
+            $ref: "#/definitions/DepthTelemetry"
+
+  /api/resources:
+    get:
+      tags: [Telemetry]
+      summary: Get MCU resource telemetry
+      description: Returns CPU usage, memory stats, thread count, and UDP counters from the MCU.
+      responses:
+        200:
+          description: MCU resource usage
+          schema:
+            $ref: "#/definitions/ResourceTelemetry"
+
+  /api/command/status:
+    get:
+      tags: [ROV Command]
+      summary: Get command uplink, controller, UDP, and override status
+      responses:
+        200:
+          description: Combined command status
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              uplink:
+                $ref: "#/definitions/UplinkStatus"
+              controller:
+                $ref: "#/definitions/ControllerInputStatus"
+              udp_rx_count:
+                type: integer
+                example: 17301
+              udp_rx_errors:
+                type: integer
+                example: 0
+              override:
+                $ref: "#/definitions/SetpointOverrideState"
+
+  /api/control/telemetry:
+    get:
+      tags: [Telemetry]
+      summary: Get the latest control loop telemetry sample
+      responses:
+        200:
+          description: Latest setpoint, output, and error sample
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              telemetry:
+                $ref: "#/definitions/ControlTelemetrySample"
+
+  /api/control/telemetry/history:
+    get:
+      tags: [Telemetry]
+      summary: Get recent control loop telemetry samples
+      parameters:
+        - in: query
+          name: limit
+          type: integer
+          required: false
+          default: 120
+          description: Number of recent samples to return. The receiver clamps this to its history capacity.
+      responses:
+        200:
+          description: Recent telemetry history
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              history:
+                type: array
+                items:
+                  $ref: "#/definitions/ControlTelemetrySample"
+        503:
+          description: Control telemetry receiver is unavailable
+
+  /api/logs/live:
+    get:
+      tags: [Telemetry]
+      summary: Get recent MCU log entries
+      parameters:
+        - in: query
+          name: limit
+          type: integer
+          required: false
+          default: 100
+          minimum: 1
+          maximum: 500
+          description: Number of recent log entries to return.
+      responses:
+        200:
+          description: Recent log entries
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              logs:
+                type: array
+                items:
+                  $ref: "#/definitions/LogEntry"
+
+  /api/setpoint/status:
+    get:
+      tags: [Debug]
+      summary: Get setpoint override status
+      responses:
+        200:
+          description: Current setpoint override client state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              state:
+                $ref: "#/definitions/SetpointOverrideState"
+        503:
+          description: Setpoint override client unavailable
+
+  /api/system/reset:
+    post:
+      tags: [System]
+      summary: Send an MCU reset command
+      responses:
+        200:
+          description: Reset packet was sent
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              reset:
+                $ref: "#/definitions/SystemResetResult"
+        503:
+          description: System control client unavailable or reset send failed
+
+  /api/rov/command:
+    post:
+      tags: [ROV Command]
+      summary: Send a manual movement command to the ROV
+      description: >
+        Accepts raw integer command fields, normalized axes under "axes", and
+        an optional live command send rate. Raw and normalized fields may be
+        sent together; the current implementation applies normalized axes first
+        and raw fields second.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/RovCommandRequest"
+      responses:
+        200:
+          description: Command accepted
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              now:
+                $ref: "#/definitions/RovCommand"
+
+  /api/rov/status:
+    get:
+      tags: [ROV Command]
+      summary: Get current ROV command, uplink, and resource acknowledgement status
+      responses:
+        200:
+          description: Current command state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              command:
+                $ref: "#/definitions/RovCommand"
+              uplink:
+                $ref: "#/definitions/UplinkStatus"
+              resource:
+                type: object
+                properties:
+                  udp_rx_count:
+                    type: integer
+                    example: 17301
+                  udp_rx_errors:
+                    type: integer
+                    example: 0
+
+  /api/imu/status:
+    get:
+      tags: [IMU]
+      summary: Get IMU receiver statistics
+      responses:
+        200:
+          description: IMU receiver stats, or ok=false if no receiver is configured
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              stats:
+                $ref: "#/definitions/ImuStats"
+              error:
+                type: string
+                example: IMU receiver not running
+
+  /api/imu/tare:
+    post:
+      tags: [IMU]
+      summary: Set current IMU orientation as zero reference
+      responses:
+        200:
+          description: Tare offset set
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              tare_offset:
+                type: object
+                additionalProperties:
+                  type: number
+        503:
+          description: IMU receiver not running
+    delete:
+      tags: [IMU]
+      summary: Clear the tare offset
+      responses:
+        200:
+          description: Tare cleared
+          schema:
+            $ref: "#/definitions/OkResponse"
+        503:
+          description: IMU receiver not running
+
+  /api/imu/offset:
+    get:
+      tags: [IMU]
+      summary: Get IMU mass-center offset
+      responses:
+        200:
+          description: Current offset in millimeters
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              offset:
+                $ref: "#/definitions/Vector3"
+    post:
+      tags: [IMU]
+      summary: Set IMU mass-center offset
+      description: Saves the offset locally and sends the full axis configuration to the MCU.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/Vector3"
+      responses:
+        200:
+          description: Offset updated
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              offset:
+                $ref: "#/definitions/Vector3"
+
+  /api/imu/axes:
+    get:
+      tags: [IMU]
+      summary: Get IMU yaw/pitch/roll axis mapping
+      responses:
+        200:
+          description: Current IMU axis mapping
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              axes:
+                $ref: "#/definitions/ImuAxisMapping"
+    post:
+      tags: [IMU]
+      summary: Set IMU yaw/pitch/roll axis mapping
+      description: Updates the receiver display mapping and sends the full axis configuration to the MCU.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/ImuAxisMapping"
+      responses:
+        200:
+          description: Axis mapping updated
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              axes:
+                $ref: "#/definitions/ImuAxisMapping"
+
+  /api/imu/accel_axes:
+    get:
+      tags: [IMU]
+      summary: Get accelerometer axis mapping
+      responses:
+        200:
+          description: Current accelerometer mapping
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              accel_axes:
+                $ref: "#/definitions/AccelAxisMapping"
+    post:
+      tags: [IMU]
+      summary: Set accelerometer axis mapping
+      description: Updates the receiver display mapping and sends the full axis configuration to the MCU.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/AccelAxisMapping"
+      responses:
+        200:
+          description: Accelerometer axis mapping updated
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              accel_axes:
+                $ref: "#/definitions/AccelAxisMapping"
+
+  /api/debug/override:
+    post:
+      tags: [Debug]
+      summary: Set raw debug axis override
+      description: >
+        Sends normalized virtual joystick values to the bitmask command link.
+        Yaw is inverted before it is applied to match the debug UI control direction.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/NormalizedAxes"
+      responses:
+        200:
+          description: Override applied
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              override:
+                $ref: "#/definitions/NormalizedAxes"
+        400:
+          description: No axes supplied
+        503:
+          description: Bitmask client unavailable
+
+  /api/debug/attitude_setpoint:
+    post:
+      tags: [Debug]
+      summary: Send roll, pitch, and yaw attitude setpoints
+      description: >
+        Sends physical degree setpoints through the setpoint override client.
+        Roll and yaw wrap to -180..180 degrees; pitch clamps to -90..90 degrees.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/AttitudeSetpointRequest"
+      responses:
+        200:
+          description: Setpoint override sent
+          schema:
+            $ref: "#/definitions/SetpointSendResponse"
+        400:
+          description: No valid attitude axes supplied
+        503:
+          description: Setpoint override client unavailable or send failed
+
+  /api/debug/clear:
+    post:
+      tags: [Debug]
+      summary: Clear debug override state
+      description: Clears controller debug override, zeros manual axes, and clears setpoint override if available.
+      responses:
+        200:
+          description: Override cleared
+          schema:
+            $ref: "#/definitions/OkResponse"
+
+  /api/pid/start:
+    post:
+      tags: [PID]
+      summary: Start PID hold from the current attitude
+      description: >
+        Requires fresh IMU data, neutralizes manual thruster axes, clears existing
+        setpoint override, and sends neutral translational setpoints plus the
+        current roll/pitch/yaw attitude.
+      responses:
+        200:
+          description: PID hold setpoints sent
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              setpoints:
+                $ref: "#/definitions/PidStartSetpoints"
+              state:
+                $ref: "#/definitions/SetpointOverrideState"
+              neutralized:
+                type: boolean
+                example: true
+              units:
+                type: string
+                example: deg
+        503:
+          description: IMU data unavailable/stale, setpoint client unavailable, or send failed
+
+  /api/pid/setpoints:
+    post:
+      tags: [PID]
+      summary: Send PID attitude setpoints
+      description: Sends roll, pitch, and yaw setpoints in physical degrees through the setpoint override client.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/AttitudeSetpointRequest"
+      responses:
+        200:
+          description: PID setpoints sent
+          schema:
+            $ref: "#/definitions/SetpointSendResponse"
+        400:
+          description: No valid attitude setpoints supplied
+        503:
+          description: Setpoint override client unavailable or send failed
+
+  /api/pid/zero_all:
+    post:
+      tags: [PID]
+      summary: Neutralize command axes and zero all PID gains
+      responses:
+        200:
+          description: PID gains were confirmed as zero by the MCU
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              gains:
+                $ref: "#/definitions/PidGains"
+              attempts:
+                type: integer
+                example: 1
+              neutralized:
+                type: boolean
+                example: true
+              override:
+                $ref: "#/definitions/NormalizedAxes"
+        504:
+          description: Thruster axes were neutralized, but the MCU did not confirm zero PID gains
+
+  /api/controller/gains:
+    get:
+      tags: [Controller]
+      summary: Get controller gain settings
+      responses:
+        200:
+          description: Current controller gains
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              gains:
+                $ref: "#/definitions/ControllerGains"
+        503:
+          description: Controller not available
+    post:
+      tags: [Controller]
+      summary: Set controller gain settings
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/ControllerGains"
+      responses:
+        200:
+          description: Gains updated
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              gains:
+                $ref: "#/definitions/ControllerGains"
+        503:
+          description: Controller not available
+
+  /api/pid/gains:
+    get:
+      tags: [PID]
+      summary: Request current PID gains from the MCU
+      responses:
+        200:
+          description: Current PID gains per axis
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              gains:
+                $ref: "#/definitions/PidGains"
+        504:
+          description: No response from MCU
+    post:
+      tags: [PID]
+      summary: Send PID gains to the MCU
+      description: Sends gains over UDP and retries up to three times for confirmation.
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/PidGains"
+      responses:
+        200:
+          description: PID gains confirmed by MCU
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              gains:
+                $ref: "#/definitions/PidGains"
+              attempts:
+                type: integer
+                example: 1
+        504:
+          description: No response from MCU after retries
+
+  /api/pid/configs:
+    get:
+      tags: [PID]
+      summary: List saved PID configuration names
+      responses:
+        200:
+          description: Saved PID config names
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              configs:
+                type: array
+                items:
+                  type: string
+                example: [default, smooth-tuning]
+    post:
+      tags: [PID]
+      summary: Save PID gains as a named configuration
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required: [name, gains]
+            properties:
+              name:
+                type: string
+                description: Config name. Alphanumeric characters, spaces, underscores, hyphens, and dots are accepted.
+                example: smooth-tuning
+              gains:
+                $ref: "#/definitions/PidGains"
+      responses:
+        200:
+          description: Config saved
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              name:
+                type: string
+                example: smooth-tuning
+        400:
+          description: Invalid config name or missing gains data
+
+  /api/pid/configs/{name}:
+    get:
+      tags: [PID]
+      summary: Load a saved PID configuration by name
+      parameters:
+        - in: path
+          name: name
+          type: string
+          required: true
+          description: Configuration name
+      responses:
+        200:
+          description: Config loaded
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              name:
+                type: string
+                example: smooth-tuning
+              gains:
+                $ref: "#/definitions/PidGains"
+        404:
+          description: Config not found
+    delete:
+      tags: [PID]
+      summary: Delete a saved PID configuration
+      parameters:
+        - in: path
+          name: name
+          type: string
+          required: true
+          description: Configuration name
+      responses:
+        200:
+          description: Config deleted
+          schema:
+            $ref: "#/definitions/OkResponse"
+        404:
+          description: Config not found
+
+definitions:
+  OkResponse:
+    type: object
+    properties:
+      ok:
+        type: boolean
+        example: true
+
+  ErrorResponse:
+    type: object
+    properties:
+      ok:
+        type: boolean
+        example: false
+      error:
+        type: string
+
+  AxisValues:
+    type: object
+    properties:
+      surge: {type: number, example: 0.0}
+      sway: {type: number, example: 0.0}
+      heave: {type: number, example: 0.0}
+      roll: {type: number, example: 0.0}
+      pitch: {type: number, example: 0.0}
+      yaw: {type: number, example: 0.0}
+
+  NormalizedAxes:
+    type: object
+    properties:
+      surge:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.5
+      sway:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.0
+      heave:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: -0.25
+      roll:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.0
+      pitch:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.0
+      yaw:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.2
+      light:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+        example: 0.8
+      manip:
+        type: number
+        minimum: -1.0
+        maximum: 1.0
+        example: 0.0
+
+  RovCommand:
+    type: object
+    properties:
+      surge: {type: integer, minimum: -128, maximum: 127, example: 0}
+      sway: {type: integer, minimum: -128, maximum: 127, example: 0}
+      heave: {type: integer, minimum: -128, maximum: 127, example: 0}
+      roll: {type: integer, minimum: -128, maximum: 127, example: 0}
+      pitch: {type: integer, minimum: -128, maximum: 127, example: 0}
+      yaw: {type: integer, minimum: -128, maximum: 127, example: 0}
+      light: {type: integer, minimum: 0, maximum: 255, example: 0}
+      manip: {type: integer, minimum: -128, maximum: 127, example: 0}
+      sequence: {type: integer, example: 1204}
+
+  RovCommandRequest:
+    type: object
+    properties:
+      surge: {type: integer, minimum: -128, maximum: 127, example: 0}
+      sway: {type: integer, minimum: -128, maximum: 127, example: 0}
+      heave: {type: integer, minimum: -128, maximum: 127, example: 0}
+      roll: {type: integer, minimum: -128, maximum: 127, example: 0}
+      pitch: {type: integer, minimum: -128, maximum: 127, example: 0}
+      yaw: {type: integer, minimum: -128, maximum: 127, example: 0}
+      light: {type: integer, minimum: 0, maximum: 255, example: 0}
+      manip: {type: integer, minimum: -128, maximum: 127, example: 0}
+      axes:
+        $ref: "#/definitions/NormalizedAxes"
+      rate_hz:
+        type: number
+        example: 20.0
+
+  UplinkStatus:
+    type: object
+    properties:
+      sequence:
+        type: integer
+        example: 1204
+      last_send_age_ms:
+        type: number
+        x-nullable: true
+        example: 12.4
+      last_ack_age_ms:
+        type: number
+        x-nullable: true
+        example: 45.2
+      last_ack_count:
+        type: integer
+        x-nullable: true
+        example: 17301
+      watchdog_timeout:
+        type: number
+        example: 0.75
+      watchdog_resends:
+        type: integer
+        example: 0
+      last_command:
+        $ref: "#/definitions/RovCommand"
+
+  ControllerInputStatus:
+    type: object
+    properties:
+      connected:
+        type: boolean
+        example: true
+      source:
+        type: string
+        enum: [none, sdl_gamecontroller, raw_joystick, debug_override]
+        example: sdl_gamecontroller
+      name:
+        type: string
+        x-nullable: true
+        example: Xbox Wireless Controller
+      buttons:
+        type: array
+        items:
+          type: number
+        example: [0, 0, 1, 0, 0, 0, 0.4, 0]
+
+  ControllerGains:
+    type: object
+    properties:
+      master: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      surge: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      sway: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      heave: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      roll: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      pitch: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+      yaw: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
+
+  CameraStatusBase:
+    type: object
+    properties:
+      connected:
+        type: boolean
+        example: true
+      last_frame_age_ms:
+        type: integer
+        x-nullable: true
+        example: 40
+      last_error:
+        type: string
+        x-nullable: true
+        example: null
+
+  LocalCameraStatus:
+    allOf:
+      - $ref: "#/definitions/CameraStatusBase"
+      - type: object
+        properties:
+          listening:
+            type: boolean
+            example: true
+          device_index:
+            type: integer
+            example: 0
+          jpeg_quality:
+            type: integer
+            example: 70
+
+  RpiCameraStatus:
+    allOf:
+      - $ref: "#/definitions/CameraStatusBase"
+      - type: object
+        properties:
+          listening:
+            type: boolean
+            example: true
+          backend:
+            type: string
+            example: gstreamer
+          port:
+            type: integer
+            example: 6969
+          latency_ms:
+            type: integer
+            example: 12
+          out_width:
+            type: integer
+            example: 960
+          out_height:
+            type: integer
+            example: 540
+          jpeg_quality:
+            type: integer
+            example: 70
+          flip_180:
+            type: boolean
+            example: false
+
+  IpCameraStatus:
+    allOf:
+      - $ref: "#/definitions/CameraStatusBase"
+      - type: object
+        properties:
+          url:
+            type: string
+            example: rtsp://10.77.0.3:554/stream1
+          out_width:
+            type: integer
+            example: 960
+          out_height:
+            type: integer
+            example: 540
+          jpeg_quality:
+            type: integer
+            example: 70
+          flip_180:
+            type: boolean
+            example: false
+
+  ThrusterTelemetry:
+    type: object
+    properties:
+      power:
+        type: number
+        example: 0
+      temp:
+        type: number
+        example: 20
+
+  ImuTelemetry:
+    type: object
+    properties:
+      yaw: {type: number, example: 12.5}
+      pitch: {type: number, example: -3.2}
+      roll: {type: number, example: 0.8}
+      yr: {type: number, description: Yaw rate, example: 0.1}
+      pr: {type: number, description: Pitch rate, example: -0.05}
+      rr: {type: number, description: Roll rate, example: 0.0}
+      ax: {type: number, description: Accelerometer X, example: 0.02}
+      ay: {type: number, description: Accelerometer Y, example: -0.01}
+      az: {type: number, description: Accelerometer Z, example: 9.81}
+
+  LightsTelemetry:
+    type: object
+    properties:
+      level:
+        type: integer
+        example: 0
+      Light1:
+        type: integer
+        example: 0
+      Light2:
+        type: integer
+        example: 0
+      Light3:
+        type: integer
+        example: 0
+      Light4:
+        type: integer
+        example: 0
+
+  DepthTelemetry:
+    type: object
+    properties:
+      dpt:
+        type: number
+        description: Current depth
+        example: 2.5
+      dptSet:
+        type: number
+        description: Target depth setpoint
+        example: 3.0
+      temperature_c:
+        type: number
+        description: Optional depth sensor temperature in Celsius
+        example: 18.5
+
+  ResourceTelemetry:
+    type: object
+    properties:
+      sequence: {type: integer, example: 1073}
+      uptime_ms: {type: integer, example: 1080133}
+      cpu_percent: {type: integer, example: 48}
+      heap_used_percent: {type: integer, example: 2}
+      heap_free_kb: {type: integer, example: 376}
+      heap_total_kb: {type: integer, example: 384}
+      thread_count: {type: integer, example: 14}
+      udp_rx_count: {type: integer, example: 17301}
+      udp_rx_errors: {type: integer, example: 0}
+
+  ControlTelemetrySample:
+    type: object
+    properties:
+      sequence:
+        type: integer
+        example: 42
+      timestamp:
+        type: number
+        description: Unix timestamp
+        example: 1765555000.25
+      setpoint:
+        $ref: "#/definitions/AxisValues"
+      output:
+        $ref: "#/definitions/AxisValues"
+      error:
+        $ref: "#/definitions/AxisValues"
+
+  LogEntry:
+    type: object
+    properties:
+      ts:
+        type: number
+        description: Unix timestamp
+        example: 1765555000.25
+      level:
+        type: string
+        enum: [I, W, R, D]
+        example: I
+      message:
+        type: string
+        example: control loop started
+
+  SetpointOverrideState:
+    type: object
+    properties:
+      active:
+        type: boolean
+        example: true
+      axes:
+        $ref: "#/definitions/AxisValues"
+      last_error:
+        type: string
+        x-nullable: true
+        example: null
+      last_update_ts:
+        type: number
+        example: 1765555000.25
+
+  SystemResetResult:
+    type: object
+    properties:
+      sequence:
+        type: integer
+        example: 0
+      host:
+        type: string
+        example: 10.77.0.2
+      port:
+        type: integer
+        example: 5008
+      repeats:
+        type: integer
+        example: 3
+      last_reset_time:
+        type: number
+        example: 1765555000.25
+
+  ImuStats:
+    type: object
+    properties:
+      packet_count:
+        type: integer
+        example: 1200
+      crc_errors:
+        type: integer
+        example: 0
+      last_data:
+        $ref: "#/definitions/ImuTelemetry"
+      age_ms:
+        type: number
+        x-nullable: true
+        example: 20
+      tare_offset:
+        type: object
+        additionalProperties:
+          type: number
+
+  Vector3:
+    type: object
+    properties:
+      x:
+        type: number
+        example: 0.0
+      y:
+        type: number
+        example: 0.0
+      z:
+        type: number
+        example: 0.0
+
+  ImuAxisMapping:
+    type: object
+    properties:
+      yaw:
+        type: string
+        enum: ["+yaw", "-yaw", "+pitch", "-pitch", "+roll", "-roll"]
+        example: "+yaw"
+      pitch:
+        type: string
+        enum: ["+yaw", "-yaw", "+pitch", "-pitch", "+roll", "-roll"]
+        example: "+pitch"
+      roll:
+        type: string
+        enum: ["+yaw", "-yaw", "+pitch", "-pitch", "+roll", "-roll"]
+        example: "+roll"
+
+  AccelAxisMapping:
+    type: object
+    properties:
+      x:
+        type: string
+        enum: ["+x", "-x", "+y", "-y", "+z", "-z"]
+        example: "+x"
+      y:
+        type: string
+        enum: ["+x", "-x", "+y", "-y", "+z", "-z"]
+        example: "+y"
+      z:
+        type: string
+        enum: ["+x", "-x", "+y", "-y", "+z", "-z"]
+        example: "+z"
+
+  AttitudeSetpointRequest:
+    type: object
+    properties:
+      roll:
+        type: number
+        minimum: -180
+        maximum: 180
+        example: 2.5
+      pitch:
+        type: number
+        minimum: -90
+        maximum: 90
+        example: -1.0
+      yaw:
+        type: number
+        minimum: -180
+        maximum: 180
+        example: 15.0
+
+  SetpointSendResponse:
+    type: object
+    properties:
+      ok:
+        type: boolean
+        example: true
+      sent:
+        $ref: "#/definitions/AttitudeSetpointRequest"
+      limits:
+        type: object
+        properties:
+          roll: {type: number, example: 180.0}
+          pitch: {type: number, example: 90.0}
+          yaw: {type: number, example: 180.0}
+      state:
+        $ref: "#/definitions/SetpointOverrideState"
+      units:
+        type: string
+        example: deg
+
+  PidStartSetpoints:
+    allOf:
+      - $ref: "#/definitions/AxisValues"
+      - $ref: "#/definitions/AttitudeSetpointRequest"
+
+  PidGainTriplet:
+    type: object
+    properties:
+      kp:
+        type: number
+        example: 0.5
+      ki:
+        type: number
+        example: 0.1
+      kd:
+        type: number
+        example: 0.2
+
+  PidGains:
+    type: object
+    properties:
+      surge:
+        $ref: "#/definitions/PidGainTriplet"
+      sway:
+        $ref: "#/definitions/PidGainTriplet"
+      heave:
+        $ref: "#/definitions/PidGainTriplet"
+      roll:
+        $ref: "#/definitions/PidGainTriplet"
+      pitch:
+        $ref: "#/definitions/PidGainTriplet"
+      yaw:
+        $ref: "#/definitions/PidGainTriplet"

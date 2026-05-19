@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}API Documentation{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    #main-content {
+      max-width: none;
+      width: 100%;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    #swagger-ui {
+      background: #ffffff;
+      border-radius: 4px;
+      min-height: 70vh;
+      padding: 1rem;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div id="swagger-ui"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.addEventListener("load", function () {
+      SwaggerUIBundle({
+        url: "{{ url_for('api_spec') }}",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout"
+      });
+    });
+  </script>
+{% endblock %}
