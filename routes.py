@@ -682,10 +682,9 @@ def register_routes(app):
             return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
 
         neutral = _neutralize_thruster_command()
-        setpoints = {**neutral, **attitude_setpoints}
         try:
             client.clear_override()
-            state = client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
+            state = client.send_override(attitude_setpoints, replay_attempts=5, replay_delay=0.1)
         except Exception as exc:  # pylint: disable=broad-except
             client.set_error(str(exc))
             return jsonify({"ok": False, "error": str(exc), "neutralized": True}), 503
@@ -693,9 +692,10 @@ def register_routes(app):
         return jsonify(
             {
                 "ok": True,
-                "setpoints": setpoints,
+                "setpoints": attitude_setpoints,
                 "state": state,
                 "neutralized": True,
+                "manual_override": neutral,
                 "units": "deg",
             }
         )
