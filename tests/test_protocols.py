@@ -2,6 +2,7 @@ import json
 import struct
 
 import pytest
+from flask import Flask
 
 import lib.control_telemetry as control_telem
 import lib.depth_receiver as depth_telem
@@ -9,6 +10,7 @@ import lib.ninedof_receiver as ninedof
 import lib.resource_receiver as resource_telem
 from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
 from lib.json_data_handler import JSONDataHandler
+from routes import register_routes
 
 
 class DummyHandler:
@@ -25,6 +27,41 @@ class DummyDepthReceiver:
 
     def process_payload(self, payload):
         self.last_payload = payload
+
+
+class DummyImu:
+    def get_stats(self):
+        return {
+            "age_ms": 100,
+            "last_data": {"roll": 12.5, "pitch": -3.0, "yaw": 181.0},
+        }
+
+
+class DummySetpointOverride:
+    def __init__(self):
+        self.cleared = False
+        self.sent_axes = None
+
+    def clear_override(self):
+        self.cleared = True
+
+    def send_override(self, axes, replay_attempts=3, replay_delay=0.05):
+        self.sent_axes = dict(axes)
+        return {"active": True, "axes": dict(axes)}
+
+    def set_error(self, message):
+        self.error = message
+
+
+class DummyManualOverride:
+    def __init__(self):
+        self.last_axes = None
+
+    def set_debug_override(self, axes):
+        self.last_axes = dict(axes)
+
+    def set_from_axes(self, **axes):
+        self.last_axes = dict(axes)
 
 
 def test_crc32_ieee_standard_vector():
@@ -157,6 +194,33 @@ def test_depth_receiver_normalizes_ms5837_payload():
         "read_errors": 1.0,
     }
     assert handler.last_update == {"depth": result}
+
+
+def test_pid_start_sends_only_attitude_setpoints():
+    app = Flask(__name__)
+    register_routes(app)
+    imu = DummyImu()
+    setpoint_client = DummySetpointOverride()
+    controller = DummyManualOverride()
+    bitmask_client = DummyManualOverride()
+    app.config.update(
+        IMU=imu,
+        SETPOINT_OVERRIDE=setpoint_client,
+        CONTROLLER=controller,
+        BITMASK=bitmask_client,
+    )
+
+    response = app.test_client().post("/api/pid/start")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["setpoints"] == {"roll": 12.5, "pitch": -3.0, "yaw": -179.0}
+    assert setpoint_client.cleared is True
+    assert setpoint_client.sent_axes == data["setpoints"]
+    assert "heave" not in setpoint_client.sent_axes
+    assert controller.last_axes == {"surge": 0.0, "sway": 0.0, "heave": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
+    assert bitmask_client.last_axes == controller.last_axes
 
 
 def test_imu_receiver_delegates_depth_payload(monkeypatch, tmp_path):
