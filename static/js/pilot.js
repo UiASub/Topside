@@ -131,9 +131,6 @@
     if (pitchG) pitchG.setAttribute("transform", transform);
   }
 
-  // ── Sensor calibration state ──────────────────────────────────
-  let calibrationOffset = { roll: 0, pitch: 0, yaw: 0 };
-
   function fmtAngle(v) {
     return (v >= 0 ? "+" : "") + v.toFixed(1) + "\u00B0";
   }
@@ -182,24 +179,24 @@
       const d = await res.json();
 
       // VN-100S provides fused yaw/pitch/roll directly
-      const cal = {
-        roll:  (d.roll  || 0) - calibrationOffset.roll,
-        pitch: (d.pitch || 0) - calibrationOffset.pitch,
-        yaw:   (d.yaw   || 0) - calibrationOffset.yaw,
+      const angles = {
+        roll:  d.roll  || 0,
+        pitch: d.pitch || 0,
+        yaw:   d.yaw   || 0,
       };
 
       // Update readouts
       const elRoll  = document.getElementById("hud-roll");
       const elPitch = document.getElementById("hud-pitch");
       const elHdg   = document.getElementById("hud-heading");
-      if (elRoll)  elRoll.textContent  = fmtAngle(cal.roll);
-      if (elPitch) elPitch.textContent = fmtAngle(cal.pitch);
+      if (elRoll)  elRoll.textContent  = fmtAngle(angles.roll);
+      if (elPitch) elPitch.textContent = fmtAngle(angles.pitch);
 
       // Heading (yaw mapped to 0-360)
-      const heading = ((cal.yaw % 360) + 360) % 360;
+      const heading = ((angles.yaw % 360) + 360) % 360;
       if (elHdg) elHdg.textContent = heading.toFixed(0).padStart(3, "0");
       updateCompass(heading);
-      updateHorizon(cal.roll, cal.pitch);
+      updateHorizon(angles.roll, angles.pitch);
     } catch (_) { /* silent */ }
   }
 

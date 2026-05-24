@@ -31,7 +31,7 @@ CONTROL_TELEM_PORT = 5005
 AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"]
 FLOAT_COUNT = len(AXES) * 3
 PACKET_SIZE = 4 + FLOAT_COUNT * 4 + 4
-HISTORY_CAPACITY = 240  # 24 seconds @ 10 Hz
+HISTORY_CAPACITY = 3000  # 5 minutes @ 10 Hz
 LOG_DIR = logs_dir()
 CONTROL_LOG = log_path("control_telemetry.ndjson")
 

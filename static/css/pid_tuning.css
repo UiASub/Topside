@@ -1,0 +1,377 @@
+.pid-page-shell {
+  width: 100%;
+}
+
+.pid-muted,
+.pid-note,
+.pid-feedback,
+.pid-small-row {
+  color: #adb5bd;
+  font-size: 0.82rem;
+}
+
+.pid-action-bar {
+  position: sticky;
+  top: 56px;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: rgba(18, 24, 31, 0.98);
+  border: 1px solid #495057;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.pid-action-status,
+.pid-action-controls,
+.pid-button-row,
+.pid-chart-buttons,
+.pid-chart-legend,
+.pid-small-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pid-kicker {
+  color: #0dcaf0;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.pid-compact-label {
+  color: #adb5bd;
+  font-size: 0.75rem;
+  margin-bottom: 0;
+}
+
+#pid-time-window {
+  width: 96px;
+}
+
+.pid-zero-btn {
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.pid-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(350px, 440px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.pid-left-stack,
+.pid-right-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.pid-panel .card-body {
+  padding: 1rem;
+}
+
+.pid-panel-header,
+.pid-chart-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.pid-attitude-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.pid-readout {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  min-width: 0;
+}
+
+.pid-readout-label {
+  display: block;
+  color: #adb5bd;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.pid-readout-value {
+  display: block;
+  color: #0dcaf0;
+  font-family: Consolas, Monaco, monospace;
+  font-size: clamp(1rem, 2vw, 1.35rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pid-setpoint-grid {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0;
+}
+
+.pid-setpoint-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pid-setpoint-row label,
+.pid-axis-label,
+.pid-slider-header label {
+  color: #f8f9fa;
+  font-weight: 700;
+  margin: 0;
+}
+
+.pid-gain-box {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.8rem;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.pid-box-title {
+  color: #0dcaf0;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.pid-gain-grid {
+  display: grid;
+  grid-template-columns: minmax(60px, 0.9fr) repeat(3, minmax(64px, 1fr));
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pid-gain-head {
+  color: #adb5bd;
+  font-size: 0.72rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.pid-input,
+.setpoint-input {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-family: Consolas, Monaco, monospace;
+  text-align: center;
+}
+
+.pid-input:focus,
+.setpoint-input:focus {
+  border-color: #0dcaf0;
+  box-shadow: 0 0 0 0.12rem rgba(13, 202, 240, 0.25);
+}
+
+.pid-config-row {
+  display: grid;
+  grid-template-columns: minmax(115px, 1fr) auto minmax(115px, 1fr) auto auto auto;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.9rem;
+}
+
+.pid-slider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.pid-slider-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.65rem;
+  min-width: 0;
+}
+
+.pid-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.slider-value {
+  color: #0dcaf0;
+  font-family: Consolas, Monaco, monospace;
+  font-weight: 700;
+}
+
+.debug-slider {
+  cursor: pointer;
+  accent-color: #6c757d;
+}
+
+.debug-slider.positive {
+  accent-color: #198754;
+}
+
+.debug-slider.negative {
+  accent-color: #dc3545;
+}
+
+.debug-slider.zero {
+  accent-color: #6c757d;
+}
+
+.pid-chart-panel {
+  min-height: 520px;
+}
+
+.pid-chart-toolbar {
+  margin-bottom: 0.5rem;
+}
+
+.pid-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.pid-chart-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 0;
+}
+
+.pid-chart-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: #f8f9fa;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.pid-chart-values {
+  color: #adb5bd;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.pid-chart-card canvas {
+  width: 100% !important;
+  height: 260px !important;
+}
+
+.pid-chart-legend span {
+  color: #adb5bd;
+  font-size: 0.78rem;
+}
+
+.pid-chart-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 0.25rem;
+  vertical-align: -1px;
+}
+
+.legend-setpoint {
+  background: #0dcaf0;
+}
+
+.legend-position {
+  background: #20c997;
+}
+
+.legend-error {
+  background: #ffc107;
+}
+
+.pid-telemetry-table th,
+.pid-telemetry-table td {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pid-command-preview {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #dce7ef;
+  font-size: 0.78rem;
+  max-height: 210px;
+  overflow: auto;
+}
+
+@media (max-width: 1200px) {
+  .pid-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pid-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pid-chart-card canvas {
+    height: 210px !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .pid-action-bar {
+    align-items: stretch;
+  }
+
+  .pid-action-bar,
+  .pid-action-status,
+  .pid-action-controls {
+    flex-direction: column;
+  }
+
+  .pid-action-controls > * {
+    width: 100%;
+  }
+
+  #pid-time-window {
+    width: 100%;
+  }
+
+  .pid-attitude-grid,
+  .pid-slider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pid-setpoint-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pid-config-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pid-chart-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

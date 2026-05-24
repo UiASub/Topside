@@ -1,18 +1,3 @@
-// Calibration offset (set when user clicks calibrate)
-let calibrationOffset = { roll: 0, pitch: 0, yaw: 0 };
-
-function applyCalibration(orientation) {
-    return {
-        roll: orientation.roll - calibrationOffset.roll,
-        pitch: orientation.pitch - calibrationOffset.pitch,
-        yaw: orientation.yaw - calibrationOffset.yaw
-    };
-}
-
-function calibrate(current) {
-    calibrationOffset = { roll: current.roll, pitch: current.pitch, yaw: current.yaw };
-}
-
 function getAngleStatus(angle, threshold = 15) {
     const absAngle = Math.abs(angle);
     if (absAngle < threshold / 2) return "status-ok";
@@ -51,10 +36,7 @@ async function updateSensors() {
             roll: data.roll || 0,
         };
 
-        const { roll, pitch, yaw } = applyCalibration(raw);
-
-        // Store for calibration button
-        window.latestOrientation = raw;
+        const { roll, pitch, yaw } = raw;
 
         sensorData.replaceChildren();
         const container = document.createElement("div");
@@ -70,9 +52,3 @@ async function updateSensors() {
 
 setInterval(updateSensors, 100);
 updateSensors();
-
-document.getElementById("calibrate-btn").addEventListener("click", () => {
-    if (window.latestOrientation) {
-        calibrate(window.latestOrientation);
-    }
-});

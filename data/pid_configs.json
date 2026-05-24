@@ -1,1 +1,130 @@
-{}
+{
+  "rollPitchRough": {
+    "surge": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "sway": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "heave": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "roll": {
+      "kp": 0.035,
+      "ki": 0,
+      "kd": 0.0015
+    },
+    "pitch": {
+      "kp": 0.05,
+      "ki": 0,
+      "kd": 0.001
+    },
+    "yaw": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    }
+  },
+  "rollPitchRough2": {
+    "surge": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "sway": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "heave": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "roll": {
+      "kp": 0.03,
+      "ki": 0,
+      "kd": 0.0015
+    },
+    "pitch": {
+      "kp": 0.045,
+      "ki": 0,
+      "kd": 0.001
+    },
+    "yaw": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    }
+  },
+  "rollPitchYawRough": {
+    "surge": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "sway": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "heave": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "roll": {
+      "kp": 0.03,
+      "ki": 0,
+      "kd": 0.0015
+    },
+    "pitch": {
+      "kp": 0.045,
+      "ki": 0,
+      "kd": 0.001
+    },
+    "yaw": {
+      "kp": -0.05,
+      "ki": 0,
+      "kd": 0
+    }
+  },
+  "rollPitchYawPrecise": {
+    "surge": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "sway": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "heave": {
+      "kp": 0,
+      "ki": 0,
+      "kd": 0
+    },
+    "roll": {
+      "kp": 0.03,
+      "ki": 0,
+      "kd": 0.003
+    },
+    "pitch": {
+      "kp": 0.045,
+      "ki": 0,
+      "kd": 0.006
+    },
+    "yaw": {
+      "kp": -0.15,
+      "ki": 0,
+      "kd": 0
+    }
+  }
+}

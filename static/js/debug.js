@@ -459,7 +459,6 @@
   const imuRoll = document.getElementById("imu-roll");
   const imuPktCount = document.getElementById("imu-pkt-count");
   const imuAge = document.getElementById("imu-age");
-  const imuTareInfo = document.getElementById("imu-tare-info");
 
   function fmtDeg(v) {
     const n = parseFloat(v);
@@ -494,34 +493,10 @@
         imuStatus.className = "badge bg-secondary me-2";
       }
 
-      // Tare info
-      const t = s.tare_offset;
-      if (t && (t.yaw !== 0 || t.pitch !== 0 || t.roll !== 0)) {
-        imuTareInfo.textContent =
-          "Y:" + t.yaw.toFixed(1) + " P:" + t.pitch.toFixed(1) + " R:" + t.roll.toFixed(1);
-      } else {
-        imuTareInfo.textContent = "none";
-      }
     } catch (_) {
       /* silent */
     }
   }
-
-  document.getElementById("btn-tare").addEventListener("click", async () => {
-    try {
-      await fetch("/api/imu/tare", { method: "POST" });
-    } catch (e) {
-      console.error("Tare failed:", e);
-    }
-  });
-
-  document.getElementById("btn-clear-tare").addEventListener("click", async () => {
-    try {
-      await fetch("/api/imu/tare", { method: "DELETE" });
-    } catch (e) {
-      console.error("Clear tare failed:", e);
-    }
-  });
 
   pollIMU();
   setInterval(pollIMU, 200);
