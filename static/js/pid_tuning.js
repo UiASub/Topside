@@ -4,6 +4,7 @@
 
   const AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"];
   const ROT_AXES = ["roll", "pitch", "yaw"];
+  const DISPLAY_AXES = ["heave", "roll", "pitch", "yaw"];
   const PID_GAINS = ["kp", "ki", "kd"];
   const SEND_INTERVAL_MS = 50;
 
@@ -11,11 +12,13 @@
   let overrideActive = false;
   let sendTimer = null;
   let latestImu = {};
+  let latestDepth = {};
   let latestTelemetry = null;
   const localSetpoints = { roll: NaN, pitch: NaN, yaw: NaN };
 
   const pageStatus = document.getElementById("pid-page-status");
   const linkStatus = document.getElementById("pid-link-status");
+  const frameStatus = document.getElementById("frame-lock-status");
   const imuAge = document.getElementById("pid-imu-age");
   const pidStatus = document.getElementById("pid-status");
   const setpointStatus = document.getElementById("setpoint-status");
@@ -85,10 +88,10 @@
   function updateTelemetryTable() {
     if (!telemetryBody) return;
     const frag = document.createDocumentFragment();
-    ROT_AXES.forEach((axis) => {
+    DISPLAY_AXES.forEach((axis) => {
       const setpoint = getTelemetrySetpoint(axis);
-      const position = Number(latestImu[axis]);
-      const error = angleError(setpoint, position);
+      const position = axis === "heave" ? -Number(latestDepth.dpt) : Number(latestImu[axis]);
+      const error = axis === "heave" ? setpoint - position : angleError(setpoint, position);
       const tr = document.createElement("tr");
       const tdAxis = document.createElement("td");
       const tdSet = document.createElement("td");
@@ -98,8 +101,10 @@
       tdSet.textContent = fmt(setpoint, 2);
       tdPos.textContent = fmt(position, 2);
       tdErr.textContent = fmt(error, 2);
-      if (isFiniteNumber(error) && Math.abs(error) > 10) tdErr.className = "text-warning";
-      if (isFiniteNumber(error) && Math.abs(error) > 25) tdErr.className = "text-danger";
+      const warnLimit = axis === "heave" ? 0.15 : 10;
+      const dangerLimit = axis === "heave" ? 0.35 : 25;
+      if (isFiniteNumber(error) && Math.abs(error) > warnLimit) tdErr.className = "text-warning";
+      if (isFiniteNumber(error) && Math.abs(error) > dangerLimit) tdErr.className = "text-danger";
       tr.append(tdAxis, tdSet, tdPos, tdErr);
       frag.appendChild(tr);
     });
@@ -119,7 +124,9 @@
   async function pollImuAndTelemetry() {
     const imuReq = fetch("/api/imu/status").then((res) => res.json());
     const telemetryReq = fetch("/api/control/telemetry").then((res) => res.json());
-    const results = await Promise.allSettled([imuReq, telemetryReq]);
+    const depthReq = fetch("/api/depth").then((res) => res.json());
+    const frameReq = fetch("/api/frame/status").then((res) => res.json());
+    const results = await Promise.allSettled([imuReq, telemetryReq, depthReq, frameReq]);
 
     if (results[0].status === "fulfilled" && results[0].value.ok) {
       const stats = results[0].value.stats || {};
@@ -137,7 +144,36 @@
       updateTelemetryAge(latestTelemetry);
     }
 
+    if (results[2].status === "fulfilled") {
+      latestDepth = results[2].value || {};
+    }
+
+    if (results[3].status === "fulfilled" && results[3].value.ok) {
+      updateFrameStatus(results[3].value.state || {}, results[3].value.telemetry || {});
+    }
+
     updateTelemetryTable();
+  }
+
+  function updateFrameStatus(state, telemetry) {
+    const locked = Boolean((telemetry && telemetry.locked) || (state && state.active));
+    setBadge(frameStatus, locked ? "FRAME LOCKED" : "FRAME FREE", locked ? "bg-info text-dark" : "bg-secondary");
+  }
+
+  async function sendFrameCommand(action) {
+    const endpoint = action === "lock" ? "/api/frame/lock" : "/api/frame/unlock";
+    try {
+      const res = await fetch(endpoint, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        updateFrameStatus(data.state || {}, {});
+      } else {
+        setBadge(frameStatus, "FRAME ERROR", "bg-danger");
+      }
+    } catch (err) {
+      setBadge(frameStatus, "FRAME ERROR", "bg-danger");
+      console.error("Frame command failed:", err);
+    }
   }
 
   function getSliderValue(axis) {
@@ -358,7 +394,7 @@
         fillSetpointFields(data.setpoints || {});
         setSetpointStatus("ACTIVE", "bg-danger");
         setPageStatus("PID HOLD ACTIVE", "bg-success");
-        setFeedback("Started from current IMU attitude with neutral manual command axes.", "text-success");
+        setFeedback("Started from current IMU attitude and current depth with neutral manual command axes.", "text-success");
       } else {
         setSetpointStatus("BLOCKED", "bg-danger");
         setPageStatus("START BLOCKED", "bg-danger");
@@ -583,6 +619,11 @@
     const btnPidSend = document.getElementById("btn-pid-send");
     if (btnPidRequest) btnPidRequest.addEventListener("click", requestPidGains);
     if (btnPidSend) btnPidSend.addEventListener("click", sendPidGains);
+
+    const btnFrameLock = document.getElementById("btn-frame-lock");
+    const btnFrameUnlock = document.getElementById("btn-frame-unlock");
+    if (btnFrameLock) btnFrameLock.addEventListener("click", () => sendFrameCommand("lock"));
+    if (btnFrameUnlock) btnFrameUnlock.addEventListener("click", () => sendFrameCommand("unlock"));
 
     const btnPidSave = document.getElementById("btn-pid-save");
     const btnPidLoad = document.getElementById("btn-pid-load");

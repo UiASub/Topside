@@ -4,7 +4,15 @@ import pytest
 
 import lib.control_telemetry as control_telem
 import lib.resource_receiver as resource_telem
-from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
+from lib import (
+    axis_config_sender,
+    bitmask,
+    crc,
+    frame_control_client,
+    net_transport,
+    pid_config_client,
+    system_control_client,
+)
 from lib.json_data_handler import JSONDataHandler
 
 
@@ -40,12 +48,22 @@ def test_system_reset_packet_crc():
     assert pkt[8:] == struct.pack("!I", expected_crc)
 
 
+def test_frame_control_packet_crc():
+    pkt = frame_control_client.build_frame_packet(frame_control_client.TYPE_LOCK, 0x01020304)
+    assert pkt[:4] == b"FRM1"
+    assert pkt[4:8] == struct.pack("!B3x", frame_control_client.TYPE_LOCK)
+    assert pkt[8:12] == struct.pack("!I", 0x01020304)
+    expected_crc = crc.crc32_ieee(pkt[:12])
+    assert pkt[12:] == struct.pack("!I", expected_crc)
+
+
 def test_network_defaults_use_current_mcu_address():
     assert net_transport.DEFAULT_ROV_HOST == "10.77.0.2"
     assert net_transport.DEFAULT_BROADCAST == "10.77.0.255"
     assert bitmask.NUCLEO_HOST == net_transport.DEFAULT_ROV_HOST
     assert axis_config_sender.NUCLEO_HOST == net_transport.DEFAULT_ROV_HOST
     assert pid_config_client.MCU_IP == net_transport.DEFAULT_ROV_HOST
+    assert frame_control_client.DEFAULT_ROV_HOST == net_transport.DEFAULT_ROV_HOST
 
 
 def test_control_telemetry_history(monkeypatch, tmp_path):
