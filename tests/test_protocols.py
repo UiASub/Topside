@@ -56,12 +56,20 @@ class DummySetpointOverride:
 class DummyManualOverride:
     def __init__(self):
         self.last_axes = None
+        self.reference_frame = "rov"
 
     def set_debug_override(self, axes):
         self.last_axes = dict(axes)
 
     def set_from_axes(self, **axes):
         self.last_axes = dict(axes)
+
+    def set_reference_frame(self, frame):
+        self.reference_frame = frame
+        return frame
+
+    def get_reference_frame(self):
+        return self.reference_frame
 
 
 def test_crc32_ieee_standard_vector():
@@ -78,6 +86,21 @@ def test_bitmask_packet_big_endian():
     assert pkt[4:12] == struct.pack("!Q", payload)
     expected_crc = crc.crc32_ieee(struct.pack("!IQ", seq, payload))
     assert pkt[12:] == struct.pack("!I", expected_crc)
+
+
+def test_bitmask_extended_packet_carries_reference_frame_flag():
+    seq = 0x12345678
+    payload = bitmask.encode_payload(bitmask.Command(surge=12))
+
+    pkt = bitmask.build_packet(seq, payload, flags=bitmask.COMMAND_FLAG_GLOBAL_FRAME)
+
+    assert len(pkt) == 20
+    assert pkt[:4] == struct.pack("!I", seq)
+    assert pkt[4:12] == struct.pack("!Q", payload)
+    assert pkt[12] == bitmask.COMMAND_FLAG_GLOBAL_FRAME
+    assert pkt[13:16] == b"\x00\x00\x00"
+    expected_crc = crc.crc32_ieee(pkt[:16])
+    assert pkt[16:] == struct.pack("!I", expected_crc)
 
 
 def test_system_reset_packet_crc():
@@ -221,6 +244,25 @@ def test_pid_start_sends_only_attitude_setpoints():
     assert "heave" not in setpoint_client.sent_axes
     assert controller.last_axes == {"surge": 0.0, "sway": 0.0, "heave": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
     assert bitmask_client.last_axes == controller.last_axes
+
+
+def test_rov_reference_frame_endpoint_updates_command_sender_and_controller():
+    app = Flask(__name__)
+    register_routes(app)
+    controller = DummyManualOverride()
+    bitmask_client = DummyManualOverride()
+    app.config.update(CONTROLLER=controller, BITMASK=bitmask_client)
+
+    response = app.test_client().post("/api/rov/reference_frame", json={"reference_frame": "global"})
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"ok": True, "reference_frame": "global"}
+    assert bitmask_client.reference_frame == "global"
+    assert controller.reference_frame == "global"
+
+    response = app.test_client().get("/api/rov/reference_frame")
+    assert response.get_json() == {"ok": True, "reference_frame": "global"}
 
 
 def test_imu_receiver_delegates_depth_payload(monkeypatch, tmp_path):

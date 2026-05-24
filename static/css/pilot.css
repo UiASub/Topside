@@ -180,6 +180,43 @@
 }
 .hud-battery { min-width: 130px; text-align: right; }
 
+.hud-frame-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-frame-toggle {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 126px;
+  border: 1px solid rgba(0, 222, 255, 0.22);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hud-frame-btn {
+  border: 0;
+  padding: 4px 8px;
+  min-height: 26px;
+  background: transparent;
+  color: rgba(226, 252, 255, 0.72);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.hud-frame-btn + .hud-frame-btn {
+  border-left: 1px solid rgba(0, 222, 255, 0.16);
+}
+
+.hud-frame-btn.is-active {
+  background: rgba(0, 222, 255, 0.24);
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0, 222, 255, 0.45);
+}
+
 /* Battery bar */
 .hud-battery-bar-outer {
   width: 100%;

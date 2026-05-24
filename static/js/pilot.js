@@ -19,6 +19,7 @@
     loadedOnce: false,
     fitContain: false,
   };
+  let referenceFrame = "rov";
 
   function setCameraState(state, label) {
     if (!camera.status || !camera.stateText) return;
@@ -280,6 +281,38 @@
     } catch (_) { /* silent */ }
   }
 
+  function updateReferenceFrameButtons(frame) {
+    referenceFrame = frame === "global" ? "global" : "rov";
+    document.querySelectorAll(".hud-frame-btn").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.frame === referenceFrame);
+    });
+  }
+
+  async function fetchReferenceFrame() {
+    try {
+      const res = await fetch("/api/rov/reference_frame");
+      const data = await res.json();
+      if (data.ok) updateReferenceFrameButtons(data.reference_frame);
+    } catch (_) { /* silent */ }
+  }
+
+  async function setReferenceFrame(frame) {
+    const next = frame === "global" ? "global" : "rov";
+    const previous = referenceFrame;
+    updateReferenceFrameButtons(next);
+    try {
+      const res = await fetch("/api/rov/reference_frame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference_frame: next }),
+      });
+      const data = await res.json();
+      if (data.ok) updateReferenceFrameButtons(data.reference_frame);
+    } catch (_) {
+      updateReferenceFrameButtons(previous);
+    }
+  }
+
   function initCameraFeed() {
     camera.img = document.getElementById("pilot-camera");
     camera.shell = document.getElementById("pilot-feed-shell");
@@ -318,10 +351,18 @@
     setFitMode(false);
   }
 
+  function initReferenceFrameToggle() {
+    document.querySelectorAll(".hud-frame-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setReferenceFrame(btn.dataset.frame));
+    });
+    fetchReferenceFrame();
+  }
+
   // ── Initialization ────────────────────────────────────────────
   function init() {
     buildCompassStrip();
     initCameraFeed();
+    initReferenceFrameToggle();
 
     // Hide the page header/footer for immersive view
     const header = document.querySelector("header.header");
@@ -336,6 +377,7 @@
     setInterval(fetchThrusters, 2000);
     setInterval(fetchLights, 3000);
     setInterval(fetchCameraStatus, 5000);
+    setInterval(fetchReferenceFrame, 3000);
     setInterval(updateMissionTime, 1000);
 
     // Initial fetches
@@ -345,6 +387,7 @@
     fetchThrusters();
     fetchLights();
     fetchCameraStatus();
+    fetchReferenceFrame();
   }
 
   if (document.readyState === "loading") {

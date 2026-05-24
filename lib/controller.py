@@ -65,6 +65,7 @@ class Controller:
         self._debug_override = None  # None = no override; dict of axes when active
         self._debug_lock = threading.Lock()
         self._input_status_lock = threading.Lock()
+        self._reference_frame = "rov"
         self._input_status = self._empty_input_status()
         # Gain settings (per-axis and master)
         self._gain_lock = threading.Lock()
@@ -137,6 +138,7 @@ class Controller:
             "source": "none",
             "name": None,
             "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+            "reference_frame": self._reference_frame,
         }
 
     def _set_input_status(self, status):
@@ -150,6 +152,7 @@ class Controller:
                 "source": self._input_status["source"],
                 "name": self._input_status["name"],
                 "buttons": list(self._input_status["buttons"]),
+                "reference_frame": self._reference_frame,
             }
 
     def calibrate_axes(self):
@@ -260,6 +263,7 @@ class Controller:
                 "source": source,
                 "name": name,
                 "buttons": buttons,
+                "reference_frame": self._reference_frame,
             }
         )
 
@@ -282,6 +286,20 @@ class Controller:
         """Multiply a value by its per-axis gain and the master gain."""
         with self._gain_lock:
             return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
+
+    def set_reference_frame(self, frame):
+        normalized = str(frame or "").strip().lower()
+        if normalized not in {"rov", "global"}:
+            raise ValueError("reference_frame must be 'rov' or 'global'")
+        self._reference_frame = normalized
+        if self.bm:
+            self.bm.set_reference_frame(normalized)
+        with self._input_status_lock:
+            self._input_status["reference_frame"] = normalized
+        return normalized
+
+    def get_reference_frame(self):
+        return self._reference_frame
 
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
@@ -332,6 +350,7 @@ class Controller:
                     "source": "debug_override",
                     "name": self.joystick.get_name() if self.joystick else None,
                     "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+                    "reference_frame": self._reference_frame,
                 }
             )
             return  # Skip all joystick processing

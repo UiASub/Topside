@@ -13,9 +13,13 @@ from lib.controller import Controller
 class FakeBitmask:
     def __init__(self):
         self.calls = []
+        self.reference_frame = "rov"
 
     def set_from_axes(self, **kwargs):
         self.calls.append(kwargs)
+
+    def set_reference_frame(self, frame):
+        self.reference_frame = frame
 
 
 class FakeSdlController:
@@ -80,6 +84,7 @@ def build_controller(controller=None, joystick=None):
     ctrl._debug_override = None
     ctrl._debug_lock = threading.Lock()
     ctrl._input_status_lock = threading.Lock()
+    ctrl._reference_frame = "rov"
     ctrl._input_status = ctrl._empty_input_status()
     ctrl._gain_lock = threading.Lock()
     ctrl._master_gain = 1.0
@@ -147,6 +152,17 @@ def test_sdl_left_shoulder_switches_left_stick_to_pitch_and_roll(monkeypatch):
     assert command["roll"] == -1.0
     status = ctrl.get_input_status()
     assert status["buttons"][4] == 1.0
+
+
+def test_controller_reference_frame_updates_bitmask_and_status():
+    ctrl = build_controller()
+
+    assert ctrl.set_reference_frame("global") == "global"
+
+    assert ctrl.get_reference_frame() == "global"
+    assert ctrl.bm.reference_frame == "global"
+    assert ctrl.bm.calls == []
+    assert ctrl.get_input_status()["reference_frame"] == "global"
 
 
 def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypatch):

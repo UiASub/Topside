@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row g-4">
   <!-- Battery Card -->
-  <div class="col-md-4">
+  <div class="col-md-3">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Battery</h5>
@@ -16,7 +16,7 @@
   </div>
 
   <!-- Depth Card -->
-  <div class="col-md-4">
+  <div class="col-md-3">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Depth</h5>
@@ -29,11 +29,25 @@
   </div>
 
   <!-- Lights Card -->
-  <div class="col-md-4">
+  <div class="col-md-3">
     <div class="card custom-card h-100">
       <div class="card-body d-flex flex-column">
         <h5 class="card-title">Lights</h5>
         <div id="light-data" class="mt-3">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reference Frame Card -->
+  <div class="col-md-3">
+    <div class="card custom-card h-100">
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title">Reference Frame</h5>
+        <div class="reference-frame-toggle mt-2" role="group" aria-label="Reference frame">
+          <button type="button" class="reference-frame-btn is-active" data-frame="rov">ROV</button>
+          <button type="button" class="reference-frame-btn" data-frame="global">Global</button>
+        </div>
+        <small id="reference-frame-status" class="text-muted mt-auto">Loading...</small>
       </div>
     </div>
   </div>
@@ -199,4 +213,5 @@
 <script src="/static/js/depth.js"></script>
 <script src="/static/js/controller.js"></script>
 <script src="/static/js/resource_monitor.js"></script>
+<script src="/static/js/reference_frame.js"></script>
 {% endblock %}

@@ -124,16 +124,6 @@ def register_routes(app):
         """Serve the main dashboard."""
         return render_template("layout.html")
 
-    @app.route("/Camera1")
-    def camera1():
-        """Render the camera1.html template."""
-        return render_template("camera1.html")
-
-    @app.route("/Camera2")
-    def camera2():
-        """Render the camera2.html template."""
-        return render_template("camera2.html")
-
     @app.route("/pilot")
     def pilot():
         """Render the pilot monitoring screen."""
@@ -343,11 +333,23 @@ def register_routes(app):
         """
         data = request.get_json(force=True, silent=True) or {}
         bm = current_app.config["BITMASK"]
+        controller = current_app.config.get("CONTROLLER")
+
+        if "reference_frame" in data:
+            try:
+                frame = bm.set_reference_frame(data["reference_frame"])
+                if controller and hasattr(controller, "set_reference_frame"):
+                    controller.set_reference_frame(frame)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
 
         # allow normalized axes
         axes = data.get("axes")
         if isinstance(axes, dict):
-            bm.set_from_axes(**axes)
+            try:
+                bm.set_from_axes(**axes)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
 
         # allow raw fields
         allowed = {"surge", "sway", "heave", "roll", "pitch", "yaw", "light", "manip"}
@@ -364,6 +366,24 @@ def register_routes(app):
                 pass
 
         return jsonify({"ok": True, "now": bm.get_command()})
+
+    @app.route("/api/rov/reference_frame", methods=["GET", "POST"])
+    def rov_reference_frame():
+        bm = current_app.config["BITMASK"]
+        controller = current_app.config.get("CONTROLLER")
+        if request.method == "POST":
+            data = request.get_json(force=True, silent=True) or {}
+            frame = data.get("reference_frame", data.get("frame"))
+            try:
+                frame = bm.set_reference_frame(frame)
+                if controller and hasattr(controller, "set_reference_frame"):
+                    controller.set_reference_frame(frame)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+        else:
+            frame = bm.get_reference_frame() if hasattr(bm, "get_reference_frame") else "rov"
+
+        return jsonify({"ok": True, "reference_frame": frame})
 
     @app.route("/api/rov/status", methods=["GET"])
     def get_rov_status():

@@ -11,6 +11,9 @@ from lib.net_transport import DEFAULT_ROV_HOST, UdpSender, next_sequence
 NUCLEO_HOST = DEFAULT_ROV_HOST  # default NUCLEO IP
 NUCLEO_PORT = 12345
 DEFAULT_RATE_HZ = 20.0  # send frequency
+REFERENCE_FRAME_ROV = "rov"
+REFERENCE_FRAME_GLOBAL = "global"
+COMMAND_FLAG_GLOBAL_FRAME = 0x01
 
 
 @dataclass
@@ -50,8 +53,12 @@ def encode_payload(cmd: Command) -> int:
     return p & 0xFFFFFFFFFFFFFFFF
 
 
-def build_packet(seq: int, payload_u64: int) -> bytes:
-    header = struct.pack("!IQ", seq & 0xFFFFFFFF, payload_u64 & 0xFFFFFFFFFFFFFFFF)
+def build_packet(seq: int, payload_u64: int, flags: int = 0) -> bytes:
+    flags = int(flags) & 0xFF
+    if flags:
+        header = struct.pack("!IQB3x", seq & 0xFFFFFFFF, payload_u64 & 0xFFFFFFFFFFFFFFFF, flags)
+    else:
+        header = struct.pack("!IQ", seq & 0xFFFFFFFF, payload_u64 & 0xFFFFFFFFFFFFFFFF)
     crc = crc32_ieee(header)
     return header + struct.pack("!I", crc & 0xFFFFFFFF)
 
@@ -78,6 +85,7 @@ class BitmaskClient:
         self._watchdog_timeout = watchdog_timeout
         self._watchdog_resends = 0
         self._last_command_snapshot: dict | None = None
+        self._reference_frame = REFERENCE_FRAME_ROV
 
     def start(self):
         if self._thread.is_alive():
@@ -107,7 +115,19 @@ class BitmaskClient:
 
     def get_command(self) -> dict:
         with self._lock:
-            return asdict(self._cmd) | {"sequence": self._seq}
+            return asdict(self._cmd) | {"sequence": self._seq, "reference_frame": self._reference_frame}
+
+    def set_reference_frame(self, frame: str) -> str:
+        normalized = str(frame or "").strip().lower()
+        if normalized not in {REFERENCE_FRAME_ROV, REFERENCE_FRAME_GLOBAL}:
+            raise ValueError("reference_frame must be 'rov' or 'global'")
+        with self._lock:
+            self._reference_frame = normalized
+        return normalized
+
+    def get_reference_frame(self) -> str:
+        with self._lock:
+            return self._reference_frame
 
     def set_resource_monitor(self, monitor) -> None:
         self._resource_monitor = monitor
@@ -128,33 +148,50 @@ class BitmaskClient:
             }
 
     # convenience: set from normalized axes
-    def set_from_axes(self, surge=0.0, sway=0.0, heave=0.0, roll=0.0, pitch=0.0, yaw=0.0, light=0.0, manip=0.0):
+    def set_from_axes(
+        self,
+        surge=0.0,
+        sway=0.0,
+        heave=0.0,
+        roll=0.0,
+        pitch=0.0,
+        yaw=0.0,
+        light=0.0,
+        manip=0.0,
+        reference_frame=None,
+    ):
         def s(x):
             return int(round(max(-1.0, min(1.0, float(x))) * 127))
 
         def u(x):
             return int(round(max(0.0, min(1.0, float(x))) * 255))
 
-        self.set_command(
-            surge=s(surge),
-            sway=s(sway),
-            heave=s(heave),
-            roll=s(roll),
-            pitch=s(pitch),
-            yaw=s(yaw),
-            light=u(light),
-            manip=s(manip),
-        )
+        with self._lock:
+            self._cmd.surge = s(surge)
+            self._cmd.sway = s(sway)
+            self._cmd.heave = s(heave)
+            self._cmd.roll = s(roll)
+            self._cmd.pitch = s(pitch)
+            self._cmd.yaw = s(yaw)
+            self._cmd.light = u(light)
+            self._cmd.manip = s(manip)
+            if reference_frame is not None:
+                normalized = str(reference_frame or "").strip().lower()
+                if normalized not in {REFERENCE_FRAME_ROV, REFERENCE_FRAME_GLOBAL}:
+                    raise ValueError("reference_frame must be 'rov' or 'global'")
+                self._reference_frame = normalized
 
     def _run(self):
         if self.period <= 0:
             return
         while not self._stop.is_set():
             with self._lock:
+                flags = COMMAND_FLAG_GLOBAL_FRAME if self._reference_frame == REFERENCE_FRAME_GLOBAL else 0
                 payload = encode_payload(self._cmd)
-                pkt = build_packet(self._seq, payload)
+                pkt = build_packet(self._seq, payload, flags=flags)
                 self._seq = next_sequence(self._seq)
                 command_snapshot = asdict(self._cmd)
+                command_snapshot["reference_frame"] = self._reference_frame
             sender = self._sender
             if sender:
                 try:

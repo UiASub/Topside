@@ -1,14 +1,14 @@
 {
     "imu": {
-        "yaw": 0.0,
-        "pitch": 0.0,
-        "roll": 0.0,
-        "yr": 0.0,
-        "pr": 0.0,
-        "rr": 0.0,
-        "ax": 0.0,
-        "ay": 0.0,
-        "az": 0.0
+        "yaw": -158.15,
+        "pitch": -4.52,
+        "roll": -178.63,
+        "yr": 0.01,
+        "pr": 0.02,
+        "rr": 0.02,
+        "ax": 0.002,
+        "ay": 0.001,
+        "az": 0.001
     },
     "9dof": {
         "acceleration": {
@@ -71,17 +71,25 @@
     "battery": 0,
     "depth": {
         "dpt": 0.0,
-        "dptSet": 0.0
+        "dptSet": 0.0,
+        "pressure_mbar": 994.4,
+        "temperature_c": 21.53,
+        "valid": true,
+        "age_ms": 490.0,
+        "addr": 118.0,
+        "last_error": 0.0,
+        "init_attempts": 1.0,
+        "read_errors": 0.0
     },
     "resources": {
-        "sequence": 0,
-        "uptime_ms": 0,
-        "cpu_percent": 0,
-        "heap_used_percent": 0,
-        "heap_free_kb": 0,
-        "heap_total_kb": 0,
-        "thread_count": 0,
-        "udp_rx_count": 0,
+        "sequence": 805,
+        "uptime_ms": 809271,
+        "cpu_percent": 13,
+        "heap_used_percent": 2,
+        "heap_free_kb": 500,
+        "heap_total_kb": 512,
+        "thread_count": 21,
+        "udp_rx_count": 16703,
         "udp_rx_errors": 0
     },
     "control_telemetry": {
