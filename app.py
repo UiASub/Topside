@@ -3,6 +3,7 @@ import os
 
 from flask import Flask
 
+from lib.aruco_logger import ArucoPipelineLogger
 from lib.axis_config_sender import send_axis_config
 from lib.bitmask import init_bitmask
 from lib.camera import init_camera, init_ip_camera, init_rpi_camera
@@ -30,6 +31,9 @@ app.config["CONTROLLER"].start()
 
 # Start background IMU receiver (UDP port 5002)
 app.config["IMU"] = init_imu_receiver(port=5002)
+
+# Tracks ordered ARUCO markers for the pipeline challenge.
+app.config["ARUCO_LOGGER"] = ArucoPipelineLogger()
 
 # Load saved IMU axis mapping from config
 _config = JSONDataHandler(file_path=data_path("config.json"))
@@ -68,6 +72,7 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
     out_height=rpi_cam_out_height,
     jpeg_quality=rpi_cam_jpeg_quality,
     flip_180=rpi_cam_flip_180,
+    marker_logger=app.config["ARUCO_LOGGER"],
 )
 
 # Initialize IP camera (SMTSEC SIP-K327GS) via RTSP
@@ -82,6 +87,7 @@ app.config["IP_CAMERA"] = init_ip_camera(
     out_height=ip_cam_out_height,
     jpeg_quality=ip_cam_jpeg_quality,
     flip_180=ip_cam_flip_180,
+    marker_logger=app.config["ARUCO_LOGGER"],
 )
 
 # Initialize default local camera for the legacy Camera 1 feed.
@@ -91,6 +97,7 @@ default_cam_jpeg_quality = int(os.getenv("DEFAULT_CAMERA_JPEG_QUALITY", "70"))
 app.config["DEFAULT_CAMERA"] = init_camera(
     device_index=default_cam_device,
     jpeg_quality=default_cam_jpeg_quality,
+    marker_logger=app.config["ARUCO_LOGGER"],
 )
 
 # Start background resource monitor receiver (UDP port 12346)
