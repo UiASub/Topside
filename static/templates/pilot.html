@@ -101,7 +101,25 @@
       </div> -->
     </div>
 
-    <!-- RIGHT PANEL – Telemetry (commented out) ----------------->
+    <!-- RIGHT PANEL – ARUCO log --------------------------------->
+    <div class="hud-right">
+      <div class="hud-panel hud-aruco-panel">
+        <div class="hud-panel-head">
+          <span class="hud-label">ARUCO</span>
+          <span class="hud-mode-pill" id="hud-aruco-state">OFF</span>
+        </div>
+        <div class="hud-aruco-actions">
+          <button type="button" id="hud-aruco-toggle" class="pilot-feed-btn">Start</button>
+          <button type="button" id="hud-aruco-clear" class="pilot-feed-btn">Clear</button>
+        </div>
+        <div class="hud-label-sm">VISIBLE</div>
+        <div class="hud-mono hud-aruco-visible" id="hud-aruco-visible">--</div>
+        <div class="hud-label-sm hud-aruco-log-label">ORDER</div>
+        <ol class="hud-aruco-log" id="hud-aruco-log"></ol>
+      </div>
+    </div>
+
+    <!-- Telemetry (commented out) ----------------->
     <!--
     <div class="hud-right">
       <div class="hud-panel">

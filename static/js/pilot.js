@@ -19,6 +19,14 @@
     loadedOnce: false,
     fitContain: false,
   };
+  const aruco = {
+    enabled: false,
+    state: null,
+    toggleBtn: null,
+    clearBtn: null,
+    visible: null,
+    log: null,
+  };
 
   function setCameraState(state, label) {
     if (!camera.status || !camera.stateText) return;
@@ -272,6 +280,63 @@
     } catch (_) { /* silent */ }
   }
 
+  function renderArucoLog(log) {
+    aruco.enabled = Boolean(log && log.enabled);
+    if (aruco.state) {
+      aruco.state.textContent = aruco.enabled ? "ON" : "OFF";
+      aruco.state.classList.toggle("is-on", aruco.enabled);
+    }
+    if (aruco.toggleBtn) {
+      aruco.toggleBtn.textContent = aruco.enabled ? "Stop" : "Start";
+    }
+    if (aruco.visible) {
+      const visibleIds = log && Array.isArray(log.visible_ids) ? log.visible_ids : [];
+      aruco.visible.textContent = visibleIds.length > 0 ? visibleIds.join(", ") : "--";
+    }
+    if (aruco.log) {
+      const entries = log && Array.isArray(log.entries) ? log.entries : [];
+      aruco.log.innerHTML = "";
+      entries.forEach((entry) => {
+        const item = document.createElement("li");
+        item.textContent = `ID ${entry.id}`;
+        aruco.log.appendChild(item);
+      });
+    }
+  }
+
+  async function fetchArucoLog() {
+    try {
+      const res = await fetch("/api/aruco-log");
+      const data = await res.json();
+      if (data.ok) renderArucoLog(data.log);
+    } catch (_) { /* silent */ }
+  }
+
+  async function postArucoAction(action) {
+    try {
+      const res = await fetch(`/api/aruco-log/${action}`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) renderArucoLog(data.log);
+    } catch (_) { /* silent */ }
+  }
+
+  function initArucoControls() {
+    aruco.state = document.getElementById("hud-aruco-state");
+    aruco.toggleBtn = document.getElementById("hud-aruco-toggle");
+    aruco.clearBtn = document.getElementById("hud-aruco-clear");
+    aruco.visible = document.getElementById("hud-aruco-visible");
+    aruco.log = document.getElementById("hud-aruco-log");
+
+    if (aruco.toggleBtn) {
+      aruco.toggleBtn.addEventListener("click", () => {
+        postArucoAction(aruco.enabled ? "stop" : "start");
+      });
+    }
+    if (aruco.clearBtn) {
+      aruco.clearBtn.addEventListener("click", () => postArucoAction("clear"));
+    }
+  }
+
   function initCameraFeed() {
     camera.img = document.getElementById("pilot-camera");
     camera.shell = document.getElementById("pilot-feed-shell");
@@ -314,6 +379,7 @@
   function init() {
     buildCompassStrip();
     initCameraFeed();
+    initArucoControls();
 
     // Hide the page header/footer for immersive view
     const header = document.querySelector("header.header");
@@ -328,6 +394,7 @@
     setInterval(fetchThrusters, 2000);
     setInterval(fetchLights, 3000);
     setInterval(fetchCameraStatus, 5000);
+    setInterval(fetchArucoLog, 1000);
     setInterval(updateMissionTime, 1000);
 
     // Initial fetches
@@ -337,6 +404,7 @@
     fetchThrusters();
     fetchLights();
     fetchCameraStatus();
+    fetchArucoLog();
   }
 
   if (document.readyState === "loading") {

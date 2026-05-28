@@ -239,6 +239,38 @@ def register_routes(app):
             return jsonify(ip_cam.get_status())
         return jsonify({"connected": False})
 
+    @app.route("/api/aruco-log", methods=["GET"])
+    def aruco_log_status():
+        """Return ordered ARUCO marker sightings for the pipeline challenge."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        return jsonify({"ok": True, "log": logger.snapshot()})
+
+    @app.route("/api/aruco-log/start", methods=["POST"])
+    def start_aruco_log():
+        """Start logging new ARUCO marker IDs."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        return jsonify({"ok": True, "log": logger.start()})
+
+    @app.route("/api/aruco-log/stop", methods=["POST"])
+    def stop_aruco_log():
+        """Stop logging new ARUCO marker IDs."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        return jsonify({"ok": True, "log": logger.stop()})
+
+    @app.route("/api/aruco-log/clear", methods=["POST"])
+    def clear_aruco_log():
+        """Clear the ordered ARUCO marker log."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        return jsonify({"ok": True, "log": logger.clear()})
+
     @app.route("/api/thrusters", methods=["GET"])
     def get_thrusters():
         """API route for thrusters data."""

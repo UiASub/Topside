@@ -7,16 +7,43 @@ import cv2
 import numpy as np
 
 
-# Dummy ArUco detector to keep code functional after removing autonomous
-class DummyArUcoMarkerDetector:
-    def __init__(self, camera_matrix=None, dist_coeffs=None):
-        pass
+class ArUcoMarkerDetector:
+    def __init__(self, dictionary_name="DICT_4X4_50", camera_matrix=None, dist_coeffs=None):
+        aruco = cv2.aruco
+        self.dictionary_name = dictionary_name
+        self.camera_matrix = camera_matrix
+        self.dist_coeffs = dist_coeffs
+        self._dictionary = aruco.getPredefinedDictionary(getattr(aruco, dictionary_name))
+        self._detector = aruco.ArucoDetector(self._dictionary, aruco.DetectorParameters())
 
     def detect_markers(self, frame):
-        return [], [], []
+        return self._detector.detectMarkers(frame)
 
     def draw_detected_markers(self, frame, corners, ids):
+        if ids is not None and len(ids) > 0:
+            cv2.aruco.drawDetectedMarkers(frame, corners, ids)
         return frame
+
+    def marker_detections(self, corners, ids):
+        if ids is None:
+            return []
+
+        detections = []
+        for marker_id, marker_corners in zip(ids.flatten(), corners, strict=False):
+            points = np.asarray(marker_corners, dtype=np.float32).reshape(-1, 2)
+            center = points.mean(axis=0)
+            detections.append({"id": int(marker_id), "center": (float(center[0]), float(center[1]))})
+        return detections
+
+
+def _process_aruco_frame(frame, detector, marker_logger):
+    if detector is None:
+        return frame
+    corners, ids, _rejected = detector.detect_markers(frame)
+    detections = detector.marker_detections(corners, ids)
+    if marker_logger is not None:
+        marker_logger.record_visible(detections)
+    return detector.draw_detected_markers(frame, corners, ids)
 
 
 class DefaultCameraReceiver:
@@ -24,12 +51,13 @@ class DefaultCameraReceiver:
 
     RECONNECT_DELAY = 3.0
 
-    def __init__(self, device_index=0, jpeg_quality=70):
+    def __init__(self, device_index=0, jpeg_quality=70, marker_logger=None):
         self.device_index = int(device_index)
         self.jpeg_quality = min(95, max(40, int(jpeg_quality)))
         self.is_connected = False
         self.is_listening = False
         self.last_error = None
+        self.marker_logger = marker_logger
 
         self._stop_event = threading.Event()
         self._thread = None
@@ -43,7 +71,7 @@ class DefaultCameraReceiver:
         self._placeholder_jpeg = self._build_placeholder_jpeg()
         camera_matrix = np.array([[900, 0, 640], [0, 900, 360], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((5, 1), dtype=np.float32)
-        self._detector = DummyArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+        self._detector = ArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -89,8 +117,7 @@ class DefaultCameraReceiver:
         }
 
     def _set_frame(self, frame):
-        corners, ids, _rejected = self._detector.detect_markers(frame)
-        frame = self._detector.draw_detected_markers(frame, corners, ids)
+        frame = _process_aruco_frame(frame, self._detector, self.marker_logger)
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
         if not ok:
             return
@@ -183,9 +210,9 @@ def generate_frames(camera):
         yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
-def init_camera(device_index=0, jpeg_quality=70):
+def init_camera(device_index=0, jpeg_quality=70, marker_logger=None):
     """Initialize and start the default local camera receiver."""
-    receiver = DefaultCameraReceiver(device_index=device_index, jpeg_quality=jpeg_quality)
+    receiver = DefaultCameraReceiver(device_index=device_index, jpeg_quality=jpeg_quality, marker_logger=marker_logger)
     receiver.start()
     return receiver
 
@@ -202,6 +229,7 @@ class RPiCameraReceiver:
         out_height=540,
         jpeg_quality=70,
         flip_180=True,
+        marker_logger=None,
     ):
         self.host = host
         self.port = int(port)
@@ -214,6 +242,7 @@ class RPiCameraReceiver:
         self.is_listening = False
         self.backend = "none"
         self.last_error = None
+        self.marker_logger = marker_logger
 
         self._stop_event = threading.Event()
         self._thread = None
@@ -227,6 +256,7 @@ class RPiCameraReceiver:
         self._frame_seq = 0
         self._last_frame_ts = 0.0
         self._placeholder_jpeg = self._build_placeholder_jpeg()
+        self._detector = ArUcoMarkerDetector()
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -278,6 +308,7 @@ class RPiCameraReceiver:
         }
 
     def _set_frame(self, frame):
+        frame = _process_aruco_frame(frame, self._detector, self.marker_logger)
         ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ok:
             return
@@ -543,6 +574,7 @@ def init_rpi_camera(
     out_height=540,
     jpeg_quality=70,
     flip_180=False,
+    marker_logger=None,
 ):
     receiver = RPiCameraReceiver(
         host=host,
@@ -552,6 +584,7 @@ def init_rpi_camera(
         out_height=out_height,
         jpeg_quality=jpeg_quality,
         flip_180=flip_180,
+        marker_logger=marker_logger,
     )
     receiver.start()
     return receiver
@@ -589,6 +622,7 @@ class IPCameraReceiver:
         out_height=540,
         jpeg_quality=70,
         flip_180=False,
+        marker_logger=None,
     ):
         self.url = url
         self.out_width = max(160, int(out_width))
@@ -597,6 +631,7 @@ class IPCameraReceiver:
         self.flip_180 = bool(flip_180)
         self.is_connected = False
         self.last_error = None
+        self.marker_logger = marker_logger
 
         self._stop_event = threading.Event()
         self._thread = None
@@ -608,6 +643,7 @@ class IPCameraReceiver:
         self._frame_seq = 0
         self._last_frame_ts = 0.0
         self._placeholder_jpeg = self._build_placeholder_jpeg()
+        self._detector = ArUcoMarkerDetector()
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -655,6 +691,7 @@ class IPCameraReceiver:
         }
 
     def _set_frame(self, frame):
+        frame = _process_aruco_frame(frame, self._detector, self.marker_logger)
         ok, buf = cv2.imencode(
             ".jpg",
             frame,
@@ -751,6 +788,7 @@ def init_ip_camera(
     out_height=540,
     jpeg_quality=70,
     flip_180=False,
+    marker_logger=None,
 ):
     """Initialize and start an IP camera receiver (RTSP/HTTP)."""
     receiver = IPCameraReceiver(
@@ -759,6 +797,7 @@ def init_ip_camera(
         out_height=out_height,
         jpeg_quality=jpeg_quality,
         flip_180=flip_180,
+        marker_logger=marker_logger,
     )
     receiver.start()
     return receiver
