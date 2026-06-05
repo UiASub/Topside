@@ -341,6 +341,7 @@ def register_routes(app):
                 "uplink": uplink,
                 "controller": controller_state,
                 "frame": controller.get_frame_mode() if controller else "rov",
+                "docked": controller.is_docked() if controller else False,
                 "udp_rx_count": udp_rx,
                 "udp_rx_errors": udp_err,
                 "override": state,
@@ -730,6 +731,39 @@ def register_routes(app):
         else:
             mode = ctrl.set_frame_mode(data.get("mode", "rov"))
         return jsonify({"ok": True, "frame": mode})
+
+    # --- Dock-hold endpoints ---
+    @app.route("/api/dock/status", methods=["GET"])
+    def dock_status():
+        """Return whether face-down dock-hold is engaged."""
+        ctrl = current_app.config.get("CONTROLLER")
+        return jsonify({"ok": True, "docked": ctrl.is_docked() if ctrl else False})
+
+    @app.route("/api/dock/toggle", methods=["POST"])
+    def dock_toggle():
+        """Toggle face-down dock-hold (lock attitude + precision gain)."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        result = ctrl.dock_toggle()
+        return jsonify(result), (200 if result.get("ok") else 503)
+
+    @app.route("/api/dock/engage", methods=["POST"])
+    def dock_engage():
+        """Engage face-down dock-hold."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        result = ctrl.dock_engage()
+        return jsonify(result), (200 if result.get("ok") else 503)
+
+    @app.route("/api/dock/release", methods=["POST"])
+    def dock_release():
+        """Release face-down dock-hold."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify(ctrl.dock_release())
 
     # --- Gain endpoints ---
     @app.route("/api/controller/gains", methods=["GET"])

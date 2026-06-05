@@ -37,6 +37,12 @@ def _controller_errors():
 # Defaults; overridable later via the controller-mapping settings.
 FRAME_TOGGLE_BUTTON = pygame.CONTROLLER_BUTTON_B
 FRAME_TOGGLE_BUTTON_JS = 1
+DOCK_TOGGLE_BUTTON = pygame.CONTROLLER_BUTTON_Y
+DOCK_TOGGLE_BUTTON_JS = 3
+
+# Face-down dock-hold targets.
+DOCK_PITCH_DEG = 90.0  # nose-down face-down target (sign confirmed in-water)
+DOCK_GAIN = 0.5  # precision master gain applied while docked
 
 
 class Controller:
@@ -91,6 +97,12 @@ class Controller:
         self._frame_mode = "rov"
         self._ref_yaw = 0.0
         self._prev_frame_button = False
+        # Setpoint override client (injected) for face-down dock-hold
+        self._override = None
+        self._dock_lock = threading.Lock()
+        self._docked = False
+        self._saved_gains = None
+        self._prev_dock_button = False
         self._try_connect()
 
     def _try_connect(self):
@@ -381,6 +393,63 @@ class Controller:
         body_sway = -surge * sin_d + sway * cos_d
         return body_surge, body_sway
 
+    # --- Face-down dock-hold API ---
+    def set_setpoint_override(self, client):
+        """Inject the setpoint-override client used to lock attitude for docking."""
+        self._override = client
+
+    def dock_engage(self):
+        """Lock attitude face-down (pitch + level roll + current heading) and
+        apply a precision gain so the pilot can still nudge surge/sway/heave.
+
+        Relies on tuned pitch/roll/yaw PID on the MCU (the override only holds
+        attitude if those gains are non-zero).
+        """
+        captured_yaw = self._current_yaw_fresh()
+        axes = {"pitch": DOCK_PITCH_DEG, "roll": 0.0}
+        if captured_yaw is not None:
+            axes["yaw"] = captured_yaw
+        with self._dock_lock:
+            if self._override is None:
+                return {"ok": False, "error": "Setpoint override client unavailable"}
+            try:
+                self._override.send_override(axes, replay_attempts=5, replay_delay=0.1)
+            except Exception as exc:  # noqa: BLE001 - surface any send failure to caller
+                return {"ok": False, "error": str(exc)}
+            if not self._docked:
+                self._saved_gains = self.get_gains()
+            self.set_gains(master=DOCK_GAIN)
+            self._docked = True
+        return {"ok": True, "docked": True, "setpoints": axes}
+
+    def dock_release(self):
+        """Clear the attitude lock and restore the pre-dock gains."""
+        with self._dock_lock:
+            if self._override is not None:
+                try:
+                    self._override.clear_override()
+                except Exception:  # noqa: BLE001 - release should always succeed locally
+                    pass
+            if self._saved_gains:
+                saved = self._saved_gains
+                self.set_gains(
+                    master=saved.get("master"),
+                    **{k: saved[k] for k in ("surge", "sway", "heave", "roll", "pitch", "yaw") if k in saved},
+                )
+                self._saved_gains = None
+            self._docked = False
+        return {"ok": True, "docked": False}
+
+    def dock_toggle(self):
+        """Engage dock-hold if released, otherwise release it."""
+        with self._dock_lock:
+            docked = self._docked
+        return self.dock_release() if docked else self.dock_engage()
+
+    def is_docked(self):
+        with self._dock_lock:
+            return self._docked
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
         if self.bm:
@@ -517,6 +586,12 @@ class Controller:
         if frame_pressed and not self._prev_frame_button:
             self.toggle_frame_mode()
         self._prev_frame_button = frame_pressed
+
+        # Dock-hold toggle (edge-detected): lock/unlock face-down attitude
+        dock_pressed = self._read_button(DOCK_TOGGLE_BUTTON, DOCK_TOGGLE_BUTTON_JS)
+        if dock_pressed and not self._prev_dock_button:
+            self.dock_toggle()
+        self._prev_dock_button = dock_pressed
 
         self._update_input_status(buttons)
 

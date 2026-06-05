@@ -100,6 +100,11 @@ def build_controller(controller=None, joystick=None):
     ctrl._frame_mode = "rov"
     ctrl._ref_yaw = 0.0
     ctrl._prev_frame_button = False
+    ctrl._override = None
+    ctrl._dock_lock = threading.Lock()
+    ctrl._docked = False
+    ctrl._saved_gains = None
+    ctrl._prev_dock_button = False
     return ctrl
 
 
@@ -110,6 +115,20 @@ class FakeIMU:
 
     def get_stats(self):
         return {"age_ms": self.age_ms, "last_data": {"yaw": self.yaw}}
+
+
+class FakeOverride:
+    def __init__(self):
+        self.sent = []
+        self.cleared = 0
+
+    def send_override(self, axes, replay_attempts=1, replay_delay=0.0):
+        self.sent.append(dict(axes))
+        return {"active": True}
+
+    def clear_override(self):
+        self.cleared += 1
+        return {"active": False}
 
 
 def test_sdl_gamecontroller_mapping_normalizes_linux_playstation_layout(monkeypatch):
@@ -248,6 +267,64 @@ def test_toggle_frame_mode_flips_between_rov_and_global():
     assert ctrl.toggle_frame_mode() == "global"
     assert ctrl.get_frame_mode() == "global"
     assert ctrl.toggle_frame_mode() == "rov"
+
+
+def test_dock_engage_locks_attitude_and_applies_precision_gain():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=33.0))
+    override = FakeOverride()
+    ctrl.set_setpoint_override(override)
+    ctrl.set_gains(master=1.0)
+
+    result = ctrl.dock_engage()
+
+    assert result["ok"] is True
+    assert ctrl.is_docked() is True
+    sent = override.sent[-1]
+    assert sent["pitch"] == controller_module.DOCK_PITCH_DEG
+    assert sent["roll"] == 0.0
+    assert sent["yaw"] == pytest.approx(33.0)
+    assert ctrl.get_gains()["master"] == pytest.approx(controller_module.DOCK_GAIN)
+
+
+def test_dock_release_clears_override_and_restores_gains():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=0.0))
+    override = FakeOverride()
+    ctrl.set_setpoint_override(override)
+    ctrl.set_gains(master=0.8, surge=0.6)
+
+    ctrl.dock_engage()
+    assert ctrl.get_gains()["master"] == pytest.approx(controller_module.DOCK_GAIN)
+
+    res = ctrl.dock_release()
+
+    assert res["docked"] is False
+    assert ctrl.is_docked() is False
+    assert override.cleared == 1
+    gains = ctrl.get_gains()
+    assert gains["master"] == pytest.approx(0.8)
+    assert gains["surge"] == pytest.approx(0.6)
+
+
+def test_dock_toggle_flips_state():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=0.0))
+    ctrl.set_setpoint_override(FakeOverride())
+    assert ctrl.is_docked() is False
+    ctrl.dock_toggle()
+    assert ctrl.is_docked() is True
+    ctrl.dock_toggle()
+    assert ctrl.is_docked() is False
+
+
+def test_dock_engage_without_override_client_reports_error():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=0.0))
+    # No override client injected.
+    result = ctrl.dock_engage()
+    assert result["ok"] is False
+    assert ctrl.is_docked() is False
 
 
 def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):
