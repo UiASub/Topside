@@ -95,6 +95,22 @@ def _neutralize_thruster_command():
     return neutral
 
 
+def _current_depth_altitude_setpoint():
+    depth = data_handler.get_section("depth") or {}
+    try:
+        depth_m = float(depth["dpt"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("Depth data is unavailable") from None
+    if not math.isfinite(depth_m):
+        raise ValueError("Depth data is invalid")
+    if depth.get("valid") is False:
+        raise ValueError("Depth sensor is not valid")
+    age_ms = depth.get("age_ms")
+    if age_ms is not None and float(age_ms) > 2500:
+        raise ValueError("Depth data is stale")
+    return -depth_m
+
+
 def _send_full_axis_config():
     """Read all axis settings from config and send to MCU in one packet."""
     imu_axes = config_handler.get_section("imu_axes") or _DEFAULT_IMU_AXES
@@ -366,6 +382,35 @@ def register_routes(app):
             return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
         return jsonify({"ok": True, "state": client.get_state()})
 
+    @app.route("/api/frame/status", methods=["GET"])
+    def frame_status():
+        client = current_app.config.get("FRAME_CONTROL")
+        if not client:
+            return jsonify({"ok": False, "error": "Frame control client unavailable"}), 503
+        return jsonify({"ok": True, "state": client.get_state(), "telemetry": data_handler.get_section("frame") or {}})
+
+    @app.route("/api/frame/lock", methods=["POST"])
+    def lock_frame():
+        client = current_app.config.get("FRAME_CONTROL")
+        if not client:
+            return jsonify({"ok": False, "error": "Frame control client unavailable"}), 503
+        try:
+            return jsonify({"ok": True, "state": client.lock()})
+        except Exception as exc:  # pylint: disable=broad-except
+            client.set_error(str(exc))
+            return jsonify({"ok": False, "error": str(exc)}), 503
+
+    @app.route("/api/frame/unlock", methods=["POST"])
+    def unlock_frame():
+        client = current_app.config.get("FRAME_CONTROL")
+        if not client:
+            return jsonify({"ok": False, "error": "Frame control client unavailable"}), 503
+        try:
+            return jsonify({"ok": True, "state": client.unlock()})
+        except Exception as exc:  # pylint: disable=broad-except
+            client.set_error(str(exc))
+            return jsonify({"ok": False, "error": str(exc)}), 503
+
     @app.route("/api/rov/command", methods=["POST"])
     def set_rov_command():
         """
@@ -608,6 +653,10 @@ def register_routes(app):
             return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
 
         neutral = _neutralize_thruster_command()
+        try:
+            neutral["heave"] = _current_depth_altitude_setpoint()
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc), "neutralized": True}), 503
         setpoints = {**neutral, **attitude_setpoints}
         try:
             client.clear_override()

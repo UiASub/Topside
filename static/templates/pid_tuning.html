@@ -18,9 +18,12 @@
       <span class="pid-kicker">PID Tuning</span>
       <span id="pid-page-status" class="badge bg-secondary">READY</span>
       <span id="pid-link-status" class="badge bg-secondary">LINK IDLE</span>
+      <span id="frame-lock-status" class="badge bg-secondary">FRAME FREE</span>
       <span class="pid-muted">IMU <span id="pid-imu-age">--</span> ms</span>
     </div>
     <div class="pid-action-controls">
+      <button type="button" id="btn-frame-lock" class="btn btn-sm btn-outline-info">Lock Frame</button>
+      <button type="button" id="btn-frame-unlock" class="btn btn-sm btn-outline-secondary">Unlock Frame</button>
       <button type="button" class="btn btn-sm btn-primary js-start-pid">Start PID</button>
       <button type="button" class="btn btn-sm btn-danger pid-zero-btn js-zero-all-pid">ZERO PID + THRUST</button>
     </div>

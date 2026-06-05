@@ -9,6 +9,7 @@ from lib.bitmask import init_bitmask
 from lib.camera import init_camera, init_ip_camera, init_rpi_camera
 from lib.control_telemetry import init_control_telemetry
 from lib.controller import Controller
+from lib.frame_control_client import init_frame_control
 from lib.json_data_handler import JSONDataHandler
 from lib.log_udp_receiver import init_log_stream
 from lib.net_transport import DEFAULT_ROV_HOST
@@ -116,6 +117,9 @@ app.config["LOG_STREAM"] = init_log_stream(port=5006)
 # Initialize system control client (UDP port 5008)
 app.config["SYSTEM_CONTROL"] = SystemControlClient()
 
+# Initialize frame control client (UDP port 5009)
+app.config["FRAME_CONTROL"] = init_frame_control()
+
 register_routes(app)
 
 
@@ -153,6 +157,9 @@ def _shutdown():
     system_control = app.config.get("SYSTEM_CONTROL")
     if system_control:
         system_control.close()
+    frame_control = app.config.get("FRAME_CONTROL")
+    if frame_control:
+        frame_control.close()
 
 
 atexit.register(_shutdown)

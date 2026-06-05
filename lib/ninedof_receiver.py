@@ -225,21 +225,24 @@ class IMUReceiver:
 
         # Update data.json
         try:
-            self.data_handler.update_data(
-                {
-                    "imu": {
-                        "yaw": _coerce_json_number(yaw),
-                        "pitch": _coerce_json_number(pitch),
-                        "roll": _coerce_json_number(roll),
-                        "yr": _coerce_json_number(raw_yr),
-                        "pr": _coerce_json_number(raw_pr),
-                        "rr": _coerce_json_number(raw_rr),
-                        "ax": _coerce_json_number(mapped_ax, precision=3),
-                        "ay": _coerce_json_number(mapped_ay, precision=3),
-                        "az": _coerce_json_number(mapped_az, precision=3),
-                    }
+            update = {
+                "imu": {
+                    "yaw": _coerce_json_number(yaw),
+                    "pitch": _coerce_json_number(pitch),
+                    "roll": _coerce_json_number(roll),
+                    "yr": _coerce_json_number(raw_yr),
+                    "pr": _coerce_json_number(raw_pr),
+                    "rr": _coerce_json_number(raw_rr),
+                    "ax": _coerce_json_number(mapped_ax, precision=3),
+                    "ay": _coerce_json_number(mapped_ay, precision=3),
+                    "az": _coerce_json_number(mapped_az, precision=3),
                 }
-            )
+            }
+            if isinstance(msg.get("depth"), dict):
+                update["depth"] = msg["depth"]
+            if isinstance(msg.get("frame"), dict):
+                update["frame"] = msg["frame"]
+            self.data_handler.update_data(update)
         except Exception as e:
             print(f"IMU: Error updating data: {e}")
 
