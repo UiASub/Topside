@@ -61,6 +61,26 @@
           </label>
           <input type="range" class="form-range gain-axis-slider" id="gain-yaw" data-axis="yaw" min="0" max="1" step="0.01" value="1">
         </div>
+
+        <hr class="border-secondary">
+        <h6 class="text-light mb-2">Controller Mapping</h6>
+        <p class="text-muted small mb-2">
+          Input index per action — SDL (game-controller mapping) and Raw (plain joystick).
+          Use <em>Bind</em> to capture an input, or edit the numbers directly.
+        </p>
+        <div class="row g-1 small text-light-muted mb-1">
+          <div class="col-4">Action</div>
+          <div class="col-auto" style="width:72px">SDL</div>
+          <div class="col-auto" style="width:72px">Raw</div>
+          <div class="col-auto" style="width:48px">Inv</div>
+          <div class="col-auto">Bind</div>
+        </div>
+        <div id="mapping-container"></div>
+        <div class="d-flex align-items-center gap-2 mt-2">
+          <button type="button" id="mapping-save" class="btn btn-sm btn-success">Save Mapping</button>
+          <button type="button" id="mapping-reset" class="btn btn-sm btn-outline-warning">Reset</button>
+          <span id="mapping-status" class="small text-muted ms-auto"></span>
+        </div>
       </div>
       <div class="modal-footer modal-footer-custom">
          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

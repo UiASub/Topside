@@ -765,6 +765,53 @@ def register_routes(app):
             return jsonify({"ok": False, "error": "Controller not available"}), 503
         return jsonify(ctrl.dock_release())
 
+    # --- Controller mapping endpoints ---
+    @app.route("/api/controller/mapping", methods=["GET"])
+    def get_controller_mapping():
+        """Return the current controller input mapping."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify({"ok": True, "mapping": ctrl.get_mapping()})
+
+    @app.route("/api/controller/mapping", methods=["POST"])
+    def set_controller_mapping():
+        """Update the controller input mapping and persist it. JSON: {"mapping": {...}}."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        mapping = data.get("mapping", data)
+        updated = ctrl.set_mapping(mapping)
+        config_handler.update_data({"controller_map": updated})
+        return jsonify({"ok": True, "mapping": updated})
+
+    @app.route("/api/controller/mapping/reset", methods=["POST"])
+    def reset_controller_mapping():
+        """Reset the controller input mapping to defaults and persist it."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        updated = ctrl.reset_mapping()
+        config_handler.update_data({"controller_map": updated})
+        return jsonify({"ok": True, "mapping": updated})
+
+    @app.route("/api/controller/live-input", methods=["GET"])
+    def controller_live_input():
+        """Return the latest pressed buttons and axis values for press-to-bind."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        status = ctrl.get_input_status()
+        return jsonify(
+            {
+                "ok": True,
+                "buttons": status.get("buttons", []),
+                "axes": status.get("axes", []),
+                "source": status.get("source"),
+            }
+        )
+
     # --- Gain endpoints ---
     @app.route("/api/controller/gains", methods=["GET"])
     def get_gains():

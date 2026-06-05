@@ -1,3 +1,4 @@
+import copy
 import os
 import threading
 
@@ -105,6 +106,8 @@ def build_controller(controller=None, joystick=None):
     ctrl._docked = False
     ctrl._saved_gains = None
     ctrl._prev_dock_button = False
+    ctrl._map_lock = threading.Lock()
+    ctrl._mapping = copy.deepcopy(controller_module.DEFAULT_MAPPING)
     return ctrl
 
 
@@ -325,6 +328,36 @@ def test_dock_engage_without_override_client_reports_error():
     result = ctrl.dock_engage()
     assert result["ok"] is False
     assert ctrl.is_docked() is False
+
+
+def test_set_mapping_overrides_known_actions_and_ignores_unknown():
+    ctrl = build_controller()
+    updated = ctrl.set_mapping({"surge": {"controller": 5, "joystick": 7, "invert": False}})
+    assert updated["surge"]["controller"] == 5
+    assert updated["surge"]["joystick"] == 7
+    assert updated["surge"]["invert"] is False
+    ctrl.set_mapping({"bogus": {"controller": 1}})
+    assert "bogus" not in ctrl.get_mapping()
+
+
+def test_reset_mapping_restores_defaults():
+    ctrl = build_controller()
+    ctrl.set_mapping({"yaw": {"controller": 9}})
+    assert ctrl.get_mapping()["yaw"]["controller"] == 9
+    ctrl.reset_mapping()
+    assert ctrl.get_mapping()["yaw"]["controller"] == controller_module.DEFAULT_MAPPING["yaw"]["controller"]
+
+
+def test_mapping_changes_which_axis_drives_surge(monkeypatch):
+    monkeypatch.setattr(pygame.event, "get", lambda: [])
+    joystick = FakeJoystick(axes={0: 0.0, 1: 0.0, 2: 0.9, 3: 0.0})
+    ctrl = build_controller(joystick=joystick)
+    # Remap surge from its default axis 1 to axis 2 (no invert).
+    ctrl.set_mapping({"surge": {"controller": 2, "joystick": 2, "invert": False}})
+
+    ctrl.update()
+
+    assert ctrl.bm.calls[-1]["surge"] == pytest.approx(0.9, rel=1e-3)
 
 
 def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):

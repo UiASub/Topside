@@ -44,6 +44,11 @@ _saved_axes = _config.get_section("imu_axes")
 if _saved_axes:
     app.config["IMU"].set_axis_mapping(_saved_axes)
 
+# Load saved controller input mapping from config
+_saved_controller_map = _config.get_section("controller_map")
+if _saved_controller_map:
+    app.config["CONTROLLER"].set_mapping(_saved_controller_map)
+
 # Load saved accel axis mapping from config
 _saved_accel_axes = _config.get_section("accel_axes")
 if _saved_accel_axes:
