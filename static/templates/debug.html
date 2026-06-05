@@ -152,6 +152,28 @@
   </div>
 </div>
 
+<!-- Face-down Dock-hold -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="card-title mb-0">Face-down Dock-hold</h5>
+          <span id="dock-status" class="badge bg-secondary">RELEASED</span>
+        </div>
+        <p class="text-muted small mb-3">
+          Locks attitude face-down (pitch ~90°, roll level, current heading) via the setpoint override and
+          applies a precision gain so you can still nudge surge/sway/heave into the dock.
+          Requires tuned pitch/roll/yaw PID gains.
+        </p>
+        <button id="btn-dock-engage" class="btn btn-sm btn-warning me-1">Engage Dock-hold</button>
+        <button id="btn-dock-release" class="btn btn-sm btn-outline-secondary">Release</button>
+        <span id="dock-feedback" class="small text-light-muted ms-2"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Accelerometer Axis Mapping -->
 <div class="row g-4 mt-1">
   <div class="col-12">

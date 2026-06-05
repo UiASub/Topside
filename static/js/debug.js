@@ -1053,4 +1053,52 @@
     refreshFrame();
     setInterval(refreshFrame, 1000);
   }
+
+  // --- Face-down Dock-hold ---
+  const btnDockEngage = document.getElementById("btn-dock-engage");
+  const btnDockRelease = document.getElementById("btn-dock-release");
+  const dockStatus = document.getElementById("dock-status");
+  const dockFeedback = document.getElementById("dock-feedback");
+
+  function setDockStatus(docked) {
+    if (!dockStatus) return;
+    dockStatus.textContent = docked ? "LOCKED" : "RELEASED";
+    dockStatus.className = "badge " + (docked ? "bg-warning text-dark" : "bg-secondary");
+  }
+
+  async function refreshDock() {
+    try {
+      var res = await fetch("/api/dock/status");
+      var data = await res.json();
+      if (data.ok) setDockStatus(Boolean(data.docked));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  async function postDock(path) {
+    try {
+      var res = await fetch(path, { method: "POST" });
+      var data = await res.json();
+      if (data.ok) {
+        setDockStatus(Boolean(data.docked));
+        if (dockFeedback) dockFeedback.textContent = data.docked ? "Attitude locked." : "Released.";
+      } else if (dockFeedback) {
+        dockFeedback.textContent = data.error || "Failed";
+      }
+    } catch (e) {
+      if (dockFeedback) dockFeedback.textContent = "Error: " + e.message;
+    }
+  }
+
+  if (btnDockEngage) {
+    btnDockEngage.addEventListener("click", function () { postDock("/api/dock/engage"); });
+  }
+  if (btnDockRelease) {
+    btnDockRelease.addEventListener("click", function () { postDock("/api/dock/release"); });
+  }
+  if (btnDockEngage || btnDockRelease) {
+    refreshDock();
+    setInterval(refreshDock, 1000);
+  }
 })();

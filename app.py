@@ -110,6 +110,9 @@ app.config["BITMASK"].set_resource_monitor(app.config["RESOURCE"])
 # Initialize setpoint override client (UDP port 5007)
 app.config["SETPOINT_OVERRIDE"] = init_setpoint_override(resource_monitor=app.config["RESOURCE"])
 
+# Give the controller the override client so it can lock attitude for docking
+app.config["CONTROLLER"].set_setpoint_override(app.config["SETPOINT_OVERRIDE"])
+
 # Start control loop telemetry receiver (UDP port 5005)
 app.config["CONTROL_TELEM"] = init_control_telemetry(port=5005)
 

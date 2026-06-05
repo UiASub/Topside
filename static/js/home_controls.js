@@ -1,4 +1,4 @@
-// home_controls.js – home dashboard control-mode buttons (frame toggle).
+// home_controls.js – home dashboard control-mode buttons (frame + dock).
 
 function setFrameButton(mode) {
     const btn = document.getElementById("frame-toggle");
@@ -11,11 +11,21 @@ function setFrameButton(mode) {
     if (status) status.textContent = global ? "World / captured heading" : "Body-relative";
 }
 
-async function refreshFrame() {
+function setDockButton(docked) {
+    const btn = document.getElementById("docking-button");
+    if (!btn) return;
+    btn.textContent = docked ? "Docking: LOCKED" : "Docking";
+    btn.classList.toggle("btn-warning", docked);
+    btn.classList.toggle("btn-primary", !docked);
+}
+
+async function refreshControls() {
     try {
-        const res = await fetch("/api/controller/frame");
+        const res = await fetch("/api/command/status", { cache: "no-store" });
         const data = await res.json();
-        if (data.ok) setFrameButton(data.frame);
+        if (!data.ok) return;
+        setFrameButton(data.frame);
+        setDockButton(Boolean(data.docked));
     } catch (error) {
         /* ignore transient errors */
     }
@@ -35,10 +45,23 @@ async function toggleFrame() {
     }
 }
 
+async function toggleDock() {
+    try {
+        const res = await fetch("/api/dock/toggle", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) setDockButton(Boolean(data.docked));
+        else console.error("Dock toggle failed:", data.error);
+    } catch (error) {
+        console.error("Error toggling dock:", error);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const frameBtn = document.getElementById("frame-toggle");
     if (frameBtn) frameBtn.addEventListener("click", toggleFrame);
-    refreshFrame();
-    // Reflect controller-button toggles made on the gamepad.
-    setInterval(refreshFrame, 1000);
+    const dockBtn = document.getElementById("docking-button");
+    if (dockBtn) dockBtn.addEventListener("click", toggleDock);
+    refreshControls();
+    // Reflect toggles made from the gamepad too.
+    setInterval(refreshControls, 1000);
 });
