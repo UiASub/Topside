@@ -95,7 +95,21 @@ def build_controller(controller=None, joystick=None):
         "pitch": 1.0,
         "yaw": 1.0,
     }
+    ctrl._imu = None
+    ctrl._frame_lock = threading.Lock()
+    ctrl._frame_mode = "rov"
+    ctrl._ref_yaw = 0.0
+    ctrl._prev_frame_button = False
     return ctrl
+
+
+class FakeIMU:
+    def __init__(self, yaw=0.0, age_ms=10):
+        self.yaw = yaw
+        self.age_ms = age_ms
+
+    def get_stats(self):
+        return {"age_ms": self.age_ms, "last_data": {"yaw": self.yaw}}
 
 
 def test_sdl_gamecontroller_mapping_normalizes_linux_playstation_layout(monkeypatch):
@@ -196,6 +210,44 @@ def test_set_light_clamps_and_pushes_to_bitmask():
     ctrl.set_light(-1.0)  # clamps to 0.0 -> 0
     assert ctrl.get_light() == 0.0
     assert ctrl.bm.commands[-1]["light"] == 0
+
+
+def test_rov_frame_is_identity():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=45.0))
+    # Default mode is "rov" -> no rotation regardless of yaw.
+    assert ctrl._apply_frame(0.7, -0.3) == (0.7, -0.3)
+
+
+def test_global_frame_rotates_translation_by_relative_yaw():
+    ctrl = build_controller()
+    imu = FakeIMU(yaw=0.0)
+    ctrl.set_imu(imu)
+    ctrl.set_frame_mode("global")  # captures ref_yaw = 0
+    # ROV has since yawed +90°; world-forward (surge=1) maps onto body axes.
+    imu.yaw = 90.0
+    body_surge, body_sway = ctrl._apply_frame(1.0, 0.0)
+    assert body_surge == pytest.approx(0.0, abs=1e-9)
+    assert body_sway == pytest.approx(-1.0, abs=1e-9)
+
+
+def test_global_frame_falls_back_to_rov_when_imu_stale():
+    ctrl = build_controller()
+    imu = FakeIMU(yaw=0.0)
+    ctrl.set_imu(imu)
+    ctrl.set_frame_mode("global")
+    imu.yaw = 90.0
+    imu.age_ms = 5000  # stale -> no rotation
+    assert ctrl._apply_frame(1.0, 0.0) == (1.0, 0.0)
+
+
+def test_toggle_frame_mode_flips_between_rov_and_global():
+    ctrl = build_controller()
+    ctrl.set_imu(FakeIMU(yaw=0.0))
+    assert ctrl.get_frame_mode() == "rov"
+    assert ctrl.toggle_frame_mode() == "global"
+    assert ctrl.get_frame_mode() == "global"
+    assert ctrl.toggle_frame_mode() == "rov"
 
 
 def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):

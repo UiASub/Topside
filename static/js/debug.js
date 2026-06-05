@@ -1014,4 +1014,43 @@
       })
       .catch(function () {});
   }
+
+  // --- Control Frame ---
+  const frameToggle = document.getElementById("debug-frame-toggle");
+
+  function setFrameButton(mode) {
+    if (!frameToggle) return;
+    var global = mode === "global";
+    frameToggle.textContent = "Frame: " + (global ? "GLOBAL" : "ROV");
+    frameToggle.classList.toggle("btn-info", global);
+    frameToggle.classList.toggle("btn-outline-info", !global);
+  }
+
+  async function refreshFrame() {
+    try {
+      var res = await fetch("/api/controller/frame");
+      var data = await res.json();
+      if (data.ok) setFrameButton(data.frame);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  if (frameToggle) {
+    frameToggle.addEventListener("click", async function () {
+      try {
+        var res = await fetch("/api/controller/frame", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toggle: true }),
+        });
+        var data = await res.json();
+        if (data.ok) setFrameButton(data.frame);
+      } catch (e) {
+        /* ignore */
+      }
+    });
+    refreshFrame();
+    setInterval(refreshFrame, 1000);
+  }
 })();

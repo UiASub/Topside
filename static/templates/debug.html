@@ -134,6 +134,24 @@
   </div>
 </div>
 
+<!-- Control Frame -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Control Frame</h5>
+          <button id="debug-frame-toggle" class="btn btn-sm btn-outline-info">Frame: ROV</button>
+        </div>
+        <p class="text-muted small mb-0 mt-2">
+          Toggle between ROV (body-relative) and global (captured-heading) translation.
+          Global rotates surge/sway by the live IMU yaw; it falls back to ROV frame if the IMU is stale.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Accelerometer Axis Mapping -->
 <div class="row g-4 mt-1">
   <div class="col-12">

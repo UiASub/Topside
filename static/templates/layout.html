@@ -177,6 +177,19 @@
 </div>
 
 <div class="row g-4 mt-1">
+  <!-- Control Mode -->
+  <div class="col-12">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">Control Mode</h5>
+        <button id="frame-toggle" type="button" class="btn btn-sm btn-outline-info">Frame: ROV</button>
+        <small id="frame-status" class="text-muted ms-2">Body-relative</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
   <!-- Controller Status -->
   <div class="col-12">
     <div class="card custom-card h-100">
@@ -202,4 +215,5 @@
 <script src="/static/js/depth.js"></script>
 <script src="/static/js/controller.js"></script>
 <script src="/static/js/resource_monitor.js"></script>
+<script src="/static/js/home_controls.js"></script>
 {% endblock %}

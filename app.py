@@ -32,6 +32,9 @@ app.config["CONTROLLER"].start()
 # Start background IMU receiver (UDP port 5002)
 app.config["IMU"] = init_imu_receiver(port=5002)
 
+# Give the controller the IMU so it can do world-frame (global) translation
+app.config["CONTROLLER"].set_imu(app.config["IMU"])
+
 # Tracks ordered ARUCO markers for the pipeline challenge.
 app.config["ARUCO_LOGGER"] = ArucoPipelineLogger()
 
