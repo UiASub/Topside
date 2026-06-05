@@ -283,6 +283,24 @@ class Controller:
         with self._gain_lock:
             return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
 
+    # --- Light API ---
+    def set_light(self, level):
+        """Set light brightness from a normalized 0.0-1.0 level.
+
+        The controller loop owns the light value and resends it every cycle, so
+        the web UI drives this same value rather than fighting it. Also pushes
+        straight to the bitmask so the change applies even when no joystick is
+        connected (and the loop is not calling set_from_axes).
+        """
+        level = max(0.0, min(1.0, float(level)))
+        self.light = level
+        if self.bm:
+            self.bm.set_command(light=int(round(level * 255)))
+
+    def get_light(self):
+        """Return current light brightness as a normalized 0.0-1.0 level."""
+        return self.light
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
         if self.bm:

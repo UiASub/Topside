@@ -283,8 +283,29 @@ def register_routes(app):
 
     @app.route("/api/lights", methods=["GET"])
     def get_lights():
-        """API route for lights data."""
-        return jsonify(data_handler.get_section("lights"))
+        """Return the current light brightness (percent) the controller is sending."""
+        ctrl = current_app.config.get("CONTROLLER")
+        level = ctrl.get_light() if ctrl else 0.0
+        pct = round(level * 100)
+        return jsonify({"level": pct, "light": pct})
+
+    @app.route("/api/lights", methods=["POST"])
+    def set_lights():
+        """Set light brightness. JSON body: {"level": 0..100} (percent)."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        if "level" not in data:
+            return jsonify({"ok": False, "error": "Missing 'level'"}), 400
+        try:
+            pct = float(data["level"])
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid 'level'"}), 400
+        pct = max(0.0, min(100.0, pct))
+        ctrl.set_light(pct / 100.0)
+        pct = round(pct)
+        return jsonify({"ok": True, "level": pct, "light": pct})
 
     @app.route("/api/battery", methods=["GET"])
     def get_battery():

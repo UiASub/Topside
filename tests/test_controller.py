@@ -13,9 +13,13 @@ from lib.controller import Controller
 class FakeBitmask:
     def __init__(self):
         self.calls = []
+        self.commands = []
 
     def set_from_axes(self, **kwargs):
         self.calls.append(kwargs)
+
+    def set_command(self, **kwargs):
+        self.commands.append(kwargs)
 
 
 class FakeSdlController:
@@ -176,6 +180,22 @@ def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypa
     status = ctrl.get_input_status()
     assert status["source"] == "raw_joystick"
     assert status["buttons"][7] == 1.0
+
+
+def test_set_light_clamps_and_pushes_to_bitmask():
+    ctrl = build_controller()
+
+    ctrl.set_light(0.5)
+    assert ctrl.get_light() == pytest.approx(0.5)
+    assert ctrl.bm.commands[-1]["light"] == 128
+
+    ctrl.set_light(2.0)  # clamps to 1.0 -> 255
+    assert ctrl.get_light() == 1.0
+    assert ctrl.bm.commands[-1]["light"] == 255
+
+    ctrl.set_light(-1.0)  # clamps to 0.0 -> 0
+    assert ctrl.get_light() == 0.0
+    assert ctrl.bm.commands[-1]["light"] == 0
 
 
 def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):

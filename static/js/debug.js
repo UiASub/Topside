@@ -971,4 +971,47 @@
     }
     btnAttitudeClear.disabled = false;
   });
+
+  // --- Lights ---
+  const lightSlider = document.getElementById("debug-light-slider");
+  const lightValue = document.getElementById("debug-light-value");
+  let lightPostTimer = null;
+
+  async function postLight(level) {
+    try {
+      await fetch("/api/lights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: level }),
+      });
+    } catch (e) {
+      /* ignore transient send errors */
+    }
+  }
+
+  if (lightSlider) {
+    lightSlider.addEventListener("input", function () {
+      var level = parseInt(lightSlider.value, 10);
+      if (lightValue) lightValue.textContent = level;
+      if (!lightPostTimer) {
+        lightPostTimer = setTimeout(function () {
+          lightPostTimer = null;
+        }, 100);
+        postLight(level);
+      }
+    });
+    lightSlider.addEventListener("change", function () {
+      postLight(parseInt(lightSlider.value, 10));
+    });
+
+    // Initialize from current server value.
+    fetch("/api/lights")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var pct = d.level != null ? d.level : (d.light != null ? d.light : 0);
+        lightSlider.value = pct;
+        if (lightValue) lightValue.textContent = pct;
+      })
+      .catch(function () {});
+  }
 })();
