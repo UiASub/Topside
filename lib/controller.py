@@ -6,6 +6,7 @@ if os.name == "posix":
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
     os.environ["SDL_VIDEODRIVER"] = "dummy"  # Run pygame without video/window on Linux/MacOS
 
+import copy
 import math
 import threading
 import time
@@ -43,6 +44,29 @@ DOCK_TOGGLE_BUTTON_JS = 3
 # Face-down dock-hold targets.
 DOCK_PITCH_DEG = 90.0  # nose-down face-down target (sign confirmed in-water)
 DOCK_GAIN = 0.5  # precision master gain applied while docked
+
+# Default controller mapping: logical action -> physical input. Each entry has a
+# "controller" id (SDL game-controller axis/button) and a "joystick" id (raw
+# joystick fallback index); axis actions also carry "invert". These defaults
+# reproduce the previously-hardcoded bindings and can be overridden from the
+# settings UI (persisted in data/config.json under "controller_map").
+DEFAULT_MAPPING = {
+    # Stick axes (active when the pitch/roll shift is NOT held)
+    "surge": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_LEFTY), "joystick": 1, "invert": True},
+    "sway": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_LEFTX), "joystick": 0, "invert": False},
+    "heave": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_RIGHTY), "joystick": 3, "invert": True},
+    "yaw": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_RIGHTX), "joystick": 2, "invert": False},
+    # Left stick when the pitch/roll shift IS held
+    "pitch": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_LEFTY), "joystick": 1, "invert": True},
+    "roll": {"type": "axis", "controller": int(pygame.CONTROLLER_AXIS_LEFTX), "joystick": 0, "invert": False},
+    # Manipulator open/close (triggers)
+    "manip_pos": {"type": "trigger", "controller": int(pygame.CONTROLLER_AXIS_TRIGGERRIGHT), "joystick": 5},
+    "manip_neg": {"type": "trigger", "controller": int(pygame.CONTROLLER_AXIS_TRIGGERLEFT), "joystick": 4},
+    # Buttons
+    "pitchroll_shift": {"type": "button", "controller": int(pygame.CONTROLLER_BUTTON_LEFTSHOULDER), "joystick": 9},
+    "dock": {"type": "button", "controller": int(DOCK_TOGGLE_BUTTON), "joystick": DOCK_TOGGLE_BUTTON_JS},
+    "frame": {"type": "button", "controller": int(FRAME_TOGGLE_BUTTON), "joystick": FRAME_TOGGLE_BUTTON_JS},
+}
 
 
 class Controller:
@@ -103,6 +127,9 @@ class Controller:
         self._docked = False
         self._saved_gains = None
         self._prev_dock_button = False
+        # Configurable input mapping (logical action -> physical input)
+        self._map_lock = threading.Lock()
+        self._mapping = copy.deepcopy(DEFAULT_MAPPING)
         self._try_connect()
 
     def _try_connect(self):
@@ -163,6 +190,7 @@ class Controller:
             "source": "none",
             "name": None,
             "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+            "axes": [],
         }
 
     def _set_input_status(self, status):
@@ -176,6 +204,7 @@ class Controller:
                 "source": self._input_status["source"],
                 "name": self._input_status["name"],
                 "buttons": list(self._input_status["buttons"]),
+                "axes": list(self._input_status.get("axes", [])),
             }
 
     def calibrate_axes(self):
@@ -270,7 +299,7 @@ class Controller:
         buttons[7] = max(buttons[7], r2)
         return buttons
 
-    def _update_input_status(self, buttons):
+    def _update_input_status(self, buttons, axes=None):
         name = None
         source = "none"
         if self.controller:
@@ -286,6 +315,7 @@ class Controller:
                 "source": source,
                 "name": name,
                 "buttons": buttons,
+                "axes": axes or [],
             }
         )
 
@@ -450,6 +480,65 @@ class Controller:
         with self._dock_lock:
             return self._docked
 
+    # --- Controller mapping API ---
+    def get_mapping(self):
+        with self._map_lock:
+            return copy.deepcopy(self._mapping)
+
+    def set_mapping(self, mapping):
+        """Merge overrides into the input mapping. Unknown actions are ignored."""
+        if isinstance(mapping, dict):
+            with self._map_lock:
+                for action, entry in mapping.items():
+                    if action not in self._mapping or not isinstance(entry, dict):
+                        continue
+                    current = self._mapping[action]
+                    for key in ("controller", "joystick"):
+                        if key in entry:
+                            try:
+                                current[key] = int(entry[key])
+                            except (TypeError, ValueError):
+                                pass
+                    if "invert" in current and "invert" in entry:
+                        current["invert"] = bool(entry["invert"])
+        return self.get_mapping()
+
+    def reset_mapping(self):
+        with self._map_lock:
+            self._mapping = copy.deepcopy(DEFAULT_MAPPING)
+        return self.get_mapping()
+
+    def _map_entry(self, action):
+        with self._map_lock:
+            return dict(self._mapping.get(action) or DEFAULT_MAPPING[action])
+
+    def _mapped_axis(self, action):
+        m = self._map_entry(action)
+        val = self._read_axis(m["controller"], m["joystick"])
+        return -val if m.get("invert") else val
+
+    def _mapped_trigger(self, action):
+        m = self._map_entry(action)
+        return self._read_trigger(m["controller"], m["joystick"])
+
+    def _mapped_button(self, action):
+        m = self._map_entry(action)
+        return self._read_button(m["controller"], m["joystick"])
+
+    def _read_all_axes(self):
+        """Snapshot normalized raw axis values for the press-to-bind UI."""
+        axes = []
+        try:
+            if self.controller:
+                for i in range(6):  # SDL game controller: LX, LY, RX, RY, TL, TR
+                    axes.append(round(self.controller.get_axis(i) / self.CONTROLLER_AXIS_MAX, 3))
+            elif self.joystick:
+                for i in range(self.joystick.get_numaxes()):
+                    axes.append(round(self.joystick.get_axis(i), 3))
+        except _controller_errors():
+            pass
+        return axes
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
         if self.bm:
@@ -499,6 +588,7 @@ class Controller:
                     "source": "debug_override",
                     "name": self.joystick.get_name() if self.joystick else None,
                     "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+                    "axes": [],
                 }
             )
             return  # Skip all joystick processing
@@ -547,25 +637,24 @@ class Controller:
             return
 
         # --- BITMASK OUTPUT ----
-        # Read axes
-        heave = -self._read_axis(pygame.CONTROLLER_AXIS_RIGHTY, 3)  # Right Y (inverted)
-        yaw = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTX, 2)  # Right X
-        # manip is r2 axis minus l2 axis
-        r2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERRIGHT, 5)  # R2 trigger
-        l2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERLEFT, 4)  # L2 trigger
+        # Read axes via the configurable mapping (invert is baked into _mapped_axis)
+        heave = self._mapped_axis("heave")
+        yaw = self._mapped_axis("yaw")
+        # manip is the open trigger minus the close trigger
+        r2 = self._mapped_trigger("manip_pos")
+        l2 = self._mapped_trigger("manip_neg")
         manip = r2 - l2
 
-        # This runs while button 9 is held down L1 to make
-        # surge and sway controls toggleable to pitch and roll
-        left_shoulder = self._read_button(pygame.CONTROLLER_BUTTON_LEFTSHOULDER, 9)
+        # Holding the pitch/roll shift remaps the left stick from surge/sway to pitch/roll
+        left_shoulder = self._mapped_button("pitchroll_shift")
         if left_shoulder:  # Pitch and roll control
-            pitch = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
-            roll = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
+            pitch = self._mapped_axis("pitch")
+            roll = self._mapped_axis("roll")
             surge = 0.0
             sway = 0.0
         else:  # Surge and sway control
-            surge = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
-            sway = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
+            surge = self._mapped_axis("surge")
+            sway = self._mapped_axis("sway")
             pitch = 0.0
             roll = 0.0
 
@@ -582,18 +671,18 @@ class Controller:
         self._prev_dpad_down = dpad_down
 
         # Frame toggle (edge-detected): switch between ROV and global frames
-        frame_pressed = self._read_button(FRAME_TOGGLE_BUTTON, FRAME_TOGGLE_BUTTON_JS)
+        frame_pressed = self._mapped_button("frame")
         if frame_pressed and not self._prev_frame_button:
             self.toggle_frame_mode()
         self._prev_frame_button = frame_pressed
 
         # Dock-hold toggle (edge-detected): lock/unlock face-down attitude
-        dock_pressed = self._read_button(DOCK_TOGGLE_BUTTON, DOCK_TOGGLE_BUTTON_JS)
+        dock_pressed = self._mapped_button("dock")
         if dock_pressed and not self._prev_dock_button:
             self.dock_toggle()
         self._prev_dock_button = dock_pressed
 
-        self._update_input_status(buttons)
+        self._update_input_status(buttons, self._read_all_axes())
 
         # Apply gain to each axis
         surge = self._apply_gain("surge", surge)
