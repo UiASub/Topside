@@ -45,6 +45,16 @@ class Controller:
     CONTROLLER_AXIS_MIN = 32768.0
     VISUALIZER_BUTTON_COUNT = 16
 
+    # Hard cap on light brightness (normalized 0.0-1.0). Enforced for every
+    # input path (D-pad, web slider, debug slider) so brightness can never
+    # exceed this regardless of where the request comes from.
+    MAX_LIGHT = 0.8
+
+    # Raw-joystick D-pad fallback: some controllers (e.g. DualShock 4 on
+    # Windows) expose the D-pad as buttons instead of a hat. Verified mapping.
+    DPAD_UP_BUTTON = 11
+    DPAD_DOWN_BUTTON = 12
+
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
@@ -211,8 +221,15 @@ class Controller:
                 bool(self.controller.get_button(pygame.CONTROLLER_BUTTON_DPAD_DOWN)),
             )
 
-        hat = self.joystick.get_hat(0) if self.joystick.get_numhats() > 0 else (0, 0)
-        return hat[1] > 0, hat[1] < 0
+        if self.joystick.get_numhats() > 0:
+            hat = self.joystick.get_hat(0)
+            return hat[1] > 0, hat[1] < 0
+
+        # No hat (e.g. DualShock 4 on Windows): D-pad is exposed as buttons.
+        num_buttons = self.joystick.get_numbuttons()
+        up = self.DPAD_UP_BUTTON < num_buttons and bool(self.joystick.get_button(self.DPAD_UP_BUTTON))
+        down = self.DPAD_DOWN_BUTTON < num_buttons and bool(self.joystick.get_button(self.DPAD_DOWN_BUTTON))
+        return up, down
 
     def _read_visualizer_buttons(self, l2=0.0, r2=0.0):
         buttons = [0.0] * self.VISUALIZER_BUTTON_COUNT
@@ -282,6 +299,24 @@ class Controller:
         """Multiply a value by its per-axis gain and the master gain."""
         with self._gain_lock:
             return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
+
+    # --- Light API ---
+    def set_light(self, level):
+        """Set light brightness from a normalized 0.0-1.0 level.
+
+        The controller loop owns the light value and resends it every cycle, so
+        the web UI drives this same value rather than fighting it. Also pushes
+        straight to the bitmask so the change applies even when no joystick is
+        connected (and the loop is not calling set_from_axes).
+        """
+        level = max(0.0, min(self.MAX_LIGHT, float(level)))
+        self.light = level
+        if self.bm:
+            self.bm.set_command(light=int(round(level * 255)))
+
+    def get_light(self):
+        """Return current light brightness as a normalized 0.0-1.0 level."""
+        return self.light
 
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
@@ -407,7 +442,7 @@ class Controller:
         buttons = self._read_visualizer_buttons(l2=l2, r2=r2)
 
         if dpad_up and not self._prev_dpad_up:  # Just pressed
-            self.light = min(1.0, self.light + 0.1)  # +10% per press
+            self.light = min(self.MAX_LIGHT, self.light + 0.1)  # +10% per press
         if dpad_down and not self._prev_dpad_down:  # Just pressed
             self.light = max(0, self.light - 0.1)  # -10% per press
 

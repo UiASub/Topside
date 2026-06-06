@@ -116,6 +116,24 @@
   </div>
 </div>
 
+<!-- Lights -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Lights</h5>
+        <p class="text-muted small mb-3">
+          Dimmable light on D6/PA8. Drives the same value the controller D-pad sets.
+        </p>
+        <label for="debug-light-slider" class="form-label small text-light-muted">
+          Brightness: <span id="debug-light-value">0</span>%
+        </label>
+        <input type="range" class="form-range" id="debug-light-slider" min="0" max="80" step="1" value="0">
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Accelerometer Axis Mapping -->
 <div class="row g-4 mt-1">
   <div class="col-12">
