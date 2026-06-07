@@ -8,6 +8,8 @@ latest setpoint/output/error triplets for each axis so the debug UI can render
     setpoint[6] (float32 little-endian, surge..yaw)
     output[6]   (float32 little-endian)
     error[6]    (float32 little-endian)
+    manipulator_deg (float32 little-endian, optional on newer firmware)
+    manipulator_pulse_us (uint16 little-endian, optional on newer firmware)
     crc32 (u32 big-endian)
 
 The CRC covers the bytes up to but excluding the CRC field.
@@ -30,7 +32,9 @@ from lib.runtime_paths import log_path, logs_dir
 CONTROL_TELEM_PORT = 5005
 AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"]
 FLOAT_COUNT = len(AXES) * 3
-PACKET_SIZE = 4 + FLOAT_COUNT * 4 + 4
+OLD_PACKET_SIZE = 4 + FLOAT_COUNT * 4 + 4
+MANIPULATOR_SIZE = struct.calcsize("<fH")
+PACKET_SIZE = OLD_PACKET_SIZE + MANIPULATOR_SIZE
 HISTORY_CAPACITY = 3000  # 5 minutes @ 10 Hz
 LOG_DIR = logs_dir()
 CONTROL_LOG = log_path("control_telemetry.ndjson")
@@ -86,8 +90,11 @@ class ControlTelemetryReceiver:
 
     # Internal helpers -------------------------------------------------
     def _handle_packet(self, data: bytes, addr: tuple[str, int]):
-        if len(data) != PACKET_SIZE:
-            print(f"Control telemetry: invalid packet size from {addr}: {len(data)} bytes (expected {PACKET_SIZE})")
+        if len(data) not in (OLD_PACKET_SIZE, PACKET_SIZE):
+            print(
+                f"Control telemetry: invalid packet size from {addr}: "
+                f"{len(data)} bytes (expected {OLD_PACKET_SIZE} or {PACKET_SIZE})"
+            )
             return
         body = data[:-4]
         crc = struct.unpack("!I", data[-4:])[0]
@@ -96,16 +103,23 @@ class ControlTelemetryReceiver:
             print(f"Control telemetry: CRC mismatch (calc=0x{calc:08X}, recv=0x{crc:08X})")
             return
         sequence = struct.unpack("!I", body[:4])[0]
-        floats = struct.unpack("<" + "f" * FLOAT_COUNT, body[4:])
+        float_end = 4 + FLOAT_COUNT * 4
+        floats = struct.unpack("<" + "f" * FLOAT_COUNT, body[4:float_end])
         setpoints = dict(zip(AXES, floats[0:6]))
         outputs = dict(zip(AXES, floats[6:12]))
         errors = dict(zip(AXES, floats[12:18]))
+        manipulator = {}
+        if len(data) == PACKET_SIZE:
+            manip_offset = float_end
+            manip_deg, manip_pulse_us = struct.unpack("<fH", body[manip_offset : manip_offset + MANIPULATOR_SIZE])
+            manipulator = {"deg": round(manip_deg, 2), "pulse_us": int(manip_pulse_us)}
         snapshot = {
             "sequence": sequence,
             "timestamp": time.time(),
             "setpoint": {k: round(v, 4) for k, v in setpoints.items()},
             "output": {k: round(v, 4) for k, v in outputs.items()},
             "error": {k: round(v, 4) for k, v in errors.items()},
+            "manipulator": manipulator,
         }
         with self._lock:
             self._latest = snapshot

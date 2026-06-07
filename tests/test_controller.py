@@ -74,12 +74,17 @@ class FakeJoystick:
 def build_controller(controller=None, joystick=None):
     ctrl = Controller.__new__(Controller)
     ctrl.bm = FakeBitmask()
+    ctrl.delay_ms = 16
     ctrl.controller = controller
     ctrl.joystick = joystick or FakeJoystick()
     ctrl.axis_offsets = {}
     ctrl.light = 0.0
     ctrl._prev_dpad_up = False
     ctrl._prev_dpad_down = False
+    ctrl._manipulator_deg = 0.0
+    ctrl._manipulator_source = "neutral"
+    ctrl._manipulator_updated = 0.0
+    ctrl._manipulator_lock = threading.Lock()
     ctrl._reconnect_delay = 0
     ctrl._debug_override = None
     ctrl._debug_lock = threading.Lock()
@@ -122,7 +127,7 @@ def test_sdl_gamecontroller_mapping_normalizes_linux_playstation_layout(monkeypa
     assert command["yaw"] == pytest.approx(0.375, rel=1e-3)
     assert command["pitch"] == 0.0
     assert command["roll"] == 0.0
-    assert command["manip"] == 1.0
+    assert command["manip"] == pytest.approx(-0.0144, rel=1e-3)
     assert command["light"] == pytest.approx(0.1, rel=1e-3)
     status = ctrl.get_input_status()
     assert status["connected"] is True
@@ -175,7 +180,7 @@ def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypa
     assert command["sway"] == 0.25
     assert command["heave"] == 0.2
     assert command["yaw"] == 0.4
-    assert command["manip"] == 1.0
+    assert command["manip"] == pytest.approx(-0.0144, rel=1e-3)
     assert command["light"] == pytest.approx(0.1, rel=1e-3)
     status = ctrl.get_input_status()
     assert status["source"] == "raw_joystick"
@@ -189,13 +194,46 @@ def test_set_light_clamps_and_pushes_to_bitmask():
     assert ctrl.get_light() == pytest.approx(0.5)
     assert ctrl.bm.commands[-1]["light"] == 128
 
-    ctrl.set_light(2.0)  # clamps to 1.0 -> 255
-    assert ctrl.get_light() == 1.0
-    assert ctrl.bm.commands[-1]["light"] == 255
+    ctrl.set_light(2.0)  # clamps to MAX_LIGHT -> 204
+    assert ctrl.get_light() == ctrl.MAX_LIGHT
+    assert ctrl.bm.commands[-1]["light"] == 204
 
     ctrl.set_light(-1.0)  # clamps to 0.0 -> 0
     assert ctrl.get_light() == 0.0
     assert ctrl.bm.commands[-1]["light"] == 0
+
+
+def test_set_manipulator_clamps_and_pushes_to_bitmask():
+    ctrl = build_controller()
+
+    state = ctrl.set_manipulator(25)
+    assert state["setpoint_deg"] == 25
+    assert ctrl.bm.commands[-1]["manip"] == 64
+
+    state = ctrl.set_manipulator(100)
+    assert state["setpoint_deg"] == 50.0
+    assert ctrl.bm.commands[-1]["manip"] == 127
+
+    state = ctrl.set_manipulator(-100)
+    assert state["setpoint_deg"] == -50.0
+    assert ctrl.bm.commands[-1]["manip"] == -127
+
+
+def test_l2_nudges_manipulator_counterclockwise(monkeypatch):
+    monkeypatch.setattr(pygame.event, "get", lambda: [])
+    sdl = FakeSdlController(
+        axes={
+            pygame.CONTROLLER_AXIS_TRIGGERLEFT: 32767,
+            pygame.CONTROLLER_AXIS_TRIGGERRIGHT: 0,
+        }
+    )
+    ctrl = build_controller(controller=sdl)
+
+    ctrl.update()
+
+    command = ctrl.bm.calls[-1]
+    assert command["manip"] == pytest.approx(0.0144, rel=1e-3)
+    assert ctrl.get_manipulator()["source"] == "controller"
 
 
 def test_non_linux_connection_uses_raw_joystick_without_sdl_probe(monkeypatch):

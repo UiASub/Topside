@@ -141,6 +141,39 @@ paths:
           schema:
             $ref: "#/definitions/LightsTelemetry"
 
+  /api/manipulator:
+    get:
+      tags: [ROV Command]
+      summary: Get manipulator target and applied telemetry
+      responses:
+        200:
+          description: Current manipulator command state
+          schema:
+            $ref: "#/definitions/ManipulatorTelemetry"
+    post:
+      tags: [ROV Command]
+      summary: Set manipulator target angle
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required: [setpoint_deg]
+            properties:
+              setpoint_deg:
+                type: number
+                minimum: -50
+                maximum: 50
+                example: 15
+      responses:
+        200:
+          description: Updated manipulator command state
+          schema:
+            $ref: "#/definitions/ManipulatorTelemetry"
+        400:
+          description: Missing or invalid setpoint_deg
+
   /api/battery:
     get:
       tags: [Telemetry]
@@ -1121,6 +1154,18 @@ definitions:
         type: integer
         example: 0
 
+  ManipulatorTelemetry:
+    type: object
+    properties:
+      ok: {type: boolean, example: true}
+      target_deg: {type: number, minimum: -50, maximum: 50, example: 15}
+      setpoint_deg: {type: number, minimum: -50, maximum: 50, example: 15}
+      source: {type: string, example: gui}
+      updated_age_ms: {type: number, example: 35.2}
+      applied_deg: {type: number, example: 14.5}
+      pulse_us: {type: integer, example: 1645}
+      telemetry_age_ms: {type: number, example: 82.1}
+
   DepthTelemetry:
     type: object
     properties:
@@ -1166,6 +1211,11 @@ definitions:
         $ref: "#/definitions/AxisValues"
       error:
         $ref: "#/definitions/AxisValues"
+      manipulator:
+        type: object
+        properties:
+          deg: {type: number, example: 14.5}
+          pulse_us: {type: integer, example: 1645}
 
   LogEntry:
     type: object

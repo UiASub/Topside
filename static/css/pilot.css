@@ -402,6 +402,18 @@
   gap: 8px;
   margin-top: 4px;
 }
+.hud-manipulator-panel {
+  width: 260px;
+}
+.hud-manipulator-readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+.hud-manipulator-slider {
+  margin: 0;
+}
 .hud-thr-item {
   display: flex;
   flex-direction: column;

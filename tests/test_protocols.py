@@ -32,6 +32,12 @@ def test_bitmask_packet_big_endian():
     assert pkt[12:] == struct.pack("!I", expected_crc)
 
 
+def test_bitmask_manipulator_is_signed_in_top_byte():
+    assert (bitmask.encode_payload(bitmask.Command(manip=-127)) >> 56) & 0xFF == 1
+    assert (bitmask.encode_payload(bitmask.Command(manip=0)) >> 56) & 0xFF == 128
+    assert (bitmask.encode_payload(bitmask.Command(manip=127)) >> 56) & 0xFF == 255
+
+
 def test_system_reset_packet_crc():
     pkt = system_control_client.build_reset_packet(0x01020304)
     assert pkt[:4] == b"RST1"
@@ -69,10 +75,35 @@ def test_control_telemetry_history(monkeypatch, tmp_path):
     assert latest["sequence"] == sequence
     for axis, value in zip(control_telem.AXES, setpoints):
         assert latest["setpoint"][axis] == pytest.approx(value, rel=1e-4)
+    assert latest["manipulator"] == {}
     history = receiver.get_history(limit=5)
     assert len(history) == 1
     assert history[0]["sequence"] == sequence
     assert handler.last_update is not None
+
+
+def test_control_telemetry_includes_manipulator_fields(monkeypatch, tmp_path):
+    monkeypatch.setattr(control_telem, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(control_telem, "CONTROL_LOG", tmp_path / "control_telemetry.ndjson")
+    receiver = control_telem.ControlTelemetryReceiver(data_handler=DummyHandler())
+    receiver.disable_capture()
+
+    sequence = 3
+    setpoints = [0.0] * 6
+    outputs = [0.0] * 6
+    errors = [0.0] * 6
+    body = (
+        struct.pack("!I", sequence)
+        + struct.pack("<" + "f" * 18, *(setpoints + outputs + errors))
+        + struct.pack("<fH", -12.5, 1375)
+    )
+    packet = body + struct.pack("!I", crc.crc32_ieee(body))
+
+    receiver._handle_packet(packet, ("127.0.0.1", 5005))  # pylint: disable=protected-access
+
+    latest = receiver.get_latest()
+    assert latest["sequence"] == sequence
+    assert latest["manipulator"] == {"deg": -12.5, "pulse_us": 1375}
 
 
 def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
