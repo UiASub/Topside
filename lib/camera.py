@@ -38,12 +38,74 @@ class ArUcoMarkerDetector:
 
 def _process_aruco_frame(frame, detector, marker_logger):
     if detector is None:
-        return frame
+        return _draw_aruco_region_overlay(frame, marker_logger)
+
     corners, ids, _rejected = detector.detect_markers(frame)
     detections = detector.marker_detections(corners, ids)
     if marker_logger is not None:
-        marker_logger.record_visible(detections)
-    return detector.draw_detected_markers(frame, corners, ids)
+        marker_logger.record_visible(detections, frame.shape[:2])
+    if _marker_overlay_enabled(marker_logger):
+        frame = detector.draw_detected_markers(frame, corners, ids)
+    return _draw_aruco_region_overlay(frame, marker_logger)
+
+
+def _marker_overlay_enabled(marker_logger):
+    if marker_logger is None:
+        return True
+    return marker_logger.marker_overlay_enabled()
+
+
+def _draw_aruco_region_overlay(frame, marker_logger):
+    if marker_logger is None:
+        return frame
+
+    region = marker_logger.region_for_frame(frame.shape[:2])
+    if region is None:
+        return frame
+
+    x = region["x"]
+    y = region["y"]
+    width = region["width"]
+    height = region["height"]
+    frame_height, frame_width = frame.shape[:2]
+    x2 = min(frame_width, x + width)
+    y2 = min(frame_height, y + height)
+
+    overlay = frame.copy()
+    shade = (0, 0, 0)
+    cv2.rectangle(overlay, (0, 0), (frame_width, y), shade, -1)
+    cv2.rectangle(overlay, (0, y2), (frame_width, frame_height), shade, -1)
+    cv2.rectangle(overlay, (0, y), (x, y2), shade, -1)
+    cv2.rectangle(overlay, (x2, y), (frame_width, y2), shade, -1)
+    cv2.addWeighted(overlay, 0.38, frame, 0.62, 0, frame)
+
+    color = (0, 255, 170)
+    cv2.rectangle(frame, (x, y), (x2, y2), color, 2)
+    tick = max(12, min(frame_width, frame_height) // 28)
+    for start, end in (
+        ((x, y), (x + tick, y)),
+        ((x, y), (x, y + tick)),
+        ((x2, y), (x2 - tick, y)),
+        ((x2, y), (x2, y + tick)),
+        ((x, y2), (x + tick, y2)),
+        ((x, y2), (x, y2 - tick)),
+        ((x2, y2), (x2 - tick, y2)),
+        ((x2, y2), (x2, y2 - tick)),
+    ):
+        cv2.line(frame, start, end, (0, 222, 255), 3)
+
+    font_scale = max(0.45, min(frame_width, frame_height) / 1200)
+    cv2.putText(
+        frame,
+        "ARUCO LOG AREA",
+        (x + 8, max(18, y - 8)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale,
+        color,
+        1,
+        cv2.LINE_AA,
+    )
+    return frame
 
 
 class DefaultCameraReceiver:

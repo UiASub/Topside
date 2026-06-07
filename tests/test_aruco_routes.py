@@ -40,3 +40,69 @@ def test_aruco_log_routes_report_missing_logger():
 
     assert res.status_code == 503
     assert res.get_json()["ok"] is False
+
+
+def test_aruco_log_csv_export_downloads_snapshot():
+    logger = ArucoPipelineLogger()
+    logger.start()
+    logger.record_visible([{"id": 5, "center": (10, 10)}])
+    client = _client_with_logger(logger)
+
+    res = client.get("/api/aruco-log/export.csv")
+
+    assert res.status_code == 200
+    assert res.mimetype == "text/csv"
+    assert "attachment" in res.headers["Content-Disposition"]
+    assert res.get_data(as_text=True).splitlines()[0] == "order,id,seen_at"
+    assert res.get_data(as_text=True).splitlines()[1].startswith("1,5,")
+
+
+def test_aruco_log_csv_export_reports_missing_logger():
+    client = _client_with_logger()
+
+    res = client.get("/api/aruco-log/export.csv")
+
+    assert res.status_code == 503
+    assert res.get_json()["ok"] is False
+
+
+def test_aruco_log_region_route_updates_scale():
+    logger = ArucoPipelineLogger()
+    client = _client_with_logger(logger)
+
+    res = client.post("/api/aruco-log/region", json={"scale": 0.45})
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["log"]["region_scale"] == 0.45
+
+
+def test_aruco_log_region_route_reports_missing_logger():
+    client = _client_with_logger()
+
+    res = client.post("/api/aruco-log/region", json={"scale": 0.45})
+
+    assert res.status_code == 503
+    assert res.get_json()["ok"] is False
+
+
+def test_aruco_log_marker_overlay_route_updates_state():
+    logger = ArucoPipelineLogger()
+    client = _client_with_logger(logger)
+
+    res = client.post("/api/aruco-log/marker-overlay", json={"enabled": False})
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["log"]["marker_overlay_enabled"] is False
+
+
+def test_aruco_log_marker_overlay_route_reports_missing_logger():
+    client = _client_with_logger()
+
+    res = client.post("/api/aruco-log/marker-overlay", json={"enabled": False})
+
+    assert res.status_code == 503
+    assert res.get_json()["ok"] is False

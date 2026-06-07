@@ -24,8 +24,14 @@
     state: null,
     toggleBtn: null,
     clearBtn: null,
+    saveBtn: null,
+    markerOverlayBtn: null,
+    scaleInput: null,
+    scaleValue: null,
     visible: null,
+    outside: null,
     log: null,
+    scaleTimer: null,
   };
 
   function setCameraState(state, label) {
@@ -289,9 +295,26 @@
     if (aruco.toggleBtn) {
       aruco.toggleBtn.textContent = aruco.enabled ? "Stop" : "Start";
     }
+    if (aruco.markerOverlayBtn && log) {
+      const markerOverlayEnabled = log.marker_overlay_enabled !== false;
+      aruco.markerOverlayBtn.textContent = markerOverlayEnabled ? "Markers On" : "Markers Off";
+      aruco.markerOverlayBtn.classList.toggle("is-on", markerOverlayEnabled);
+      aruco.markerOverlayBtn.setAttribute("aria-pressed", markerOverlayEnabled ? "true" : "false");
+    }
     if (aruco.visible) {
       const visibleIds = log && Array.isArray(log.visible_ids) ? log.visible_ids : [];
       aruco.visible.textContent = visibleIds.length > 0 ? visibleIds.join(", ") : "--";
+    }
+    if (aruco.outside) {
+      const outsideIds = log && Array.isArray(log.outside_ids) ? log.outside_ids : [];
+      aruco.outside.textContent = outsideIds.length > 0 ? outsideIds.join(", ") : "--";
+    }
+    if (log && Number.isFinite(Number(log.region_scale))) {
+      const scalePercent = Math.round(Number(log.region_scale) * 100);
+      if (aruco.scaleValue) aruco.scaleValue.textContent = `${scalePercent}%`;
+      if (aruco.scaleInput && document.activeElement !== aruco.scaleInput) {
+        aruco.scaleInput.value = String(scalePercent);
+      }
     }
     if (aruco.log) {
       const entries = log && Array.isArray(log.entries) ? log.entries : [];
@@ -320,11 +343,79 @@
     } catch (_) { /* silent */ }
   }
 
+  async function postArucoRegionScale(scalePercent) {
+    try {
+      const res = await fetch("/api/aruco-log/region", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scale: Number(scalePercent) / 100 }),
+      });
+      const data = await res.json();
+      if (data.ok) renderArucoLog(data.log);
+    } catch (_) { /* silent */ }
+  }
+
+  async function postArucoMarkerOverlay(enabled) {
+    try {
+      const res = await fetch("/api/aruco-log/marker-overlay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json();
+      if (data.ok) renderArucoLog(data.log);
+    } catch (_) { /* silent */ }
+  }
+
+  function arucoDownloadName() {
+    const now = new Date();
+    const ts = now.getFullYear() +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0") + "_" +
+      String(now.getHours()).padStart(2, "0") +
+      String(now.getMinutes()).padStart(2, "0") +
+      String(now.getSeconds()).padStart(2, "0");
+    return `aruco_log_${ts}.csv`;
+  }
+
+  function filenameFromDisposition(disposition) {
+    if (!disposition) return null;
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    return match ? match[1] : null;
+  }
+
+  async function saveArucoLog() {
+    if (!aruco.saveBtn) return;
+    aruco.saveBtn.disabled = true;
+    try {
+      const res = await fetch("/api/aruco-log/export.csv");
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filenameFromDisposition(res.headers.get("Content-Disposition")) || arucoDownloadName();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (_) {
+      /* silent */
+    } finally {
+      aruco.saveBtn.disabled = false;
+    }
+  }
+
   function initArucoControls() {
     aruco.state = document.getElementById("hud-aruco-state");
     aruco.toggleBtn = document.getElementById("hud-aruco-toggle");
     aruco.clearBtn = document.getElementById("hud-aruco-clear");
+    aruco.saveBtn = document.getElementById("hud-aruco-save");
+    aruco.markerOverlayBtn = document.getElementById("hud-aruco-marker-overlay");
+    aruco.scaleInput = document.getElementById("hud-aruco-scale");
+    aruco.scaleValue = document.getElementById("hud-aruco-scale-value");
     aruco.visible = document.getElementById("hud-aruco-visible");
+    aruco.outside = document.getElementById("hud-aruco-outside");
     aruco.log = document.getElementById("hud-aruco-log");
 
     if (aruco.toggleBtn) {
@@ -334,6 +425,25 @@
     }
     if (aruco.clearBtn) {
       aruco.clearBtn.addEventListener("click", () => postArucoAction("clear"));
+    }
+    if (aruco.saveBtn) {
+      aruco.saveBtn.addEventListener("click", saveArucoLog);
+    }
+    if (aruco.markerOverlayBtn) {
+      aruco.markerOverlayBtn.addEventListener("click", () => {
+        postArucoMarkerOverlay(aruco.markerOverlayBtn.getAttribute("aria-pressed") !== "true");
+      });
+    }
+    if (aruco.scaleInput) {
+      aruco.scaleInput.addEventListener("input", () => {
+        if (aruco.scaleValue) aruco.scaleValue.textContent = `${aruco.scaleInput.value}%`;
+        clearTimeout(aruco.scaleTimer);
+        aruco.scaleTimer = setTimeout(() => postArucoRegionScale(aruco.scaleInput.value), 120);
+      });
+      aruco.scaleInput.addEventListener("change", () => {
+        clearTimeout(aruco.scaleTimer);
+        postArucoRegionScale(aruco.scaleInput.value);
+      });
     }
   }
 

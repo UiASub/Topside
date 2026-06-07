@@ -22,6 +22,8 @@ tags:
     description: Camera status and MJPEG streams
   - name: Telemetry
     description: ROV telemetry, sensors, logs, and live control data
+  - name: ARUCO
+    description: Pipeline challenge marker logging
   - name: ROV Command
     description: Manual command output and uplink state
   - name: IMU
@@ -271,6 +273,150 @@ paths:
                 type: array
                 items:
                   $ref: "#/definitions/LogEntry"
+
+  /api/aruco-log:
+    get:
+      tags: [ARUCO]
+      summary: Get ordered ARUCO marker sightings
+      responses:
+        200:
+          description: Current ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/start:
+    post:
+      tags: [ARUCO]
+      summary: Start ordered ARUCO marker logging
+      responses:
+        200:
+          description: Updated ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/stop:
+    post:
+      tags: [ARUCO]
+      summary: Stop ordered ARUCO marker logging
+      responses:
+        200:
+          description: Updated ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/clear:
+    post:
+      tags: [ARUCO]
+      summary: Clear ordered ARUCO marker sightings
+      responses:
+        200:
+          description: Cleared ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/region:
+    post:
+      tags: [ARUCO]
+      summary: Set the centered ARUCO logging region scale
+      parameters:
+        - in: body
+          name: region
+          required: true
+          schema:
+            type: object
+            properties:
+              scale:
+                type: number
+                minimum: 0.2
+                maximum: 1.0
+                example: 0.7
+      responses:
+        200:
+          description: Updated ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/marker-overlay:
+    post:
+      tags: [ARUCO]
+      summary: Enable or disable ARUCO marker outlines in the camera feed
+      parameters:
+        - in: body
+          name: marker_overlay
+          required: true
+          schema:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                example: true
+      responses:
+        200:
+          description: Updated ARUCO log state
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+                example: true
+              log:
+                $ref: "#/definitions/ArucoLogState"
+        503:
+          description: ARUCO logger is unavailable
+
+  /api/aruco-log/export.csv:
+    get:
+      tags: [ARUCO]
+      summary: Download ordered ARUCO marker sightings as CSV
+      produces:
+        - text/csv
+      responses:
+        200:
+          description: CSV attachment with columns order,id,seen_at
+          schema:
+            type: file
+        503:
+          description: ARUCO logger is unavailable
 
   /api/setpoint/status:
     get:
@@ -1181,6 +1327,52 @@ definitions:
       message:
         type: string
         example: control loop started
+
+  ArucoLogEntry:
+    type: object
+    properties:
+      order:
+        type: integer
+        example: 1
+      id:
+        type: integer
+        example: 12
+      seen_at:
+        type: string
+        format: date-time
+        example: "2026-05-28T13:45:10Z"
+
+  ArucoLogState:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        example: true
+      entries:
+        type: array
+        items:
+          $ref: "#/definitions/ArucoLogEntry"
+      visible_ids:
+        type: array
+        items:
+          type: integer
+        example: [12, 15]
+      outside_ids:
+        type: array
+        items:
+          type: integer
+        example: [4]
+      duplicate_count:
+        type: integer
+        example: 3
+      region_scale:
+        type: number
+        minimum: 0.2
+        maximum: 1.0
+        example: 0.7
+      marker_overlay_enabled:
+        type: boolean
+        example: true
 
   SetpointOverrideState:
     type: object

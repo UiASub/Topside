@@ -45,16 +45,20 @@ def test_default_camera_start_returns_before_device_opens(monkeypatch):
 
 
 class FakeArucoDetector:
+    def __init__(self):
+        self.draw_calls = 0
+
     def detect_markers(self, frame):
         return [], None, []
 
     def marker_detections(self, corners, ids):
         return [
-            {"id": 3, "center": (300, 100)},
-            {"id": 2, "center": (200, 100)},
+            {"id": 3, "center": (12, 10)},
+            {"id": 2, "center": (8, 10)},
         ]
 
     def draw_detected_markers(self, frame, corners, ids):
+        self.draw_calls += 1
         return frame
 
 
@@ -70,3 +74,20 @@ def test_ip_camera_frame_updates_aruco_logger():
     assert [entry["id"] for entry in snapshot["entries"]] == [2, 3]
     assert snapshot["visible_ids"] == [2, 3]
     assert camera.get_latest_jpeg() is not None
+
+
+def test_ip_camera_marker_overlay_can_be_disabled():
+    logger = ArucoPipelineLogger()
+    logger.set_marker_overlay_enabled(False)
+    camera = IPCameraReceiver("rtsp://example.invalid/stream", marker_logger=logger)
+    detector = FakeArucoDetector()
+    camera._detector = detector
+
+    camera._set_frame(np.zeros((20, 20, 3), dtype=np.uint8))
+
+    assert detector.draw_calls == 0
+
+    logger.set_marker_overlay_enabled(True)
+    camera._set_frame(np.zeros((20, 20, 3), dtype=np.uint8))
+
+    assert detector.draw_calls == 1

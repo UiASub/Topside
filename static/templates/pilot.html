@@ -111,9 +111,22 @@
         <div class="hud-aruco-actions">
           <button type="button" id="hud-aruco-toggle" class="pilot-feed-btn">Start</button>
           <button type="button" id="hud-aruco-clear" class="pilot-feed-btn">Clear</button>
+          <button type="button" id="hud-aruco-save" class="pilot-feed-btn">Save</button>
+        </div>
+        <div class="hud-aruco-overlay-actions">
+          <button type="button" id="hud-aruco-marker-overlay" class="pilot-feed-btn is-on" aria-pressed="true">Markers On</button>
+        </div>
+        <div class="hud-aruco-scale">
+          <div class="hud-aruco-scale-head">
+            <span class="hud-label-sm">AREA</span>
+            <span class="hud-mono" id="hud-aruco-scale-value">70%</span>
+          </div>
+          <input type="range" id="hud-aruco-scale" min="20" max="100" step="5" value="70">
         </div>
         <div class="hud-label-sm">VISIBLE</div>
         <div class="hud-mono hud-aruco-visible" id="hud-aruco-visible">--</div>
+        <div class="hud-label-sm">OUTSIDE</div>
+        <div class="hud-mono hud-aruco-outside" id="hud-aruco-outside">--</div>
         <div class="hud-label-sm hud-aruco-log-label">ORDER</div>
         <ol class="hud-aruco-log" id="hud-aruco-log"></ol>
       </div>
