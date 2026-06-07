@@ -49,6 +49,20 @@ def _process_aruco_frame(frame, detector, marker_logger):
     return _draw_aruco_region_overlay(frame, marker_logger)
 
 
+def _process_aruco_jpeg(jpg, detector, marker_logger, jpeg_quality=70):
+    if detector is None and marker_logger is None:
+        return jpg
+
+    data = np.frombuffer(jpg, dtype=np.uint8)
+    frame = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    if frame is None:
+        return jpg
+
+    frame = _process_aruco_frame(frame, detector, marker_logger)
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+    return buf.tobytes() if ok else jpg
+
+
 def _marker_overlay_enabled(marker_logger):
     if marker_logger is None:
         return True
@@ -568,7 +582,7 @@ class RPiCameraReceiver:
                 if not had_frame:
                     print("[RPi Camera] ✓ Receiving frames")
                     had_frame = True
-                # JPEG is already encoded by GStreamer; avoid re-decode/re-encode.
+                jpg = _process_aruco_jpeg(jpg, self._detector, self.marker_logger, self.jpeg_quality)
                 self._set_jpeg_bytes(jpg)
 
             if self._is_stream_stale():
@@ -754,6 +768,8 @@ class IPCameraReceiver:
 
     def _set_frame(self, frame):
         frame = _process_aruco_frame(frame, self._detector, self.marker_logger)
+        if frame.shape[1] != self.out_width or frame.shape[0] != self.out_height:
+            frame = cv2.resize(frame, (self.out_width, self.out_height))
         ok, buf = cv2.imencode(
             ".jpg",
             frame,
@@ -830,8 +846,6 @@ class IPCameraReceiver:
                     print("[IP Camera] ✓ Receiving frames")
                     had_frame = True
 
-                if frame.shape[1] != self.out_width or frame.shape[0] != self.out_height:
-                    frame = cv2.resize(frame, (self.out_width, self.out_height))
                 if self.flip_180:
                     frame = cv2.rotate(frame, cv2.ROTATE_180)
 

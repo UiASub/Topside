@@ -151,7 +151,4 @@ def _marker_inside_region(marker, region):
     if center is None or len(center) < 2:
         return False
     x, y = center[0], center[1]
-    return (
-        region["x"] <= x <= region["x"] + region["width"]
-        and region["y"] <= y <= region["y"] + region["height"]
-    )
+    return region["x"] <= x <= region["x"] + region["width"] and region["y"] <= y <= region["y"] + region["height"]
