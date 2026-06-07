@@ -340,6 +340,7 @@ def register_routes(app):
                 "ok": True,
                 "uplink": uplink,
                 "controller": controller_state,
+                "frame": controller.get_frame_mode() if controller else "rov",
                 "udp_rx_count": udp_rx,
                 "udp_rx_errors": udp_err,
                 "override": state,
@@ -707,6 +708,28 @@ def register_routes(app):
                 "override": neutral,
             }
         )
+
+    # --- Control frame endpoints ---
+    @app.route("/api/controller/frame", methods=["GET"])
+    def get_frame():
+        """Return the current control frame ('rov' or 'global')."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify({"ok": True, "frame": ctrl.get_frame_mode()})
+
+    @app.route("/api/controller/frame", methods=["POST"])
+    def set_frame():
+        """Set the control frame. JSON: {"mode": "rov"|"global"} or {"toggle": true}."""
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        if data.get("toggle"):
+            mode = ctrl.toggle_frame_mode()
+        else:
+            mode = ctrl.set_frame_mode(data.get("mode", "rov"))
+        return jsonify({"ok": True, "frame": mode})
 
     # --- Gain endpoints ---
     @app.route("/api/controller/gains", methods=["GET"])

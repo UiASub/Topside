@@ -6,6 +6,7 @@ if os.name == "posix":
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
     os.environ["SDL_VIDEODRIVER"] = "dummy"  # Run pygame without video/window on Linux/MacOS
 
+import math
 import threading
 import time
 
@@ -30,6 +31,12 @@ def _controller_errors():
     if sdl2 is not None:
         errors.append(sdl2.error)
     return tuple(errors)
+
+
+# Controller button bindings: (SDL game-controller button, raw-joystick fallback index).
+# Defaults; overridable later via the controller-mapping settings.
+FRAME_TOGGLE_BUTTON = pygame.CONTROLLER_BUTTON_B
+FRAME_TOGGLE_BUTTON_JS = 1
 
 
 class Controller:
@@ -87,6 +94,13 @@ class Controller:
             "pitch": 1.0,
             "yaw": 1.0,
         }
+        # IMU receiver (injected from app.py) for world-frame translation
+        self._imu = None
+        # Control frame: "rov" (body-relative) or "global" (captured heading)
+        self._frame_lock = threading.Lock()
+        self._frame_mode = "rov"
+        self._ref_yaw = 0.0
+        self._prev_frame_button = False
         self._try_connect()
 
     def _try_connect(self):
@@ -318,6 +332,72 @@ class Controller:
         """Return current light brightness as a normalized 0.0-1.0 level."""
         return self.light
 
+    # --- Control frame API ---
+    def set_imu(self, imu):
+        """Inject the IMU receiver used for world-frame translation."""
+        self._imu = imu
+
+    def _current_yaw_fresh(self, max_age_ms=500):
+        """Return the latest IMU yaw (deg) if fresh, else None."""
+        imu = self._imu
+        if imu is None:
+            return None
+        try:
+            stats = imu.get_stats()
+        except Exception:
+            return None
+        age = stats.get("age_ms")
+        if age is None or age > max_age_ms:
+            return None
+        yaw = (stats.get("last_data") or {}).get("yaw")
+        try:
+            return float(yaw)
+        except (TypeError, ValueError):
+            return None
+
+    def set_frame_mode(self, mode):
+        """Set the control frame ('rov' or 'global'); capture heading on global."""
+        mode = "global" if str(mode).lower() == "global" else "rov"
+        captured = self._current_yaw_fresh()
+        with self._frame_lock:
+            self._frame_mode = mode
+            if mode == "global":
+                self._ref_yaw = captured if captured is not None else 0.0
+        return mode
+
+    def toggle_frame_mode(self):
+        """Flip between 'rov' and 'global' frames."""
+        with self._frame_lock:
+            current = self._frame_mode
+        return self.set_frame_mode("rov" if current == "global" else "global")
+
+    def get_frame_mode(self):
+        with self._frame_lock:
+            return self._frame_mode
+
+    def _apply_frame(self, surge, sway):
+        """Rotate horizontal translation into the body frame when in global mode.
+
+        Global mode keeps 'forward' pointing at the heading captured when the
+        mode was enabled, regardless of how the ROV has since yawed. Falls back
+        to ROV (body) frame when the IMU yaw is missing or stale. The rotation
+        sign is the single place to flip if in-water testing shows it inverted.
+        """
+        with self._frame_lock:
+            mode = self._frame_mode
+            ref = self._ref_yaw
+        if mode != "global":
+            return surge, sway
+        yaw = self._current_yaw_fresh()
+        if yaw is None:
+            return surge, sway
+        delta = math.radians(yaw - ref)
+        cos_d = math.cos(delta)
+        sin_d = math.sin(delta)
+        body_surge = surge * cos_d + sway * sin_d
+        body_sway = -surge * sin_d + sway * cos_d
+        return body_surge, body_sway
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
         if self.bm:
@@ -448,6 +528,13 @@ class Controller:
 
         self._prev_dpad_up = dpad_up
         self._prev_dpad_down = dpad_down
+
+        # Frame toggle (edge-detected): switch between ROV and global frames
+        frame_pressed = self._read_button(FRAME_TOGGLE_BUTTON, FRAME_TOGGLE_BUTTON_JS)
+        if frame_pressed and not self._prev_frame_button:
+            self.toggle_frame_mode()
+        self._prev_frame_button = frame_pressed
+
         self._update_input_status(buttons)
 
         # Apply gain to each axis
@@ -457,6 +544,9 @@ class Controller:
         roll = self._apply_gain("roll", roll)
         pitch = self._apply_gain("pitch", pitch)
         yaw = self._apply_gain("yaw", yaw)
+
+        # World/global frame: rotate horizontal translation by IMU yaw if enabled
+        surge, sway = self._apply_frame(surge, sway)
 
         # Send to ROV!
         if self.bm:
