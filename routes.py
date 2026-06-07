@@ -1,6 +1,7 @@
 import json
 import math
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from flask import Response, current_app, jsonify, render_template, request, send_from_directory
@@ -101,6 +102,10 @@ def _send_full_axis_config():
     accel_axes = config_handler.get_section("accel_axes") or _DEFAULT_ACCEL_AXES
     offset = config_handler.get_section("imu_offset") or _DEFAULT_OFFSET
     send_axis_config(imu_axes=imu_axes, accel_axes=accel_axes, offset=offset)
+
+
+def _download_timestamp():
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
 # Default resource data (used when no telemetry received)
@@ -270,6 +275,36 @@ def register_routes(app):
         if not logger:
             return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
         return jsonify({"ok": True, "log": logger.clear()})
+
+    @app.route("/api/aruco-log/region", methods=["POST"])
+    def set_aruco_log_region():
+        """Set the centered ARUCO logging region scale."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        payload = request.get_json(silent=True) or {}
+        return jsonify({"ok": True, "log": logger.set_region_scale(payload.get("scale"))})
+
+    @app.route("/api/aruco-log/marker-overlay", methods=["POST"])
+    def set_aruco_marker_overlay():
+        """Enable or disable ARUCO marker outlines in the camera feed."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        payload = request.get_json(silent=True) or {}
+        return jsonify({"ok": True, "log": logger.set_marker_overlay_enabled(bool(payload.get("enabled")))})
+
+    @app.route("/api/aruco-log/export.csv", methods=["GET"])
+    def export_aruco_log_csv():
+        """Download ordered ARUCO marker sightings as CSV."""
+        logger = current_app.config.get("ARUCO_LOGGER")
+        if not logger:
+            return jsonify({"ok": False, "error": "ARUCO logger unavailable"}), 503
+        filename = f"aruco_log_{_download_timestamp()}.csv"
+        response = Response(logger.to_csv(), mimetype="text/csv")
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.route("/api/thrusters", methods=["GET"])
     def get_thrusters():
