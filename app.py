@@ -9,6 +9,7 @@ from lib.bitmask import init_bitmask
 from lib.camera import init_camera, init_ip_camera, init_rpi_camera
 from lib.control_telemetry import init_control_telemetry
 from lib.controller import Controller
+from lib.depth_receiver import DepthTelemetryReceiver
 from lib.json_data_handler import JSONDataHandler
 from lib.log_udp_receiver import init_log_stream
 from lib.net_transport import DEFAULT_ROV_HOST
@@ -29,8 +30,15 @@ app.config["BITMASK"] = init_bitmask(rate_hz=20.0, host=DEFAULT_ROV_HOST, port=1
 app.config["CONTROLLER"] = Controller(bitmask_client=app.config["BITMASK"], rate_hz=60.0)
 app.config["CONTROLLER"].start()
 
-# Start background IMU receiver (UDP port 5002)
-app.config["IMU"] = init_imu_receiver(port=5002)
+# Start background sensor receiver (UDP port 5002). IMU and depth are separate
+# components, but the MCU currently sends both in the same JSON datagram.
+_sensor_data = JSONDataHandler()
+app.config["DEPTH"] = DepthTelemetryReceiver(data_handler=_sensor_data)
+app.config["IMU"] = init_imu_receiver(
+    port=5002,
+    data_handler=_sensor_data,
+    depth_receiver=app.config["DEPTH"],
+)
 
 # Tracks ordered ARUCO markers for the pipeline challenge.
 app.config["ARUCO_LOGGER"] = ArucoPipelineLogger()

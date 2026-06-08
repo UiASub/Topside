@@ -1,11 +1,16 @@
+import json
 import struct
 
 import pytest
+from flask import Flask
 
 import lib.control_telemetry as control_telem
+import lib.depth_receiver as depth_telem
+import lib.ninedof_receiver as ninedof
 import lib.resource_receiver as resource_telem
 from lib import axis_config_sender, bitmask, crc, net_transport, pid_config_client, system_control_client
 from lib.json_data_handler import JSONDataHandler
+from routes import register_routes
 
 
 class DummyHandler:
@@ -14,6 +19,49 @@ class DummyHandler:
 
     def update_data(self, payload):
         self.last_update = payload
+
+
+class DummyDepthReceiver:
+    def __init__(self):
+        self.last_payload = None
+
+    def process_payload(self, payload):
+        self.last_payload = payload
+
+
+class DummyImu:
+    def get_stats(self):
+        return {
+            "age_ms": 100,
+            "last_data": {"roll": 12.5, "pitch": -3.0, "yaw": 181.0},
+        }
+
+
+class DummySetpointOverride:
+    def __init__(self):
+        self.cleared = False
+        self.sent_axes = None
+
+    def clear_override(self):
+        self.cleared = True
+
+    def send_override(self, axes, replay_attempts=3, replay_delay=0.05):
+        self.sent_axes = dict(axes)
+        return {"active": True, "axes": dict(axes)}
+
+    def set_error(self, message):
+        self.error = message
+
+
+class DummyManualOverride:
+    def __init__(self):
+        self.last_axes = None
+
+    def set_debug_override(self, axes):
+        self.last_axes = dict(axes)
+
+    def set_from_axes(self, **axes):
+        self.last_axes = dict(axes)
 
 
 def test_crc32_ieee_standard_vector():
@@ -144,6 +192,108 @@ def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
         }
     }
     assert receiver.get_udp_counters() == (84, 0)
+
+
+def test_depth_receiver_normalizes_ms5837_payload():
+    handler = DummyHandler()
+    receiver = depth_telem.DepthTelemetryReceiver(data_handler=handler)
+
+    result = receiver.process_payload(
+        {
+            "dpt": "1.234",
+            "dptSet": 2,
+            "pressure_mbar": 1013.26,
+            "temperature_c": "18.5",
+            "valid": "true",
+            "age_ms": 42.4,
+            "addr": 118,
+            "last_error": -5,
+            "init_attempts": 3,
+            "read_errors": 1,
+        }
+    )
+
+    assert result == {
+        "dpt": 1.23,
+        "dptSet": 2.0,
+        "pressure_mbar": 1013.3,
+        "temperature_c": 18.5,
+        "valid": True,
+        "age_ms": 42.0,
+        "addr": 118.0,
+        "last_error": -5.0,
+        "init_attempts": 3.0,
+        "read_errors": 1.0,
+    }
+    assert handler.last_update == {"depth": result}
+
+
+def test_pid_start_sends_only_attitude_setpoints():
+    app = Flask(__name__)
+    register_routes(app)
+    imu = DummyImu()
+    setpoint_client = DummySetpointOverride()
+    controller = DummyManualOverride()
+    bitmask_client = DummyManualOverride()
+    app.config.update(
+        IMU=imu,
+        SETPOINT_OVERRIDE=setpoint_client,
+        CONTROLLER=controller,
+        BITMASK=bitmask_client,
+    )
+
+    response = app.test_client().post("/api/pid/start")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["setpoints"] == {"roll": 12.5, "pitch": -3.0, "yaw": -179.0}
+    assert setpoint_client.cleared is True
+    assert setpoint_client.sent_axes == data["setpoints"]
+    assert "heave" not in setpoint_client.sent_axes
+    assert controller.last_axes == {"surge": 0.0, "sway": 0.0, "heave": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
+    assert bitmask_client.last_axes == controller.last_axes
+
+
+def test_imu_receiver_delegates_depth_payload(monkeypatch, tmp_path):
+    monkeypatch.setattr(ninedof, "IMU_LOG", tmp_path / "imu_raw.ndjson")
+    handler = DummyHandler()
+    depth_receiver = DummyDepthReceiver()
+    receiver = ninedof.IMUReceiver(data_handler=handler, depth_receiver=depth_receiver)
+
+    depth_payload = {
+        "dpt": 0.0,
+        "dptSet": 0.0,
+        "pressure_mbar": 0.0,
+        "temperature_c": 0.0,
+        "valid": False,
+        "age_ms": -1,
+        "addr": 0,
+        "last_error": -5,
+        "init_attempts": 39,
+        "read_errors": 0,
+    }
+    packet = json.dumps(
+        {
+            "imu": {
+                "yaw": -126.98,
+                "pitch": -5.45,
+                "roll": 179.55,
+                "yr": 0.03,
+                "pr": 0.0,
+                "rr": 0.1,
+                "ax": -0.002,
+                "ay": 0.001,
+                "az": -0.002,
+            },
+            "depth": depth_payload,
+        }
+    ).encode("utf-8")
+
+    receiver._process_packet(packet, ("10.77.0.2", 5002))  # pylint: disable=protected-access
+
+    assert handler.last_update["imu"]["yaw"] == -126.98
+    assert depth_receiver.last_payload == depth_payload
 
 
 def test_json_data_handler_creates_parent_and_preserves_sections(tmp_path):
