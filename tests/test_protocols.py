@@ -66,6 +66,7 @@ def test_control_telemetry_history(monkeypatch, tmp_path):
     outputs = [value + 0.05 for value in setpoints]
     errors = [output - value for value, output in zip(setpoints, outputs)]
     body = struct.pack("!I", sequence) + struct.pack("<" + "f" * 18, *(setpoints + outputs + errors))
+    body += struct.pack("<fH", 12.5, 1625)
     crc_value = crc.crc32_ieee(body)
     packet = body + struct.pack("!I", crc_value)
 
@@ -75,7 +76,7 @@ def test_control_telemetry_history(monkeypatch, tmp_path):
     assert latest["sequence"] == sequence
     for axis, value in zip(control_telem.AXES, setpoints):
         assert latest["setpoint"][axis] == pytest.approx(value, rel=1e-4)
-    assert latest["manipulator"] == {}
+    assert latest["manipulator"] == {"deg": 12.5, "pulse_us": 1625}
     history = receiver.get_history(limit=5)
     assert len(history) == 1
     assert history[0]["sequence"] == sequence
