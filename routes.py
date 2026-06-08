@@ -1,6 +1,7 @@
 import json
 import math
 import re
+import time
 from pathlib import Path
 
 from flask import Response, current_app, jsonify, render_template, request, send_from_directory
@@ -87,12 +88,32 @@ def _neutralize_thruster_command():
     """Force topside manual command output to neutral axes."""
     neutral = _neutral_axis_values()
     ctrl = current_app.config.get("CONTROLLER")
+    manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
     if ctrl:
         ctrl.set_debug_override(neutral)
     bm = current_app.config.get("BITMASK")
     if bm:
-        bm.set_from_axes(**neutral)
+        bm.set_from_axes(**neutral, manip=manip)
     return neutral
+
+
+def _manipulator_payload(ctrl, receiver=None):
+    state = ctrl.get_manipulator() if ctrl else {}
+    latest = receiver.get_latest() if receiver else {}
+    manip = latest.get("manipulator") if isinstance(latest, dict) else {}
+    now = time.time()
+    updated_at = state.get("updated_at")
+    telem_ts = latest.get("timestamp") if isinstance(latest, dict) else None
+    return {
+        "ok": bool(ctrl),
+        "target_deg": state.get("setpoint_deg", 0.0),
+        "setpoint_deg": state.get("setpoint_deg", 0.0),
+        "source": state.get("source", "unknown"),
+        "updated_age_ms": None if updated_at is None else max(0.0, (now - updated_at) * 1000.0),
+        "applied_deg": manip.get("deg") if isinstance(manip, dict) else None,
+        "pulse_us": manip.get("pulse_us") if isinstance(manip, dict) else None,
+        "telemetry_age_ms": None if telem_ts is None else max(0.0, (now - telem_ts) * 1000.0),
+    }
 
 
 def _send_full_axis_config():
@@ -307,6 +328,32 @@ def register_routes(app):
         pct = round(pct)
         return jsonify({"ok": True, "level": pct, "light": pct})
 
+    @app.route("/api/manipulator", methods=["GET"])
+    def get_manipulator():
+        ctrl = current_app.config.get("CONTROLLER")
+        receiver = current_app.config.get("CONTROL_TELEM")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify(_manipulator_payload(ctrl, receiver))
+
+    @app.route("/api/manipulator", methods=["POST"])
+    def set_manipulator():
+        data = request.get_json(force=True, silent=True) or {}
+        ctrl = current_app.config.get("CONTROLLER")
+        receiver = current_app.config.get("CONTROL_TELEM")
+        if not ctrl:
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        if "setpoint_deg" not in data:
+            return jsonify({"ok": False, "error": "Missing 'setpoint_deg'"}), 400
+        try:
+            setpoint = float(data["setpoint_deg"])
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid 'setpoint_deg'"}), 400
+        if not math.isfinite(setpoint):
+            return jsonify({"ok": False, "error": "Invalid 'setpoint_deg'"}), 400
+        ctrl.set_manipulator(setpoint, source="gui")
+        return jsonify(_manipulator_payload(ctrl, receiver))
+
     @app.route("/api/battery", methods=["GET"])
     def get_battery():
         """API route for battery status."""
@@ -391,7 +438,7 @@ def register_routes(app):
     def set_rov_command():
         """
         JSON body: any subset of
-        surge,sway,heave,roll,pitch,yaw ([-128..127]), light,manip ([0..255])
+        surge,sway,heave,roll,pitch,yaw,manip ([-128..127]), light ([0..255])
         or normalized axes in [-1..1] via "axes": and optional "rate_hz"
         """
         data = request.get_json(force=True, silent=True) or {}
@@ -400,6 +447,10 @@ def register_routes(app):
         # allow normalized axes
         axes = data.get("axes")
         if isinstance(axes, dict):
+            axes = dict(axes)
+            ctrl = current_app.config.get("CONTROLLER")
+            if "manip" not in axes and ctrl:
+                axes["manip"] = ctrl.get_manipulator()["setpoint_norm"]
             bm.set_from_axes(**axes)
 
         # allow raw fields
@@ -550,9 +601,10 @@ def register_routes(app):
         if not axes:
             return jsonify({"ok": False, "error": "No axes supplied"}), 400
 
-        bm.set_from_axes(**axes)
-
         ctrl = current_app.config.get("CONTROLLER")
+        manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
+        bm.set_from_axes(**axes, manip=manip)
+
         if ctrl:
             ctrl.set_debug_override(axes)
 
@@ -593,7 +645,8 @@ def register_routes(app):
         # Zero out the bitmask axes (slider override path)
         bm = current_app.config.get("BITMASK")
         if bm:
-            bm.set_from_axes(surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0)
+            manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
+            bm.set_from_axes(surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0, manip=manip)
 
         # Clear any setpoint override on port 5007 (attitude override path)
         client = current_app.config.get("SETPOINT_OVERRIDE")

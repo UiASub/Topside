@@ -54,6 +54,9 @@ class Controller:
     # Windows) expose the D-pad as buttons instead of a hat. Verified mapping.
     DPAD_UP_BUTTON = 11
     DPAD_DOWN_BUTTON = 12
+    MANIP_MIN_DEG = -50.0
+    MANIP_MAX_DEG = 50.0
+    MANIP_NUDGE_DEG_PER_SEC = 45.0
 
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
@@ -68,6 +71,10 @@ class Controller:
         self.light = 0  # Initial light value
         self._prev_dpad_up = False  # For edge detection of light increase (D-pad up)
         self._prev_dpad_down = False  # For edge detection of light decrease (D-pad down)
+        self._manipulator_deg = 0.0
+        self._manipulator_source = "neutral"
+        self._manipulator_updated = time.time()
+        self._manipulator_lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = None
         self._reconnect_delay = 0  # Counter for reconnect attempts
@@ -318,8 +325,47 @@ class Controller:
         """Return current light brightness as a normalized 0.0-1.0 level."""
         return self.light
 
+    # --- Manipulator API ---
+    def _clamp_manipulator(self, deg):
+        return max(self.MANIP_MIN_DEG, min(self.MANIP_MAX_DEG, float(deg)))
+
+    def _manipulator_norm_locked(self):
+        return self._manipulator_deg / self.MANIP_MAX_DEG
+
+    def set_manipulator(self, setpoint_deg, source="gui"):
+        """Set manipulator position in degrees, clamped to safe servo travel."""
+        with self._manipulator_lock:
+            self._manipulator_deg = self._clamp_manipulator(setpoint_deg)
+            self._manipulator_source = str(source or "gui")
+            self._manipulator_updated = time.time()
+            norm = self._manipulator_norm_locked()
+            state = {
+                "setpoint_deg": self._manipulator_deg,
+                "setpoint_norm": norm,
+                "source": self._manipulator_source,
+                "updated_at": self._manipulator_updated,
+            }
+        if self.bm:
+            self.bm.set_command(manip=int(round(norm * 127)))
+        return state
+
+    def nudge_manipulator(self, direction, dt):
+        with self._manipulator_lock:
+            next_deg = self._manipulator_deg + float(direction) * self.MANIP_NUDGE_DEG_PER_SEC * float(dt)
+        return self.set_manipulator(next_deg, source="controller")
+
+    def get_manipulator(self):
+        with self._manipulator_lock:
+            return {
+                "setpoint_deg": self._manipulator_deg,
+                "setpoint_norm": self._manipulator_norm_locked(),
+                "source": self._manipulator_source,
+                "updated_at": self._manipulator_updated,
+            }
+
     def _reset_command(self):
         """Reset all axes to neutral/zero."""
+        manip = self.get_manipulator()["setpoint_norm"]
         if self.bm:
             self.bm.set_from_axes(
                 surge=0,
@@ -329,7 +375,7 @@ class Controller:
                 pitch=0,
                 yaw=0,
                 light=self.light,  # Keep light at current level
-                manip=0,
+                manip=manip,
             )
 
     # --- Debug override API ---
@@ -349,6 +395,7 @@ class Controller:
         with self._debug_lock:
             override = self._debug_override.copy() if self._debug_override is not None else None
         if override is not None:
+            manip = self.get_manipulator()["setpoint_norm"]
             # Debug sliders have priority – send their values directly
             if self.bm:
                 self.bm.set_from_axes(
@@ -359,7 +406,7 @@ class Controller:
                     pitch=override.get("pitch", 0),
                     yaw=override.get("yaw", 0),
                     light=self.light,
-                    manip=0,
+                    manip=manip,
                 )
             self._set_input_status(
                 {
@@ -418,10 +465,12 @@ class Controller:
         # Read axes
         heave = -self._read_axis(pygame.CONTROLLER_AXIS_RIGHTY, 3)  # Right Y (inverted)
         yaw = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTX, 2)  # Right X
-        # manip is r2 axis minus l2 axis
         r2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERRIGHT, 5)  # R2 trigger
         l2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERLEFT, 4)  # L2 trigger
-        manip = r2 - l2
+        trigger_delta = l2 - r2
+        if abs(trigger_delta) > self.DEADZONE:
+            self.nudge_manipulator(trigger_delta, self.delay_ms / 1000)
+        manip = self.get_manipulator()["setpoint_norm"]
 
         # This runs while button 9 is held down L1 to make
         # surge and sway controls toggleable to pitch and roll

@@ -8,6 +8,8 @@ latest setpoint/output/error triplets for each axis so the debug UI can render
     setpoint[6] (float32 little-endian, surge..yaw)
     output[6]   (float32 little-endian)
     error[6]    (float32 little-endian)
+    manipulator_deg (float32 little-endian)
+    manipulator_pulse_us (uint16 little-endian)
     crc32 (u32 big-endian)
 
 The CRC covers the bytes up to but excluding the CRC field.
@@ -30,7 +32,7 @@ from lib.runtime_paths import log_path, logs_dir
 CONTROL_TELEM_PORT = 5005
 AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"]
 FLOAT_COUNT = len(AXES) * 3
-PACKET_SIZE = 4 + FLOAT_COUNT * 4 + 4
+PACKET_SIZE = 4 + FLOAT_COUNT * 4 + struct.calcsize("<fH") + 4
 HISTORY_CAPACITY = 3000  # 5 minutes @ 10 Hz
 LOG_DIR = logs_dir()
 CONTROL_LOG = log_path("control_telemetry.ndjson")
@@ -96,16 +98,20 @@ class ControlTelemetryReceiver:
             print(f"Control telemetry: CRC mismatch (calc=0x{calc:08X}, recv=0x{crc:08X})")
             return
         sequence = struct.unpack("!I", body[:4])[0]
-        floats = struct.unpack("<" + "f" * FLOAT_COUNT, body[4:])
+        float_end = 4 + FLOAT_COUNT * 4
+        floats = struct.unpack("<" + "f" * FLOAT_COUNT, body[4:float_end])
         setpoints = dict(zip(AXES, floats[0:6]))
         outputs = dict(zip(AXES, floats[6:12]))
         errors = dict(zip(AXES, floats[12:18]))
+        manip_deg, manip_pulse_us = struct.unpack("<fH", body[float_end:])
+        manipulator = {"deg": round(manip_deg, 2), "pulse_us": int(manip_pulse_us)}
         snapshot = {
             "sequence": sequence,
             "timestamp": time.time(),
             "setpoint": {k: round(v, 4) for k, v in setpoints.items()},
             "output": {k: round(v, 4) for k, v in outputs.items()},
             "error": {k: round(v, 4) for k, v in errors.items()},
+            "manipulator": manipulator,
         }
         with self._lock:
             self._latest = snapshot

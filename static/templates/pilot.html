@@ -167,6 +167,25 @@
         <div class="hud-thruster-row" id="hud-thrusters"></div>
       </div>
 
+      <div class="hud-panel hud-manipulator-panel">
+        <span class="hud-label">MANIPULATOR</span>
+        <div class="hud-manipulator-readout">
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">TARGET</span>
+            <span class="hud-mono" id="hud-manipulator-target">0 deg</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">APPLIED</span>
+            <span class="hud-mono" id="hud-manipulator-applied">--</span>
+          </div>
+          <div class="hud-telem-item">
+            <span class="hud-label-sm">PULSE</span>
+            <span class="hud-mono" id="hud-manipulator-pulse">--</span>
+          </div>
+        </div>
+        <input type="range" class="form-range hud-manipulator-slider" id="hud-manipulator-slider" min="-50" max="50" step="1" value="0">
+      </div>
+
       <div class="hud-panel hud-status-panel">
         <div class="hud-status-row">
           <span class="hud-status-dot" id="hud-rpi-dot"></span>
@@ -189,4 +208,5 @@
 
 <link rel="stylesheet" href="/static/css/pilot.css">
 <script src="/static/js/pilot.js"></script>
+<script src="/static/js/manipulator.js"></script>
 {% endblock %}

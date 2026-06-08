@@ -55,7 +55,6 @@ function updateControllerFromCommand(command) {
   const roll = getBackendAxis(command, "roll");
   const pitch = getBackendAxis(command, "pitch");
   const yaw = getBackendAxis(command, "yaw");
-  const manip = getBackendAxis(command, "manip");
 
   if (Math.abs(pitch) > 0.01 || Math.abs(roll) > 0.01) {
     updateControllerButton(4, 1);
@@ -66,19 +65,13 @@ function updateControllerFromCommand(command) {
 
   updateStick("controller-b11", yaw, -heave);
 
-  if (manip < -0.01) {
-    updateControllerButton(6, Math.abs(manip));
-  } else if (manip > 0.01) {
-    updateControllerButton(7, manip);
-  }
-
   if (backendButtons) {
     updateControllerButtonsFromValues(backendButtons);
   }
 }
 
 function commandIsActive(command) {
-  return ["surge", "sway", "heave", "roll", "pitch", "yaw", "manip"].some((axis) => Math.abs(command[axis] || 0) > 1);
+  return ["surge", "sway", "heave", "roll", "pitch", "yaw"].some((axis) => Math.abs(command[axis] || 0) > 1);
 }
 
 async function fetchBackendCommand() {
