@@ -110,6 +110,6 @@ If you have a firewall (Windows Defender or similar), allow inbound UDP on `5002
 ## Troubleshooting
 
 - **No video / no telemetry** — verify the static IP, then `ping 10.77.0.2`. If the ping fails, the network is the problem, not the app.
-- **Settings don't persist between launches** — on Windows packaged builds, the config lives at `%LOCALAPPDATA%\Topside\data\config.json`. Source runs use the repository `data` folder. Starter files are copied only if missing, and the packaged `data/data.json` is used to initialize or fill missing AppData fields, so reinstalling won't wipe your settings.
+- **Settings don't persist between launches** — on Windows packaged builds, the config lives at `%LOCALAPPDATA%\Topside\data\config.json`. Source runs use `.runtime/data`, seeded from the repository `data` folder. Starter files are copied only if missing, and the packaged `data/data.json` is used to initialize or fill missing runtime fields, so reinstalling won't wipe your settings.
 - **Live data doesn't update** — launch from the Start Menu and check the console line that starts with `Using data directory:`. For Windows packaged builds it should be `%LOCALAPPDATA%\Topside\data`; `data.json` in that folder should update as UDP telemetry arrives.
 - **App window closes immediately** — launch from the Start Menu (not by double-clicking inside Program Files). If the console flashes and disappears, run `Topside.exe` from `cmd.exe` to see the error.

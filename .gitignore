@@ -1,6 +1,7 @@
 #egendefinerte til dette prosjektet
 logs/*
 data/data.json
+.runtime/
 .idea/*
 debug_server/server_logs/*
 agent.md

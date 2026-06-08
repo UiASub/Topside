@@ -19,7 +19,24 @@ def test_source_data_dir_uses_app_root_override(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime_paths.sys, "frozen", False, raising=False)
     monkeypatch.setenv("TOPSIDE_APP_ROOT", str(tmp_path))
 
-    assert runtime_paths.data_dir() == tmp_path / "data"
+    assert runtime_paths.data_dir() == tmp_path / ".runtime" / "data"
+
+
+def test_source_ensure_data_dir_seeds_from_repo_data(monkeypatch, tmp_path):
+    _clear_path_env(monkeypatch)
+    starter_dir = tmp_path / "data"
+    starter_dir.mkdir(parents=True)
+    (starter_dir / "data.json").write_text('{"starter": true}', encoding="utf-8")
+    (starter_dir / "config.json").write_text('{"imu_axes": {"yaw": "+yaw"}}', encoding="utf-8")
+
+    monkeypatch.setattr(runtime_paths.sys, "frozen", False, raising=False)
+    monkeypatch.setenv("TOPSIDE_APP_ROOT", str(tmp_path))
+
+    target = runtime_paths.ensure_data_dir()
+
+    assert target == tmp_path / ".runtime" / "data"
+    assert (target / "data.json").read_text(encoding="utf-8") == '{"starter": true}'
+    assert (target / "config.json").exists()
 
 
 def test_windows_frozen_data_dir_uses_local_appdata(monkeypatch, tmp_path):

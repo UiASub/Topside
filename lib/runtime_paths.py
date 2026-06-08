@@ -46,6 +46,8 @@ def data_dir() -> Path:
     override = os.getenv("TOPSIDE_DATA_DIR")
     if override:
         return Path(override).expanduser().resolve()
+    if not _is_frozen():
+        return writable_app_root() / ".runtime" / "data"
     return writable_app_root() / "data"
 
 
