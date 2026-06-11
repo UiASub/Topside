@@ -1,26 +1,14 @@
 {
     "imu": {
-<<<<<<< HEAD
-        "yaw": -2.76,
-        "pitch": 4.75,
-        "roll": -179.79,
-        "yr": -0.01,
+        "yaw": 0.0,
+        "pitch": 0.0,
+        "roll": 0.0,
+        "yr": 0.0,
         "pr": 0.0,
-        "rr": 0.06,
-        "ax": 0.001,
-        "ay": -0.0,
-        "az": -0.0
-=======
-        "yaw": -2.86,
-        "pitch": 4.76,
-        "roll": -179.79,
-        "yr": -0.0,
-        "pr": -0.01,
-        "rr": 0.11,
-        "ax": 0.001,
+        "rr": 0.0,
+        "ax": 0.0,
         "ay": 0.0,
         "az": 0.0
->>>>>>> 9a56d4d (Extensive visual Topside changes, as well as workflow changes. removed e.g. placeholders, fixed nucleo uplink log. Kept Back-end changes to a minimum.)
     },
     "9dof": {
         "acceleration": {
@@ -86,23 +74,14 @@
         "dptSet": 0.0
     },
     "resources": {
-<<<<<<< HEAD
-        "sequence": 365,
-        "uptime_ms": 367294,
-=======
-        "sequence": 474,
-        "uptime_ms": 476425,
->>>>>>> 9a56d4d (Extensive visual Topside changes, as well as workflow changes. removed e.g. placeholders, fixed nucleo uplink log. Kept Back-end changes to a minimum.)
-        "cpu_percent": 5,
-        "heap_used_percent": 2,
-        "heap_free_kb": 502,
-        "heap_total_kb": 512,
-        "thread_count": 20,
-<<<<<<< HEAD
-        "udp_rx_count": 15240,
-=======
-        "udp_rx_count": 19788,
->>>>>>> 9a56d4d (Extensive visual Topside changes, as well as workflow changes. removed e.g. placeholders, fixed nucleo uplink log. Kept Back-end changes to a minimum.)
+        "sequence": 0,
+        "uptime_ms": 0,
+        "cpu_percent": 0,
+        "heap_used_percent": 0,
+        "heap_free_kb": 0,
+        "heap_total_kb": 0,
+        "thread_count": 0,
+        "udp_rx_count": 0,
         "udp_rx_errors": 0
     },
     "control_telemetry": {

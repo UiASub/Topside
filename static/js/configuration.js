@@ -1,8 +1,4 @@
 document.addEventListener("DOMContentLoaded", function () {
-  const axes = ["surge", "sway", "heave", "roll", "pitch", "yaw"];
-  const masterSlider = document.getElementById("gain-master");
-  const masterDisplay = document.getElementById("gain-master-value");
-
   function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -14,57 +10,6 @@ document.addEventListener("DOMContentLoaded", function () {
     el.textContent = text;
     el.className = "small mt-2 " + cls;
   }
-
-  function sendGains(payload) {
-    fetch("/api/controller/gains", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-  }
-
-  fetch("/api/controller/gains")
-    .then((r) => r.json())
-    .then((data) => {
-      if (!data.ok) return;
-      const gains = data.gains;
-      if (masterSlider && gains.master !== undefined) {
-        masterSlider.value = gains.master;
-        if (masterDisplay) masterDisplay.textContent = Number(gains.master).toFixed(2);
-      }
-      axes.forEach((axis) => {
-        const slider = document.getElementById("gain-" + axis);
-        if (!slider || gains[axis] === undefined) return;
-        slider.value = gains[axis];
-        setText("gain-" + axis + "-value", Number(gains[axis]).toFixed(2));
-      });
-    })
-    .catch(() => {});
-
-  if (masterSlider) {
-    masterSlider.addEventListener("input", function () {
-      const value = parseFloat(this.value);
-      if (masterDisplay) masterDisplay.textContent = value.toFixed(2);
-      const payload = { master: value };
-      axes.forEach((axis) => {
-        const slider = document.getElementById("gain-" + axis);
-        if (slider) slider.value = value;
-        setText("gain-" + axis + "-value", value.toFixed(2));
-        payload[axis] = value;
-      });
-      sendGains(payload);
-    });
-  }
-
-  axes.forEach((axis) => {
-    const slider = document.getElementById("gain-" + axis);
-    if (!slider) return;
-    slider.addEventListener("input", function () {
-      const value = parseFloat(this.value);
-      setText("gain-" + axis + "-value", value.toFixed(2));
-      sendGains({ [axis]: value });
-    });
-  });
 
   const axesYaw = document.getElementById("axes-yaw");
   const axesPitch = document.getElementById("axes-pitch");
@@ -94,7 +39,11 @@ document.addEventListener("DOMContentLoaded", function () {
           }),
         });
         const data = await res.json();
-        setFeedback("axes-feedback", data.ok ? "Mapping saved" : "Failed to save mapping", data.ok ? "text-success" : "text-danger");
+        setFeedback(
+          "axes-feedback",
+          data.ok ? "Mapping saved" : "Failed to save mapping",
+          data.ok ? "text-success" : "text-danger"
+        );
       } catch (error) {
         setFeedback("axes-feedback", "Error: " + error.message, "text-danger");
       }
@@ -129,7 +78,11 @@ document.addEventListener("DOMContentLoaded", function () {
           }),
         });
         const data = await res.json();
-        setFeedback("accel-feedback", data.ok ? "Accelerometer mapping saved" : "Failed to save mapping", data.ok ? "text-success" : "text-danger");
+        setFeedback(
+          "accel-feedback",
+          data.ok ? "Accelerometer mapping saved" : "Failed to save mapping",
+          data.ok ? "text-success" : "text-danger"
+        );
       } catch (error) {
         setFeedback("accel-feedback", "Error: " + error.message, "text-danger");
       }

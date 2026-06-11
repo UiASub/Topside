@@ -338,14 +338,14 @@ class RPiCameraReceiver:
         return buf.tobytes() if ok else b""
 
     def _run(self):
-        print("[RPi Camera] Trying OpenCV+GStreamer …")
+        print("[RPi Camera] Trying OpenCV+GStreamer ...")
         if self._opencv_gstreamer_available():
             if self._run_opencv_gstreamer():
                 return
         else:
             print("[RPi Camera]   OpenCV has no GStreamer support, skipping.")
 
-        print("[RPi Camera] Trying gst-launch-1.0 …")
+        print("[RPi Camera] Trying gst-launch-1.0 ...")
         self._run_gst_subprocess()
 
     def _opencv_gstreamer_available(self):
@@ -373,14 +373,14 @@ class RPiCameraReceiver:
             self.last_error = "OpenCV GStreamer pipeline failed to open"
             return False
 
-        print(f"[RPi Camera]   Listening on UDP port {self.port} …")
+        print(f"[RPi Camera]   Listening on UDP port {self.port} ...")
         self.is_listening = True
         had_frame = False
         while not self._stop_event.is_set():
             ok, frame = cap.read()
             if ok and frame is not None and frame.size > 0:
                 if not had_frame:
-                    print("[RPi Camera] ✓ Receiving frames")
+                    print("[RPi Camera] Receiving frames")
                     had_frame = True
                 self._set_frame(frame)
             else:
@@ -454,7 +454,7 @@ class RPiCameraReceiver:
             "async=false",
         ]
 
-        print(f"[RPi Camera]   Listening on UDP port {self.port} …")
+        print(f"[RPi Camera]   Listening on UDP port {self.port} ...")
         self.is_listening = True
         proc = subprocess.Popen(
             cmd,
@@ -504,7 +504,7 @@ class RPiCameraReceiver:
                 del buffer[: end + 2]
 
                 if not had_frame:
-                    print("[RPi Camera] ✓ Receiving frames")
+                    print("[RPi Camera] Receiving frames")
                     had_frame = True
                 # JPEG is already encoded by GStreamer; avoid re-decode/re-encode.
                 self._set_jpeg_bytes(jpg)
@@ -741,31 +741,31 @@ class IPCameraReceiver:
             self._cap = None
 
     def _run_loop(self):
-        """Main thread: connect → read frames → reconnect on failure."""
+        """Main thread: connect, read frames, then reconnect on failure."""
         while not self._stop_event.is_set():
-            print(f"[IP Camera] Connecting to {self.url} …")
+            print(f"[IP Camera] Connecting to {self.url} ...")
             if not self._open_stream():
                 self.last_error = f"Failed to open: {self.url}"
-                print(f"[IP Camera] ✗ {self.last_error}")
+                print(f"[IP Camera] error: {self.last_error}")
                 self.is_connected = False
                 if self._stop_event.wait(self.RECONNECT_DELAY):
                     break
                 continue
 
-            print("[IP Camera] ✓ Stream connected")
+            print("[IP Camera] Stream connected")
             self.last_error = None
             had_frame = False
 
             while not self._stop_event.is_set():
                 ok, frame = self._cap.read()
                 if not ok or frame is None:
-                    print("[IP Camera] Lost connection, will reconnect …")
+                    print("[IP Camera] Lost connection, will reconnect ...")
                     self.is_connected = False
                     self._release_cap()
                     break
 
                 if not had_frame:
-                    print("[IP Camera] ✓ Receiving frames")
+                    print("[IP Camera] Receiving frames")
                     had_frame = True
 
                 if frame.shape[1] != self.out_width or frame.shape[0] != self.out_height:

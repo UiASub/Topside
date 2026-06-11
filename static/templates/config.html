@@ -40,28 +40,6 @@
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">
-        <h5 class="card-title mb-3">Controller Gains</h5>
-        <div class="mb-3">
-          <label for="gain-master" class="form-label">Master: <span id="gain-master-value">1.00</span></label>
-          <input type="range" class="form-range" id="gain-master" min="0" max="1" step="0.01" value="1">
-        </div>
-        <div class="row g-3">
-          {% for axis in ["surge", "sway", "heave", "roll", "pitch", "yaw"] %}
-          <div class="col-md-6 col-xl-4">
-            <label for="gain-{{ axis }}" class="form-label">{{ axis|capitalize }}: <span id="gain-{{ axis }}-value">1.00</span></label>
-            <input type="range" class="form-range gain-axis-slider" id="gain-{{ axis }}" data-axis="{{ axis }}" min="0" max="1" step="0.01" value="1">
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
         <h5 class="card-title mb-3">IMU Axis Mapping</h5>
         <div class="row g-3 align-items-end">
           <div class="col-md-3">

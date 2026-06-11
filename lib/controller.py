@@ -83,17 +83,6 @@ class Controller:
         self._debug_lock = threading.Lock()
         self._input_status_lock = threading.Lock()
         self._input_status = self._empty_input_status()
-        # Gain settings (per-axis and master)
-        self._gain_lock = threading.Lock()
-        self._master_gain = 1.0
-        self._axis_gains = {
-            "surge": 1.0,
-            "sway": 1.0,
-            "heave": 1.0,
-            "roll": 1.0,
-            "pitch": 1.0,
-            "yaw": 1.0,
-        }
         self._try_connect()
 
     def _try_connect(self):
@@ -287,26 +276,6 @@ class Controller:
             }
         )
 
-    # --- Gain API ---
-    def set_gains(self, master=None, **axis_gains):
-        """Set master and/or per-axis gains. Values should be 0.0 – 1.0."""
-        with self._gain_lock:
-            if master is not None:
-                self._master_gain = max(0.0, min(1.0, float(master)))
-            for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
-                if key in axis_gains:
-                    self._axis_gains[key] = max(0.0, min(1.0, float(axis_gains[key])))
-
-    def get_gains(self):
-        """Return current gain settings."""
-        with self._gain_lock:
-            return {"master": self._master_gain, **self._axis_gains}
-
-    def _apply_gain(self, axis_name, value):
-        """Multiply a value by its per-axis gain and the master gain."""
-        with self._gain_lock:
-            return value * self._axis_gains.get(axis_name, 1.0) * self._master_gain
-
     # --- Light API ---
     def set_light(self, level):
         """Set light brightness from a normalized 0.0-1.0 level.
@@ -498,14 +467,6 @@ class Controller:
         self._prev_dpad_up = dpad_up
         self._prev_dpad_down = dpad_down
         self._update_input_status(buttons)
-
-        # Apply gain to each axis
-        surge = self._apply_gain("surge", surge)
-        sway = self._apply_gain("sway", sway)
-        heave = self._apply_gain("heave", heave)
-        roll = self._apply_gain("roll", roll)
-        pitch = self._apply_gain("pitch", pitch)
-        yaw = self._apply_gain("yaw", yaw)
 
         # Send to ROV!
         if self.bm:

@@ -90,16 +90,6 @@ def build_controller(controller=None, joystick=None):
     ctrl._debug_lock = threading.Lock()
     ctrl._input_status_lock = threading.Lock()
     ctrl._input_status = ctrl._empty_input_status()
-    ctrl._gain_lock = threading.Lock()
-    ctrl._master_gain = 1.0
-    ctrl._axis_gains = {
-        "surge": 1.0,
-        "sway": 1.0,
-        "heave": 1.0,
-        "roll": 1.0,
-        "pitch": 1.0,
-        "yaw": 1.0,
-    }
     return ctrl
 
 
