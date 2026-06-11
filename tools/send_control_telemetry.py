@@ -1,6 +1,12 @@
-import binascii
 import socket
 import struct
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from lib.crc import crc32_ieee
 
 AXES = ["surge", "sway", "heave", "roll", "pitch", "yaw"]
 PORT = 5005
@@ -17,11 +23,12 @@ def build_packet() -> bytes:
     body += struct.pack("<6f", *setpoints)
     body += struct.pack("<6f", *outputs)
     body += struct.pack("<6f", *errors)
+    body += struct.pack("<fH", 0.0, 1500)
 
-    crc = binascii.crc32(body) & 0xFFFFFFFF
+    crc = crc32_ieee(body)
     packet = body + struct.pack(">I", crc)
 
-    print(f"Packet size: {len(packet)} bytes (expected 80)")
+    print(f"Packet size: {len(packet)} bytes (expected 86)")
     print(f"CRC: 0x{crc:08X}")
     return packet
 
