@@ -76,11 +76,25 @@ app.config["RPI_CAMERA"] = init_rpi_camera(
 )
 
 # Initialize IP camera (SMTSEC SIP-K327GS) via RTSP
-ip_cam_url = os.getenv("IP_CAMERA_URL", "rtsp://10.77.0.3:554/stream1")
+_ip_camera_config = _config.get_section("ip_camera") or {}
+ip_cam_active_ip = _ip_camera_config.get("active_ip") or "10.77.0.4"
+ip_cam_url = os.getenv("IP_CAMERA_URL")
+if ip_cam_url:
+    ip_cam_active_ip = None
+else:
+    ip_cam_url = f"rtsp://{ip_cam_active_ip}:554/stream1"
 ip_cam_out_width = int(os.getenv("IP_CAMERA_OUT_WIDTH", "960"))
 ip_cam_out_height = int(os.getenv("IP_CAMERA_OUT_HEIGHT", "540"))
 ip_cam_jpeg_quality = int(os.getenv("IP_CAMERA_JPEG_QUALITY", "70"))
 ip_cam_flip_180 = os.getenv("IP_CAMERA_FLIP_180", "false").strip().lower() in {"1", "true", "yes", "on"}
+app.config["IP_CAMERA_ACTIVE_IP"] = ip_cam_active_ip
+app.config["IP_CAMERA_ACTIVE_URL"] = ip_cam_url
+app.config["IP_CAMERA_SETTINGS"] = {
+    "out_width": ip_cam_out_width,
+    "out_height": ip_cam_out_height,
+    "jpeg_quality": ip_cam_jpeg_quality,
+    "flip_180": ip_cam_flip_180,
+}
 app.config["IP_CAMERA"] = init_ip_camera(
     url=ip_cam_url,
     out_width=ip_cam_out_width,

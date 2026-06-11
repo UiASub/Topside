@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}IP Camera - UiASub Topside{% endblock %}
+
+{% block content %}
+<div class="ip-camera-shell">
+  <div class="ip-camera-view">
+    <img id="ip-camera-feed" src="/ip_video_feed" alt="IP camera feed" draggable="false">
+    <div class="ip-camera-panel">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">IP Camera</h5>
+        <span id="ip-camera-state" class="badge bg-secondary">LOADING</span>
+      </div>
+      <div class="small text-light-muted mb-3">
+        Active: <span id="ip-camera-active-ip">--</span><br>
+        URL: <span id="ip-camera-active-url">--</span>
+      </div>
+
+      <label class="form-label small text-light-muted" for="ip-camera-ip">Manual IP</label>
+      <div class="input-group input-group-sm mb-2">
+        <input id="ip-camera-ip" class="form-control bg-dark text-light" type="text" value="10.77.0.4">
+        <button id="ip-camera-apply" class="btn btn-primary" type="button">Apply</button>
+      </div>
+
+      <label class="form-label small text-light-muted" for="ip-camera-name">Preset name</label>
+      <div class="input-group input-group-sm mb-2">
+        <input id="ip-camera-name" class="form-control bg-dark text-light" type="text" placeholder="pool">
+        <button id="ip-camera-save" class="btn btn-outline-success" type="button">Save</button>
+      </div>
+
+      <label class="form-label small text-light-muted" for="ip-camera-presets">Saved presets</label>
+      <div class="input-group input-group-sm">
+        <select id="ip-camera-presets" class="form-select bg-dark text-light">
+          <option value="">No presets</option>
+        </select>
+        <button id="ip-camera-load" class="btn btn-outline-info" type="button">Load</button>
+        <button id="ip-camera-delete" class="btn btn-outline-danger" type="button">Delete</button>
+      </div>
+      <div id="ip-camera-feedback" class="small mt-2 text-light-muted">Ready.</div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/ip_camera.js"></script>
+{% endblock %}

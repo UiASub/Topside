@@ -1,13 +1,15 @@
+import ipaddress
 import json
 import math
 import re
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import Response, current_app, jsonify, render_template, request, send_from_directory
 
 from lib.axis_config_sender import send_axis_config
-from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames
+from lib.camera import generate_frames, generate_ip_camera_frames, generate_rpi_frames, init_ip_camera
 from lib.json_data_handler import JSONDataHandler
 from lib.pid_config_client import AXES as PID_AXES
 from lib.pid_config_client import request_pid_gains, send_pid_gains
@@ -41,6 +43,7 @@ _DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
 ATTITUDE_LIMITS_DEG = {"roll": 180.0, "pitch": 90.0, "yaw": 180.0}
 CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
 ATTITUDE_AXES = ("roll", "pitch", "yaw")
+DEFAULT_IP_CAMERA_IP = "10.77.0.4"
 
 
 def _clamp(value, lower, upper):
@@ -124,6 +127,57 @@ def _send_full_axis_config():
     send_axis_config(imu_axes=imu_axes, accel_axes=accel_axes, offset=offset)
 
 
+def _camera_url_for_ip(ip):
+    return f"rtsp://{ip}:554/stream1"
+
+
+def _coerce_ipv4(value):
+    try:
+        addr = ipaddress.ip_address(str(value).strip())
+    except ValueError:
+        return None
+    if addr.version != 4:
+        return None
+    return str(addr)
+
+
+def _ip_from_url(url):
+    try:
+        return _coerce_ipv4(urlparse(url).hostname)
+    except Exception:
+        return None
+
+
+def _camera_status_payload():
+    ip_cam = current_app.config.get("IP_CAMERA")
+    status = ip_cam.get_status() if ip_cam else {"connected": False}
+    active_url = status.get("url") or current_app.config.get("IP_CAMERA_ACTIVE_URL") or _camera_url_for_ip(DEFAULT_IP_CAMERA_IP)
+    active_ip = current_app.config.get("IP_CAMERA_ACTIVE_IP") or _ip_from_url(active_url) or DEFAULT_IP_CAMERA_IP
+    return active_ip, active_url, status
+
+
+def _get_ip_camera_config():
+    section = config_handler.get_section("ip_camera") or {}
+    raw_presets = section.get("presets", [])
+    presets = []
+    if isinstance(raw_presets, dict):
+        raw_presets = [{"name": name, "ip": ip} for name, ip in raw_presets.items()]
+    if isinstance(raw_presets, list):
+        for item in raw_presets:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip()
+            ip = _coerce_ipv4(item.get("ip"))
+            if name and ip:
+                presets.append({"name": name, "ip": ip})
+    active_ip = _coerce_ipv4(section.get("active_ip")) or DEFAULT_IP_CAMERA_IP
+    return {"active_ip": active_ip, "presets": presets}
+
+
+def _save_ip_camera_config(section):
+    config_handler.update_data({"ip_camera": section})
+
+
 # Default resource data (used when no telemetry received)
 DEFAULT_RESOURCES = {
     "sequence": 0,
@@ -153,7 +207,7 @@ def register_routes(app):
     @app.route("/Camera2")
     def camera2():
         """Render the camera2.html template."""
-        return render_template("camera2.html")
+        return render_template("ip_camera.html")
 
     @app.route("/pilot")
     def pilot():
@@ -164,6 +218,26 @@ def register_routes(app):
     def debug():
         """Render the debug slider page."""
         return render_template("debug.html", attitude_limits=ATTITUDE_LIMITS_DEG)
+
+    @app.route("/tooling")
+    def tooling():
+        """Render the tooling controls page."""
+        return render_template("tooling.html")
+
+    @app.route("/config")
+    def config():
+        """Render the configuration page."""
+        return render_template("config.html")
+
+    @app.route("/ip-camera")
+    def ip_camera():
+        """Render the IP camera page."""
+        return render_template("ip_camera.html")
+
+    @app.route("/connection")
+    def connection():
+        """Render the connection status page."""
+        return render_template("connection.html")
 
     @app.route("/pid-tuning")
     def pid_tuning():
@@ -259,6 +333,83 @@ def register_routes(app):
         if ip_cam:
             return jsonify(ip_cam.get_status())
         return jsonify({"connected": False})
+
+    @app.route("/api/ip_camera/configs", methods=["GET"])
+    def get_ip_camera_configs():
+        """Return active IP camera URL plus saved IP presets."""
+        active_ip, active_url, status = _camera_status_payload()
+        section = _get_ip_camera_config()
+        return jsonify(
+            {
+                "ok": True,
+                "active_ip": active_ip,
+                "active_url": active_url,
+                "presets": section["presets"],
+                "status": status,
+            }
+        )
+
+    @app.route("/api/ip_camera/configs", methods=["POST"])
+    def save_ip_camera_config():
+        """Save or update a named IP camera IPv4 preset."""
+        data = request.get_json(force=True, silent=True) or {}
+        name = str(data.get("name", "")).strip()
+        ip = _coerce_ipv4(data.get("ip"))
+        if not name or not re.match(r"^[\w\s\-\.]+$", name):
+            return jsonify({"ok": False, "error": "Invalid preset name"}), 400
+        if not ip:
+            return jsonify({"ok": False, "error": "Invalid IPv4 address"}), 400
+
+        section = _get_ip_camera_config()
+        presets = [preset for preset in section["presets"] if preset["name"] != name]
+        presets.append({"name": name, "ip": ip})
+        presets.sort(key=lambda preset: preset["name"].lower())
+        section["presets"] = presets
+        _save_ip_camera_config(section)
+        return jsonify({"ok": True, "name": name, "ip": ip, "presets": presets})
+
+    @app.route("/api/ip_camera/configs/<name>", methods=["DELETE"])
+    def delete_ip_camera_config(name):
+        """Delete a named IP camera preset."""
+        section = _get_ip_camera_config()
+        presets = [preset for preset in section["presets"] if preset["name"] != name]
+        if len(presets) == len(section["presets"]):
+            return jsonify({"ok": False, "error": "Preset not found"}), 404
+        section["presets"] = presets
+        _save_ip_camera_config(section)
+        return jsonify({"ok": True, "presets": presets})
+
+    @app.route("/api/ip_camera/reassign", methods=["POST"])
+    def reassign_ip_camera():
+        """Restart only the IP camera receiver with a new RTSP URL."""
+        data = request.get_json(force=True, silent=True) or {}
+        ip = _coerce_ipv4(data.get("ip"))
+        if not ip:
+            return jsonify({"ok": False, "error": "Invalid IPv4 address"}), 400
+
+        url = _camera_url_for_ip(ip)
+        old_camera = current_app.config.get("IP_CAMERA")
+        if old_camera:
+            old_camera.stop()
+
+        settings = current_app.config.get("IP_CAMERA_SETTINGS") or {}
+        new_camera = init_ip_camera(
+            url=url,
+            out_width=settings.get("out_width", 960),
+            out_height=settings.get("out_height", 540),
+            jpeg_quality=settings.get("jpeg_quality", 70),
+            flip_180=settings.get("flip_180", False),
+            marker_logger=current_app.config.get("ARUCO_LOGGER"),
+        )
+        current_app.config["IP_CAMERA"] = new_camera
+        current_app.config["IP_CAMERA_ACTIVE_IP"] = ip
+        current_app.config["IP_CAMERA_ACTIVE_URL"] = url
+
+        section = _get_ip_camera_config()
+        section["active_ip"] = ip
+        _save_ip_camera_config(section)
+        active_ip, active_url, status = _camera_status_payload()
+        return jsonify({"ok": True, "active_ip": active_ip, "active_url": active_url, "status": status})
 
     @app.route("/api/aruco-log", methods=["GET"])
     def aruco_log_status():

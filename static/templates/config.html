@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Config - UiASub Topside{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Input Source</h5>
+          <span id="input-source-status" class="badge bg-secondary">UNKNOWN</span>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">Controller</div>
+              <div class="stat-value" id="input-controller">--</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">Override</div>
+              <div class="stat-value" id="input-override">--</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">Last Ack</div>
+              <div class="stat-value" id="input-last-ack">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Controller Gains</h5>
+        <div class="mb-3">
+          <label for="gain-master" class="form-label">Master: <span id="gain-master-value">1.00</span></label>
+          <input type="range" class="form-range" id="gain-master" min="0" max="1" step="0.01" value="1">
+        </div>
+        <div class="row g-3">
+          {% for axis in ["surge", "sway", "heave", "roll", "pitch", "yaw"] %}
+          <div class="col-md-6 col-xl-4">
+            <label for="gain-{{ axis }}" class="form-label">{{ axis|capitalize }}: <span id="gain-{{ axis }}-value">1.00</span></label>
+            <input type="range" class="form-range gain-axis-slider" id="gain-{{ axis }}" data-axis="{{ axis }}" min="0" max="1" step="0.01" value="1">
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Axis Mapping</h5>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="axes-yaw">ROV Yaw reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-yaw">
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="axes-pitch">ROV Pitch reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-pitch">
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="axes-roll">ROV Roll reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="axes-roll">
+              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
+              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
+              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button id="btn-save-axes" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="axes-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Accelerometer Axis Mapping</h5>
+        <div class="row g-3 align-items-end">
+          {% for axis in ["x", "y", "z"] %}
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="accel-{{ axis }}">ROV {{ axis|upper }} reads from</label>
+            <select class="form-select form-select-sm bg-dark text-light" id="accel-{{ axis }}">
+              <option value="+x">+X</option><option value="-x">-X</option>
+              <option value="+y">+Y</option><option value="-y">-Y</option>
+              <option value="+z">+Z</option><option value="-z">-Z</option>
+            </select>
+          </div>
+          {% endfor %}
+          <div class="col-md-3">
+            <button id="btn-save-accel" class="btn btn-sm btn-primary w-100">Save Mapping</button>
+          </div>
+        </div>
+        <div id="accel-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">IMU Offset from Mass Center</h5>
+        <div class="row g-3 align-items-end">
+          {% for axis, label in [("x", "X forward +"), ("y", "Y starboard +"), ("z", "Z down +")] %}
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="offset-{{ axis }}">{{ label }}</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="offset-{{ axis }}" step="0.1" value="0">
+              <span class="input-group-text">mm</span>
+            </div>
+          </div>
+          {% endfor %}
+          <div class="col-md-3">
+            <button id="btn-save-offset" class="btn btn-sm btn-primary w-100">Save Offset</button>
+          </div>
+        </div>
+        <div id="offset-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/configuration.js"></script>
+{% endblock %}

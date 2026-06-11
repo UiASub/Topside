@@ -1,485 +1,60 @@
 {% extends "base.html" %}
 
-{% block title %}Debug Controls{% endblock %}
+{% block title %}Debug - UiASub Topside{% endblock %}
 
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/debug.css') }}">
-<script>
-  window.debugAttitudeLimits = {{ attitude_limits|default({})|tojson|safe }};
-</script>
 
-<!-- IMU Live Readout -->
 <div class="row g-4">
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">IMU – VN-100S</h5>
-          <div>
-            <span id="imu-status" class="badge bg-secondary me-2">NO DATA</span>
-          </div>
+          <h5 class="card-title mb-0">Debug Override</h5>
+          <span id="debug-status" class="badge bg-secondary">INACTIVE</span>
         </div>
-
-        <div class="row g-3">
-          <div class="col-md-4">
-            <div class="debug-slider-card text-center">
-              <span class="text-light-muted small">YAW</span>
-              <div class="imu-value" id="imu-yaw">--.-°</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="debug-slider-card text-center">
-              <span class="text-light-muted small">PITCH</span>
-              <div class="imu-value" id="imu-pitch">--.-°</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="debug-slider-card text-center">
-              <span class="text-light-muted small">ROLL</span>
-              <div class="imu-value" id="imu-roll">--.-°</div>
-            </div>
-          </div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <button id="btn-enable" class="btn btn-sm btn-success">Enable Override</button>
+          <button id="btn-disable" class="btn btn-sm btn-outline-secondary" disabled>Disable Override</button>
+          <button id="btn-reset-all" class="btn btn-sm btn-outline-warning">Zero Sliders</button>
+          <button id="btn-stop-all" class="btn btn-lg btn-danger ms-auto">STOP ALL</button>
         </div>
-
-        <div class="row mt-2">
-          <div class="col-12">
-            <small class="text-light-muted">
-              Packets: <span id="imu-pkt-count">0</span> |
-              Age: <span id="imu-age">--</span> ms
-            </small>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- IMU Axis Mapping -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <h5 class="card-title mb-3">IMU Axis Remapping</h5>
-        <p class="text-muted small mb-3">
-          Remap the sensor output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
-        </p>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV Yaw reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="axes-yaw">
-              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
-              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
-              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV Pitch reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="axes-pitch">
-              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
-              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
-              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV Roll reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="axes-roll">
-              <option value="+roll">+Roll</option><option value="-roll">-Roll</option>
-              <option value="+yaw">+Yaw</option><option value="-yaw">-Yaw</option>
-              <option value="+pitch">+Pitch</option><option value="-pitch">-Pitch</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <button id="btn-save-axes" class="btn btn-sm btn-primary w-100">Save Mapping</button>
-          </div>
-        </div>
-        <div id="axes-feedback" class="small mt-2"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- System Controls -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">System Controls</h5>
-          <span id="system-reset-status" class="badge bg-secondary">READY</span>
-        </div>
-        <p class="text-muted small mb-3">
-          Request a cold restart of the MCU. Thrusters will stop while the controller reboots and reconnects.
-        </p>
-        <button id="btn-system-reset" class="btn btn-sm btn-outline-danger">Restart MCU</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Lights -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <h5 class="card-title mb-3">Lights</h5>
-        <p class="text-muted small mb-3">
-          Dimmable light on D6/PA8. Drives the same value the controller D-pad sets.
-        </p>
-        <label for="debug-light-slider" class="form-label small text-light-muted">
-          Brightness: <span id="debug-light-value">0</span>%
-        </label>
-        <input type="range" class="form-range" id="debug-light-slider" min="0" max="80" step="1" value="0">
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Accelerometer Axis Mapping -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <h5 class="card-title mb-3">Accelerometer Axis Remapping</h5>
-        <p class="text-muted small mb-3">
-          Remap the accelerometer output to match the ROV frame. For each ROV axis, pick which sensor output to use and whether to flip it.
-        </p>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV X reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="accel-x">
-              <option value="+x">+X</option><option value="-x">-X</option>
-              <option value="+y">+Y</option><option value="-y">-Y</option>
-              <option value="+z">+Z</option><option value="-z">-Z</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV Y reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="accel-y">
-              <option value="+y">+Y</option><option value="-y">-Y</option>
-              <option value="+x">+X</option><option value="-x">-X</option>
-              <option value="+z">+Z</option><option value="-z">-Z</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">ROV Z reads from</label>
-            <select class="form-select form-select-sm bg-dark text-light" id="accel-z">
-              <option value="+z">+Z</option><option value="-z">-Z</option>
-              <option value="+x">+X</option><option value="-x">-X</option>
-              <option value="+y">+Y</option><option value="-y">-Y</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <button id="btn-save-accel" class="btn btn-sm btn-primary w-100">Save Mapping</button>
-          </div>
-        </div>
-        <div id="accel-feedback" class="small mt-2"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- IMU Mass Center Offset -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <h5 class="card-title mb-3">IMU Offset from Mass Center</h5>
-        <p class="text-muted small mb-3">
-          Distance from the IMU sensor to the ROV center of mass (mm). Used for PID compensation.
-        </p>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">X (forward +)</label>
-            <div class="input-group input-group-sm">
-              <input type="number" class="form-control bg-dark text-light" id="offset-x" step="0.1" value="0">
-              <span class="input-group-text">mm</span>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">Y (starboard +)</label>
-            <div class="input-group input-group-sm">
-              <input type="number" class="form-control bg-dark text-light" id="offset-y" step="0.1" value="0">
-              <span class="input-group-text">mm</span>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small text-light-muted">Z (down +)</label>
-            <div class="input-group input-group-sm">
-              <input type="number" class="form-control bg-dark text-light" id="offset-z" step="0.1" value="0">
-              <span class="input-group-text">mm</span>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <button id="btn-save-offset" class="btn btn-sm btn-primary w-100">Save Offset</button>
-          </div>
-        </div>
-        <div id="offset-feedback" class="small mt-2"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Debug Override Controls -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Debug Override Controls</h5>
-          <div>
-            <span id="debug-status" class="badge bg-secondary me-2">INACTIVE</span>
-            <button id="btn-enable" class="btn btn-sm btn-success me-1">Enable Override</button>
-            <button id="btn-disable" class="btn btn-sm btn-danger" disabled>Disable Override</button>
-          </div>
-        </div>
-        <p class="text-muted small mb-4">
-          When enabled, these sliders override the physical controller. All values range from -1.0 to 1.0.
-          Double-click any slider to reset it to 0.
-        </p>
 
         <div class="row g-3" id="slider-container">
-          <!-- Surge -->
+          {% for axis, label in [("surge", "Surge"), ("sway", "Sway"), ("heave", "Heave"), ("roll", "Roll"), ("pitch", "Pitch"), ("yaw", "Yaw")] %}
           <div class="col-md-6 col-lg-4">
             <div class="debug-slider-card">
               <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Surge</label>
-                <span class="slider-value" id="val-surge">0.00</span>
+                <label class="form-label fw-bold mb-0" for="slider-{{ axis }}">{{ label }}</label>
+                <span class="slider-value" id="val-{{ axis }}">0.00</span>
               </div>
-              <small class="text-light-muted">Forward / Backward</small>
-              <input type="range" class="form-range debug-slider" id="slider-surge"
-                     min="-100" max="100" value="0" data-axis="surge">
+              <input type="range" class="form-range debug-slider" id="slider-{{ axis }}" min="-100" max="100" value="0" data-axis="{{ axis }}">
             </div>
           </div>
-
-          <!-- Sway -->
-          <div class="col-md-6 col-lg-4">
-            <div class="debug-slider-card">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Sway</label>
-                <span class="slider-value" id="val-sway">0.00</span>
-              </div>
-              <small class="text-light-muted">Left / Right</small>
-              <input type="range" class="form-range debug-slider" id="slider-sway"
-                     min="-100" max="100" value="0" data-axis="sway">
-            </div>
-          </div>
-
-          <!-- Heave -->
-          <div class="col-md-6 col-lg-4">
-            <div class="debug-slider-card">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Heave</label>
-                <span class="slider-value" id="val-heave">0.00</span>
-              </div>
-              <small class="text-light-muted">Up / Down</small>
-              <input type="range" class="form-range debug-slider" id="slider-heave"
-                     min="-100" max="100" value="0" data-axis="heave">
-            </div>
-          </div>
-
-          <!-- Roll -->
-          <div class="col-md-6 col-lg-4">
-            <div class="debug-slider-card">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Roll</label>
-                <span class="slider-value" id="val-roll">0.00</span>
-              </div>
-              <small class="text-light-muted">Rotate around forward axis</small>
-              <input type="range" class="form-range debug-slider" id="slider-roll"
-                     min="-100" max="100" value="0" data-axis="roll">
-            </div>
-          </div>
-
-          <!-- Pitch -->
-          <div class="col-md-6 col-lg-4">
-            <div class="debug-slider-card">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Pitch</label>
-                <span class="slider-value" id="val-pitch">0.00</span>
-              </div>
-              <small class="text-light-muted">Nose up / down</small>
-              <input type="range" class="form-range debug-slider" id="slider-pitch"
-                     min="-100" max="100" value="0" data-axis="pitch">
-            </div>
-          </div>
-
-          <!-- Yaw -->
-          <div class="col-md-6 col-lg-4">
-            <div class="debug-slider-card">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label fw-bold mb-0">Yaw</label>
-                <span class="slider-value" id="val-yaw">0.00</span>
-              </div>
-              <small class="text-light-muted">Turn left / right</small>
-              <input type="range" class="form-range debug-slider" id="slider-yaw"
-                     min="-100" max="100" value="0" data-axis="yaw">
-            </div>
-          </div>
-        </div>
-
-        <!-- Reset All button -->
-        <div class="text-center mt-4">
-          <button id="btn-reset-all" class="btn btn-outline-warning">Reset All Sliders to 0</button>
+          {% endfor %}
         </div>
       </div>
     </div>
   </div>
 </div>
 
-      <!-- Attitude Setpoint Override -->
-      <div class="row g-4 mt-1">
-        <div class="col-12">
-          <div class="card custom-card">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="card-title mb-0">Attitude Setpoint Override (°)</h5>
-                <span id="attitude-status" class="badge bg-secondary">IDLE</span>
-              </div>
-              <p class="text-muted small mb-4">
-                Push exact roll, pitch, and yaw setpoints down to the flight controller. Values are clamped to the configured VN-100 angle ranges.
-                Use this for heading-hold experiments without touching the raw thruster sliders.
-              </p>
-              <div class="row g-3 attitude-field-row">
-                <div class="col-md-4">
-                  <label class="form-label small text-light-muted">Roll (±{{ attitude_limits.roll }}°)</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" class="form-control bg-dark text-light" id="attitude-roll" step="0.1" placeholder="0.0">
-                    <span class="input-group-text">deg</span>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label small text-light-muted">Pitch (±{{ attitude_limits.pitch }}°)</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" class="form-control bg-dark text-light" id="attitude-pitch" step="0.1" placeholder="0.0">
-                    <span class="input-group-text">deg</span>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label small text-light-muted">Yaw (±{{ attitude_limits.yaw }}°)</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" class="form-control bg-dark text-light" id="attitude-yaw" step="0.1" placeholder="0.0">
-                    <span class="input-group-text">deg</span>
-                  </div>
-                </div>
-              </div>
-              <div class="d-flex align-items-center gap-2 flex-wrap mt-4">
-                <button id="btn-attitude-send" class="btn btn-sm btn-primary">Send Setpoints</button>
-                <button id="btn-attitude-clear" class="btn btn-sm btn-outline-secondary">Clear Attitude Override</button>
-                <div id="attitude-feedback" class="small text-light-muted ms-auto">Waiting for input…</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-<!-- PID Configuration -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">PID Configuration (MCU)</h5>
-          <div>
-            <span id="pid-status" class="badge bg-secondary me-2">READY</span>
-            <button id="btn-pid-request" class="btn btn-sm btn-info me-1">Request Current</button>
-            <button id="btn-pid-send" class="btn btn-sm btn-success me-1">Send to MCU</button>
-            <button id="btn-pid-reset" class="btn btn-sm btn-outline-danger">Reset All to 0</button>
-          </div>
-        </div>
-        <p class="text-muted small mb-3">
-          Set exact P, I, D gains for each axis. Use "Request Current" to load values from the MCU, edit them, then "Send to MCU".
-        </p>
-
-        <div class="table-responsive">
-          <table class="table table-sm table-dark table-bordered pid-table mb-0">
-            <thead>
-              <tr>
-                <th>Axis</th>
-                <th>P (Proportional)</th>
-                <th>I (Integral)</th>
-                <th>D (Derivative)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="fw-bold">Surge</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-surge-kd" value="0"></td>
-              </tr>
-              <tr>
-                <td class="fw-bold">Sway</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-sway-kd" value="0"></td>
-              </tr>
-              <tr>
-                <td class="fw-bold">Heave</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-heave-kd" value="0"></td>
-              </tr>
-              <tr>
-                <td class="fw-bold">Roll</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-roll-kd" value="0"></td>
-              </tr>
-              <tr>
-                <td class="fw-bold">Pitch</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-pitch-kd" value="0"></td>
-              </tr>
-              <tr>
-                <td class="fw-bold">Yaw</td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kp" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-ki" value="0"></td>
-                <td><input type="number" step="any" class="form-control form-control-sm pid-input" id="pid-yaw-kd" value="0"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Save / Load PID Configs -->
-        <div class="mt-3 pt-3 border-top border-secondary">
-          <div class="row g-2 align-items-end">
-            <div class="col-auto">
-              <label class="form-label small text-muted mb-1">Config Name</label>
-              <input type="text" class="form-control form-control-sm" id="pid-config-name" placeholder="e.g. pool-test-1" style="width: 200px;">
-            </div>
-            <div class="col-auto">
-              <button id="btn-pid-save" class="btn btn-sm btn-outline-success">Save Config</button>
-            </div>
-            <div class="col-auto">
-              <label class="form-label small text-muted mb-1">Load Config</label>
-              <select class="form-select form-select-sm" id="pid-config-select" style="width: 200px;">
-                <option value="">-- select --</option>
-              </select>
-            </div>
-            <div class="col-auto">
-              <button id="btn-pid-load" class="btn btn-sm btn-outline-info">Load</button>
-            </div>
-            <div class="col-auto">
-              <button id="btn-pid-delete" class="btn btn-sm btn-outline-danger">Delete</button>
-            </div>
-            <div class="col-auto">
-              <span id="pid-config-status" class="badge bg-secondary small">-</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Control Telemetry & Command Link -->
 <div class="row g-4 mt-1">
   <div class="col-lg-6">
     <div class="card custom-card h-100">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Control Telemetry</h5>
+          <h5 class="card-title mb-0">Topside Sends</h5>
+          <small class="text-light-muted">/api/rov/status</small>
+        </div>
+        <pre id="rov-status" class="text-light mb-0 debug-pre">Loading...</pre>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Nucleo Control Telemetry</h5>
           <small class="text-light-muted">Updated <span id="control-telemetry-age">--</span> ms ago</small>
         </div>
         <div class="table-responsive">
@@ -493,168 +68,24 @@
               </tr>
             </thead>
             <tbody id="control-telemetry-body">
-              <tr><td colspan="4" class="text-center text-muted">Waiting for packets…</td></tr>
+              <tr><td colspan="4" class="text-center text-muted">Waiting for packets...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
-  <div class="col-lg-6">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="card-title mb-0">Command Link Health</h5>
-          <span id="uplink-status-badge" class="badge bg-secondary">IDLE</span>
-        </div>
-        <p class="text-muted small mb-2">Sequence <span id="uplink-sequence">--</span> · Last send <span id="uplink-send-age">--</span> ms · Last ack <span id="uplink-ack-age">--</span> ms</p>
-        <div class="row g-2 mb-3">
-          <div class="col-sm-6">
-            <div class="small text-light-muted">UDP RX Count</div>
-            <div class="fs-5" id="uplink-udp-rx">--</div>
-          </div>
-          <div class="col-sm-6">
-            <div class="small text-light-muted">RX Errors</div>
-            <div class="fs-5" id="uplink-udp-errors">--</div>
-          </div>
-        </div>
-        <div class="small text-light-muted">Watchdog Resends</div>
-        <div class="fs-6 mb-3" id="uplink-resends">0</div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="mb-0">Override State</h6>
-          <span id="override-status-chip" class="badge bg-secondary">INACTIVE</span>
-        </div>
-        <div id="override-axes" class="small text-light"></div>
-      </div>
-    </div>
-  </div>
 </div>
 
-<!-- Control Loop Visualizer -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Control Loop Visualizer</h5>
-          <small class="text-light-muted">10&nbsp;Hz history of setpoint, output, and error</small>
-        </div>
-        <div class="row g-3" id="control-chart-grid">
-          <div class="col-md-4 col-xl-2" id="chart-card-surge">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Surge</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-surge">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-surge" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 col-xl-2" id="chart-card-sway">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Sway</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-sway">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-sway" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 col-xl-2" id="chart-card-heave">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Heave</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-heave">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-heave" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 col-xl-2" id="chart-card-roll">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Roll</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-roll">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-roll" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 col-xl-2" id="chart-card-pitch">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Pitch</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-pitch">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-pitch" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-          <div class="col-md-4 col-xl-2" id="chart-card-yaw">
-            <div class="control-chart-card">
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="text-uppercase text-light-muted fw-semibold small">Yaw</span>
-                <span class="badge bg-secondary axis-status" id="axis-status-yaw">--</span>
-              </div>
-              <canvas class="control-chart" id="chart-yaw" width="320" height="120"></canvas>
-              <div class="chart-legend small text-light-muted">
-                <span class="legend-swatch legend-setpoint"></span> Setpoint
-                <span class="legend-swatch legend-output ms-2"></span> Output
-                <span class="legend-swatch legend-error ms-2"></span> Error
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Live ROV Command readout -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Live Packages Sent from Topside</h5>
-          <small class="text-light-muted">Bitmask payload preview &amp; raw command snapshot</small>
-        </div>
-        <pre id="rov-status" class="text-light mb-0 mt-3" style="font-size: 0.85rem;">Loading...</pre>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Log Stream -->
 <div class="row g-4 mt-1">
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="card-title mb-0">Zephyr Log Stream</h5>
-          <small class="text-light-muted">Latest 50 entries</small>
+          <small class="text-light-muted">/api/logs/live</small>
         </div>
-        <div id="log-stream" class="log-stream border border-secondary rounded" style="min-height: 200px; max-height: 320px; overflow-y: auto; font-family: var(--bs-font-monospace); font-size: 0.8rem;"></div>
+        <div id="log-stream" class="log-stream border border-secondary rounded"></div>
       </div>
     </div>
   </div>

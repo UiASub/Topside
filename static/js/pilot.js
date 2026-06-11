@@ -1,8 +1,3 @@
-/* ===================================================================
-   Pilot HUD – JavaScript
-   Fetches telemetry from existing APIs and updates the HUD elements
-   =================================================================== */
-
 (function () {
   "use strict";
 
@@ -19,6 +14,7 @@
     loadedOnce: false,
     fitContain: false,
   };
+
   const aruco = {
     enabled: false,
     state: null,
@@ -28,20 +24,24 @@
     log: null,
   };
 
+  let hudLightSlider = null;
+  let hudLightPostTimer = null;
+  const startTime = Date.now();
+
   function setCameraState(state, label) {
     if (!camera.status || !camera.stateText) return;
     camera.status.classList.remove("state-ok", "state-reconnecting", "state-waiting", "state-error");
-    camera.status.classList.add(`state-${state}`);
+    camera.status.classList.add("state-" + state);
     camera.stateText.textContent = label;
   }
 
   function cameraUrl() {
-    return `/ip_video_feed?ts=${Date.now()}`;
+    return "/ip_video_feed?ts=" + Date.now();
   }
 
-  function scheduleCameraReconnect(reason = "Reconnecting…") {
+  function scheduleCameraReconnect(label) {
     if (!camera.img || camera.reconnectTimer) return;
-    setCameraState("reconnecting", reason);
+    setCameraState("reconnecting", label || "Reconnecting...");
     camera.reconnectTimer = setTimeout(() => {
       camera.reconnectTimer = null;
       camera.img.src = cameraUrl();
@@ -65,8 +65,6 @@
     camera.fitBtn.textContent = contain ? "Fill" : "Fit";
   }
 
-  // ── Mission timer ─────────────────────────────────────────────
-  const startTime = Date.now();
   function updateMissionTime() {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const h = String(Math.floor(elapsed / 3600)).padStart(2, "0");
@@ -76,208 +74,84 @@
     if (el) el.textContent = `${h}:${m}:${s}`;
   }
 
-  // ── Compass strip builder ─────────────────────────────────────
-  function buildCompassStrip() {
-    const strip = document.getElementById("hud-compass-strip");
-    if (!strip) return;
-    strip.innerHTML = "";
-    const cardinals = { 0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW", 360: "N" };
-    // Build from -90 to 450 for wrapping
-    for (let deg = -90; deg <= 450; deg += 5) {
-      const tick = document.createElement("div");
-      tick.className = "compass-tick";
-      const line = document.createElement("div");
-      const normDeg = ((deg % 360) + 360) % 360;
-      if (normDeg % 45 === 0) {
-        line.className = "compass-tick-line major";
-        const lbl = document.createElement("div");
-        lbl.className = "compass-tick-label";
-        lbl.textContent = cardinals[normDeg] || `${normDeg}`;
-        tick.appendChild(line);
-        tick.appendChild(lbl);
-      } else if (normDeg % 10 === 0) {
-        line.className = "compass-tick-line minor";
-        tick.appendChild(line);
-      } else {
-        line.className = "compass-tick-line minor";
-        line.style.height = "3px";
-        tick.appendChild(line);
-      }
-      tick.dataset.deg = deg;
-      strip.appendChild(tick);
-    }
-  }
-
-  function updateCompass(heading) {
-    const strip = document.getElementById("hud-compass-strip");
-    if (!strip) return;
-    // Each tick is 30px wide, ticks every 5°  →  6px per degree
-    const offset = heading * 6;
-    // Center the -90 start offset
-    const baseOffset = -90 * 6;
-    strip.style.transform = `translateX(${-(offset - baseOffset)}px)`;
-  }
-
-  // ── Artificial horizon ────────────────────────────────────────
-  function updateHorizon(roll, pitch) {
-    const svg = document.getElementById("hud-horizon");
-    if (!svg) return;
-
-    const sky    = document.getElementById("horizon-sky");
-    const ground = document.getElementById("horizon-ground");
-    const line   = document.getElementById("horizon-line");
-    const pitchG = document.getElementById("horizon-pitch-group");
-
-    // Pitch: 1px per degree, clamped to ±45
-    const pitchPx = Math.max(-45, Math.min(45, pitch)) * 1.0;
-
-    // Apply rotation (roll) and translation (pitch) to sky/ground group
-    const transform = `rotate(${-roll}, 60, 60) translate(0, ${pitchPx})`;
-    sky.setAttribute("transform", transform);
-    ground.setAttribute("transform", transform);
-    line.setAttribute("transform", transform);
-    if (pitchG) pitchG.setAttribute("transform", transform);
-  }
-
-  function fmtAngle(v) {
-    return (v >= 0 ? "+" : "") + v.toFixed(1) + "\u00B0";
-  }
-
-  // ── Data fetchers ─────────────────────────────────────────────
-
   async function fetchDepth() {
     try {
       const res = await fetch("/api/depth");
-      const d = await res.json();
-      const el = document.getElementById("hud-depth");
-      const tgt = document.getElementById("hud-depth-target");
-      if (el) el.textContent = d.dpt != null ? parseFloat(d.dpt).toFixed(1) : "--.-";
-      if (tgt) tgt.textContent = d.dptSet != null ? parseFloat(d.dptSet).toFixed(1) : "--.-";
-    } catch (_) { /* silent */ }
-  }
-
-  async function fetchBattery() {
-    try {
-      const res = await fetch("/api/battery");
-      const d = await res.json();
-      const level = d.battery ?? 0;
-      const el = document.getElementById("hud-battery");
-      const fill = document.getElementById("hud-battery-fill");
-      if (el) el.textContent = level;
-      if (fill) {
-        fill.style.width = level + "%";
-        fill.classList.remove("batt-low", "batt-mid");
-        if (level < 20)      fill.classList.add("batt-low");
-        else if (level < 50) fill.classList.add("batt-mid");
-      }
-    } catch (_) { /* silent */ }
-  }
-
-  async function fetchSensors() {
-    try {
-      const res = await fetch("/api/sensors");
-      const d = await res.json();
-
-      // VN-100S provides fused yaw/pitch/roll directly
-      const angles = {
-        roll:  d.roll  || 0,
-        pitch: d.pitch || 0,
-        yaw:   d.yaw   || 0,
-      };
-
-      // Update readouts
-      const elRoll  = document.getElementById("hud-roll");
-      const elPitch = document.getElementById("hud-pitch");
-      const elHdg   = document.getElementById("hud-heading");
-      if (elRoll)  elRoll.textContent  = fmtAngle(angles.roll);
-      if (elPitch) elPitch.textContent = fmtAngle(angles.pitch);
-
-      // Heading (yaw mapped to 0-360)
-      const heading = ((angles.yaw % 360) + 360) % 360;
-      if (elHdg) elHdg.textContent = heading.toFixed(0).padStart(3, "0");
-      updateCompass(heading);
-      updateHorizon(angles.roll, angles.pitch);
-    } catch (_) { /* silent */ }
-  }
-
-  function setTelem(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val != null ? parseFloat(val).toFixed(2) : "—";
-  }
-
-  async function fetchThrusters() {
-    try {
-      const res = await fetch("/api/thrusters");
       const data = await res.json();
-      const container = document.getElementById("hud-thrusters");
-      if (!container) return;
-
-      // Build thruster indicators if empty
-      const thrusters = Array.isArray(data) ? data : Object.values(data);
-      if (container.children.length === 0 && thrusters.length > 0) {
-        container.innerHTML = "";
-        thrusters.forEach((_, i) => {
-          const item = document.createElement("div");
-          item.className = "hud-thr-item";
-          item.innerHTML = `
-            <div class="hud-thr-dot" id="thr-dot-${i}"></div>
-            <span class="hud-thr-label">T${i + 1}</span>
-            <span class="hud-thr-val" id="thr-val-${i}">—</span>`;
-          container.appendChild(item);
-        });
-      }
-
-      thrusters.forEach((t, i) => {
-        const dot = document.getElementById(`thr-dot-${i}`);
-        const val = document.getElementById(`thr-val-${i}`);
-        const power = t.power ?? t.pwr ?? 0;
-        const temp  = t.temperature ?? t.temp ?? 0;
-
-        if (val) val.textContent = `${power}W`;
-        if (dot) {
-          dot.classList.remove("thr-ok", "thr-warn", "thr-error");
-          if (temp > 60)      dot.classList.add("thr-error");
-          else if (temp > 40) dot.classList.add("thr-warn");
-          else                dot.classList.add("thr-ok");
-        }
-      });
-    } catch (_) { /* silent */ }
+      const depth = document.getElementById("hud-depth");
+      const target = document.getElementById("hud-depth-target");
+      if (depth) depth.textContent = data.dpt != null ? parseFloat(data.dpt).toFixed(1) : "--.-";
+      if (target) target.textContent = data.dptSet != null ? parseFloat(data.dptSet).toFixed(1) : "--.-";
+    } catch (_) {}
   }
 
   async function fetchLights() {
     try {
       const res = await fetch("/api/lights");
-      const d = await res.json();
-      const el = document.getElementById("hud-lights");
-      if (el) {
-        const level = d.level ?? d.light ?? d.value ?? "—";
-        el.textContent = typeof level === "number" ? `${level}%` : level;
+      const data = await res.json();
+      const level = data.level ?? data.light ?? 0;
+      const readout = document.getElementById("hud-lights");
+      if (readout) readout.textContent = typeof level === "number" ? `${level}%` : String(level);
+      if (hudLightSlider && document.activeElement !== hudLightSlider) {
+        hudLightSlider.value = typeof level === "number" ? level : 0;
       }
-    } catch (_) { /* silent */ }
+    } catch (_) {}
+  }
+
+  async function postLights(level) {
+    try {
+      await fetch("/api/lights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level }),
+      });
+    } catch (_) {}
+  }
+
+  function queueLightPost(level) {
+    if (hudLightPostTimer) return;
+    hudLightPostTimer = setTimeout(() => {
+      hudLightPostTimer = null;
+    }, 100);
+    postLights(level);
+  }
+
+  function initLightControls() {
+    hudLightSlider = document.getElementById("hud-light-slider");
+    if (!hudLightSlider) return;
+    hudLightSlider.addEventListener("input", () => {
+      const level = parseInt(hudLightSlider.value, 10);
+      const readout = document.getElementById("hud-lights");
+      if (readout) readout.textContent = `${level}%`;
+      queueLightPost(level);
+    });
+    hudLightSlider.addEventListener("change", () => {
+      postLights(parseInt(hudLightSlider.value, 10));
+    });
   }
 
   async function fetchCameraStatus() {
     try {
       const res = await fetch("/api/ip_camera/status");
-      const d = await res.json();
+      const data = await res.json();
       const dot = document.getElementById("hud-rpi-dot");
       if (dot) {
         dot.classList.remove("status-ok", "status-err");
-        dot.classList.add(d.connected ? "status-ok" : "status-err");
+        dot.classList.add(data.connected ? "status-ok" : "status-err");
       }
 
-      if (d.connected) {
+      if (data.connected) {
         if (camera.loadedOnce) {
           setCameraState("ok", "Live");
           resetCameraReconnectBackoff();
         } else {
-          setCameraState("waiting", "Waiting for first frame…");
+          setCameraState("waiting", "Waiting for first frame...");
         }
       } else {
         setCameraState("error", "Camera offline");
-        scheduleCameraReconnect("Camera offline – reconnecting…");
+        scheduleCameraReconnect("Camera offline - reconnecting...");
       }
-    } catch (_) { /* silent */ }
+    } catch (_) {}
   }
 
   function renderArucoLog(log) {
@@ -286,9 +160,7 @@
       aruco.state.textContent = aruco.enabled ? "ON" : "OFF";
       aruco.state.classList.toggle("is-on", aruco.enabled);
     }
-    if (aruco.toggleBtn) {
-      aruco.toggleBtn.textContent = aruco.enabled ? "Stop" : "Start";
-    }
+    if (aruco.toggleBtn) aruco.toggleBtn.textContent = aruco.enabled ? "Stop" : "Start";
     if (aruco.visible) {
       const visibleIds = log && Array.isArray(log.visible_ids) ? log.visible_ids : [];
       aruco.visible.textContent = visibleIds.length > 0 ? visibleIds.join(", ") : "--";
@@ -298,7 +170,7 @@
       aruco.log.innerHTML = "";
       entries.forEach((entry) => {
         const item = document.createElement("li");
-        item.textContent = `ID ${entry.id}`;
+        item.textContent = "ID " + entry.id;
         aruco.log.appendChild(item);
       });
     }
@@ -309,15 +181,15 @@
       const res = await fetch("/api/aruco-log");
       const data = await res.json();
       if (data.ok) renderArucoLog(data.log);
-    } catch (_) { /* silent */ }
+    } catch (_) {}
   }
 
   async function postArucoAction(action) {
     try {
-      const res = await fetch(`/api/aruco-log/${action}`, { method: "POST" });
+      const res = await fetch("/api/aruco-log/" + action, { method: "POST" });
       const data = await res.json();
       if (data.ok) renderArucoLog(data.log);
-    } catch (_) { /* silent */ }
+    } catch (_) {}
   }
 
   function initArucoControls() {
@@ -332,9 +204,7 @@
         postArucoAction(aruco.enabled ? "stop" : "start");
       });
     }
-    if (aruco.clearBtn) {
-      aruco.clearBtn.addEventListener("click", () => postArucoAction("clear"));
-    }
+    if (aruco.clearBtn) aruco.clearBtn.addEventListener("click", () => postArucoAction("clear"));
   }
 
   function initCameraFeed() {
@@ -346,65 +216,49 @@
     camera.fitBtn = document.getElementById("pilot-fit");
 
     if (!camera.img) return;
-
-    setCameraState("waiting", "Connecting…");
+    setCameraState("waiting", "Connecting...");
 
     camera.img.addEventListener("load", () => {
       camera.loadedOnce = true;
       setCameraState("ok", "Live");
       resetCameraReconnectBackoff();
     });
-
     camera.img.addEventListener("error", () => {
       setCameraState("error", "Stream error");
-      scheduleCameraReconnect("Stream error – reconnecting…");
+      scheduleCameraReconnect("Stream error - reconnecting...");
     });
-
     if (camera.reconnectBtn) {
       camera.reconnectBtn.addEventListener("click", () => {
         resetCameraReconnectBackoff();
-        setCameraState("reconnecting", "Manual reconnect…");
+        setCameraState("reconnecting", "Manual reconnect...");
         camera.img.src = cameraUrl();
       });
     }
-
-    if (camera.fitBtn) {
-      camera.fitBtn.addEventListener("click", () => setFitMode(!camera.fitContain));
-    }
-
+    if (camera.fitBtn) camera.fitBtn.addEventListener("click", () => setFitMode(!camera.fitContain));
     setFitMode(false);
   }
 
-  // ── Initialization ────────────────────────────────────────────
   function init() {
-    buildCompassStrip();
     initCameraFeed();
     initArucoControls();
+    initLightControls();
 
-    // Hide the page header/footer for immersive view
     const header = document.querySelector("header.header");
     if (header) header.style.display = "none";
     const footer = document.querySelector("footer.footer, .footer");
     if (footer) footer.style.display = "none";
 
-    // Start polling loops  (keep rates low to avoid starving the MJPEG stream)
+    fetchDepth();
+    fetchLights();
+    fetchCameraStatus();
+    fetchArucoLog();
+    updateMissionTime();
+
     setInterval(fetchDepth, 1000);
-    setInterval(fetchBattery, 3000);
-    setInterval(fetchSensors, 500);        // lower API pressure; keep camera smooth
-    setInterval(fetchThrusters, 2000);
     setInterval(fetchLights, 3000);
     setInterval(fetchCameraStatus, 5000);
     setInterval(fetchArucoLog, 1000);
     setInterval(updateMissionTime, 1000);
-
-    // Initial fetches
-    fetchDepth();
-    fetchBattery();
-    fetchSensors();
-    fetchThrusters();
-    fetchLights();
-    fetchCameraStatus();
-    fetchArucoLog();
   }
 
   if (document.readyState === "loading") {
