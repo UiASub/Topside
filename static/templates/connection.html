@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Connection - UiASub Topside{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Nucleo Contact Proof</h5>
+          <span id="nucleo-contact-badge" class="badge bg-secondary">WAITING</span>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">Last Ack</div>
+              <div class="stat-value" id="nucleo-last-ack">--</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">UDP RX</div>
+              <div class="stat-value" id="nucleo-udp-rx">--</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">RX Errors</div>
+              <div class="stat-value" id="nucleo-udp-errors">--</div>
+            </div>
+          </div>
+        </div>
+        <pre id="nucleo-link-details" class="text-light mt-3 mb-0 debug-pre">Loading...</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">ESC Proof</h5>
+        <span class="badge bg-secondary mb-3">UNAVAILABLE</span>
+        <p class="small text-muted mb-0">Real ESC telemetry is not available yet.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Restart MCU</h5>
+          <span id="system-reset-status" class="badge bg-secondary">READY</span>
+        </div>
+        <button id="btn-system-reset" class="btn btn-outline-danger">Restart MCU</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">test.py Activation</h5>
+        <button class="btn btn-outline-secondary" type="button" disabled>TODO</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/connection.js"></script>
+{% endblock %}

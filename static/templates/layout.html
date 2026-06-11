@@ -1,226 +1,62 @@
 {% extends "base.html" %}
 
+{% block title %}Home - UiASub Topside{% endblock %}
+
 {% block content %}
 <div class="row g-4">
-  <!-- Battery Card -->
-  <div class="col-md-4">
-    <div class="card custom-card h-100">
-      <div class="card-body d-flex flex-column">
-        <h5 class="card-title">Battery</h5>
-        <div class="progress mb-2">
-          <div id="battery-progress" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-        </div>
-        <p id="battery-status" class="card-text mt-auto">Loading...</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Depth Card -->
-  <div class="col-md-4">
-    <div class="card custom-card h-100">
-      <div class="card-body d-flex flex-column">
-        <h5 class="card-title">Depth</h5>
-        <p id="depth-status" class="display-6">Loading...</p>
-        <small class="text-muted mt-auto">Target: <span id="depth-target">-</span></small>
-      </div>
-    </div>
-  </div>
-
-  <!-- Lights Card -->
-  <div class="col-md-4">
-    <div class="card custom-card h-100">
-      <div class="card-body d-flex flex-column">
-        <h5 class="card-title">Lights</h5>
-        <div class="mt-3">
-          <label for="light-slider" class="form-label">
-            Brightness: <span id="light-value">0</span>%
-          </label>
-          <input type="range" class="form-range" id="light-slider" min="0" max="80" step="1" value="0">
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Manipulator Card -->
-  <div class="col-md-4">
-    <div class="card custom-card h-100">
-      <div class="card-body d-flex flex-column">
-        <h5 class="card-title">Manipulator</h5>
-        <div class="mt-3">
-          <label for="manipulator-slider" class="form-label">
-            Target: <span id="manipulator-target-value">0</span>&deg;
-          </label>
-          <input type="range" class="form-range" id="manipulator-slider" min="-50" max="50" step="1" value="0">
-        </div>
-        <div class="small text-muted mt-2">
-          Applied: <span id="manipulator-applied-value">--</span>&deg; /
-          <span id="manipulator-pulse-value">--</span> us
-        </div>
-        <div class="small text-muted mt-auto">Source: <span id="manipulator-source-value">--</span></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mt-1">
-  <!-- Thruster Status -->
-  <div class="col-md-8">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <h5 class="card-title">Thruster Status</h5>
-        <table id="thruster-status-table" class="table custom-table">
-          <thead>
-            <tr>
-              <th>Thruster</th>
-              <th>Power (W)</th>
-              <th>Temperature (°C)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Dynamically populated by JavaScript -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sensor Data -->
-  <div class="col-md-4">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">Sensor Data (9DOF)</h5>
-        </div>
-        <div id="sensor-data" class="mt-3">Loading...</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Resource Monitor -->
-<div class="row g-4 mt-1">
-  <div class="col-12">
+  <div class="col-lg-8">
     <div class="card custom-card">
       <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Resource Monitor</h5>
-          <small id="connection-status" class="text-muted">Waiting for telemetry...</small>
-        </div>
-
-        <div class="row">
-          <!-- CPU Gauge -->
-          <div class="col-md-3 col-6 text-center">
-            <svg viewBox="0 0 200 120" class="resource-gauge-svg">
-              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#2d3748" stroke-width="12" stroke-linecap="round"/>
-              <path id="cpu-arc" d="M 20 100 A 80 80 0 0 1 20 100" fill="none" stroke="#28a745" stroke-width="12" stroke-linecap="round"/>
-              <text x="100" y="85" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold" id="cpu-value">0%</text>
-              <text x="100" y="110" text-anchor="middle" fill="#6c757d" font-size="14">CPU</text>
-            </svg>
-          </div>
-
-          <!-- Memory Gauge -->
-          <div class="col-md-3 col-6 text-center">
-            <svg viewBox="0 0 200 120" class="resource-gauge-svg">
-              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#2d3748" stroke-width="12" stroke-linecap="round"/>
-              <path id="mem-arc" d="M 20 100 A 80 80 0 0 1 20 100" fill="none" stroke="#28a745" stroke-width="12" stroke-linecap="round"/>
-              <text x="100" y="85" text-anchor="middle" fill="#fff" font-size="24" font-weight="bold" id="mem-value">0%</text>
-              <text x="100" y="110" text-anchor="middle" fill="#6c757d" font-size="14">Memory</text>
-            </svg>
-            <div class="small text-muted">
-              <span id="mem-free">Free: -- KB</span> / <span id="mem-total">Total: -- KB</span>
-            </div>
-          </div>
-
-          <!-- Stats -->
-          <div class="col-md-6">
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">Uptime</div>
-                  <div class="stat-value" id="uptime">--:--</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">Threads</div>
-                  <div class="stat-value" id="thread-count">--</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">UDP Received</div>
-                  <div class="stat-value" id="udp-rx">0</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">UDP Errors</div>
-                  <div class="stat-value" id="udp-errors">0</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">Sequence</div>
-                  <div class="stat-value" id="sequence">0</div>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="stat-box">
-                  <div class="stat-label">Packets Lost</div>
-                  <div class="stat-value" id="packets-lost">0</div>
-                </div>
-              </div>
-            </div>
-            <div class="mt-2 small text-muted">
-              Last update: <span id="last-update">--:--:--</span>
-            </div>
-          </div>
-        </div>
+        <h2 class="h4 card-title">UiASub Topside</h2>
+        <p class="mb-3">
+          Start in the Connection tab and verify Nucleo contact before using camera, tooling, debug, or pilot.
+        </p>
+        <a class="btn btn-primary" href="/connection">Open Connection</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card custom-card">
+      <div class="card-body">
+        <h2 class="h5 card-title">Branch</h2>
+        <div class="display-6">gui-rework</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="row g-4 mt-1">
-  <!-- Video Feed -->
-  <div class="col-12">
-    <div class="card custom-card h-100">
+  <div class="col-md-6 col-xl-3">
+    <a class="card custom-card page-link-card" href="/ip-camera">
       <div class="card-body">
-        <h5 class="card-title">Autonomus missions</h5>
-          <div class="navigation">
-            <button id="docking-button" type="button" class="btn btn-sm btn-primary">Docking</button>
-              <button id="pipeline-button" type="button" class="btn btn-sm btn-primary">Pipeline</button>
-          </div>
+        <h3 class="h5 card-title">IP Camera</h3>
+        <p class="mb-0 text-light-muted">Live camera view and IP presets.</p>
       </div>
-    </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-xl-3">
+    <a class="card custom-card page-link-card" href="/tooling">
+      <div class="card-body">
+        <h3 class="h5 card-title">Tooling</h3>
+        <p class="mb-0 text-light-muted">Lights and manipulator controls.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-xl-3">
+    <a class="card custom-card page-link-card" href="/config">
+      <div class="card-body">
+        <h3 class="h5 card-title">Config</h3>
+        <p class="mb-0 text-light-muted">Axis mapping, gains, and offsets.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-xl-3">
+    <a class="card custom-card page-link-card" href="/debug">
+      <div class="card-body">
+        <h3 class="h5 card-title">Debug</h3>
+        <p class="mb-0 text-light-muted">Override sliders, telemetry, and logs.</p>
+      </div>
+    </a>
   </div>
 </div>
-
-<div class="row g-4 mt-1">
-  <!-- Controller Status -->
-  <div class="col-12">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <h5 class="card-title">Controller Status</h5>
-        <div class="d-flex justify-content-center align-items-center">
-          <div id="controller-svg-container" style="max-width: 500px; width: 100%;">
-            {% include '_controller.html' %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-{% include '_config_modal.html' %}
-
-<script src="/static/js/thrusters.js"></script>
-<script src="/static/js/sensors.js"></script>
-<script src="/static/js/lights.js"></script>
-<script src="/static/js/manipulator.js"></script>
-<script src="/static/js/battery.js"></script>
-<script src="/static/js/depth.js"></script>
-<script src="/static/js/controller.js"></script>
-<script src="/static/js/resource_monitor.js"></script>
 {% endblock %}

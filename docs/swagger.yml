@@ -5,7 +5,7 @@ info:
   description: >
     REST and streaming endpoints exposed by the Topside ROV Flask application.
     The API provides camera status and feeds, telemetry, command/uplink status,
-    IMU configuration, debug overrides, controller gains, and PID tuning.
+    IMU configuration, debug overrides, controller input, and PID tuning.
   version: "1.0.0"
 
 host: localhost:5000
@@ -28,8 +28,6 @@ tags:
     description: IMU receiver status, tare, offsets, and axis mappings
   - name: Debug
     description: Manual debug overrides and attitude setpoints
-  - name: Controller
-    description: Gamepad controller input and gain settings
   - name: PID
     description: PID gain tuning, setpoints, and saved presets
   - name: System
@@ -695,46 +693,6 @@ paths:
         504:
           description: Thruster axes were neutralized, but the MCU did not confirm zero PID gains
 
-  /api/controller/gains:
-    get:
-      tags: [Controller]
-      summary: Get controller gain settings
-      responses:
-        200:
-          description: Current controller gains
-          schema:
-            type: object
-            properties:
-              ok:
-                type: boolean
-                example: true
-              gains:
-                $ref: "#/definitions/ControllerGains"
-        503:
-          description: Controller not available
-    post:
-      tags: [Controller]
-      summary: Set controller gain settings
-      parameters:
-        - in: body
-          name: body
-          required: true
-          schema:
-            $ref: "#/definitions/ControllerGains"
-      responses:
-        200:
-          description: Gains updated
-          schema:
-            type: object
-            properties:
-              ok:
-                type: boolean
-                example: true
-              gains:
-                $ref: "#/definitions/ControllerGains"
-        503:
-          description: Controller not available
-
   /api/pid/gains:
     get:
       tags: [PID]
@@ -1019,17 +977,6 @@ definitions:
         items:
           type: number
         example: [0, 0, 1, 0, 0, 0, 0.4, 0]
-
-  ControllerGains:
-    type: object
-    properties:
-      master: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      surge: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      sway: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      heave: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      roll: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      pitch: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
-      yaw: {type: number, minimum: 0.0, maximum: 1.0, example: 1.0}
 
   CameraStatusBase:
     type: object

@@ -405,3 +405,82 @@ body {
         font-size: 0.9rem;
     }
 }
+
+.text-light-muted {
+    color: #adb5bd !important;
+}
+
+.page-link-card {
+    text-decoration: none;
+}
+
+.page-link-card:hover {
+    border-color: #0dcaf0;
+}
+
+.debug-pre {
+    max-height: 360px;
+    overflow: auto;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #495057;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.log-stream {
+    background: rgba(0, 0, 0, 0.4);
+    min-height: 240px;
+    max-height: 320px;
+    overflow-y: auto;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.8rem;
+    padding: 8px;
+}
+
+.ip-camera-shell {
+    min-height: calc(100vh - 220px);
+}
+
+.ip-camera-view {
+    position: relative;
+    min-height: calc(100vh - 240px);
+    overflow: hidden;
+    border: 1px solid #495057;
+    border-radius: 8px;
+    background: #05080b;
+}
+
+.ip-camera-view img {
+    display: block;
+    width: 100%;
+    min-height: calc(100vh - 240px);
+    max-height: calc(100vh - 180px);
+    object-fit: contain;
+    background: #000;
+}
+
+.ip-camera-panel {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: min(360px, calc(100% - 32px));
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: rgba(20, 24, 28, 0.92);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 768px) {
+    .ip-camera-panel {
+        position: static;
+        width: 100%;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .ip-camera-view img {
+        min-height: 360px;
+    }
+}

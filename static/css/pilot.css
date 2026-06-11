@@ -397,6 +397,12 @@
 
 /* Thruster strip */
 .hud-thruster-strip { flex: 1; }
+.hud-lights-panel {
+  width: 170px;
+}
+.hud-light-slider {
+  margin: 7px 0 0;
+}
 .hud-thruster-row {
   display: flex;
   gap: 8px;

@@ -3,18 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   {% block extra_head %}{% endblock %}
-  <title>{% block title %}ROV Dashboard{% endblock %}</title>
+  <title>{% block title %}UiASub Topside{% endblock %}</title>
 </head>
 <body class="bg-dark text-light">
-  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom sticky-top">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="/">Change View</a>
+      <a class="navbar-brand fw-bold" href="/">UiASub Topside</a>
       <button
         class="navbar-toggler"
         type="button"
@@ -28,52 +25,27 @@
       </button>
       <div class="collapse navbar-collapse justify-content-end" id="navbarSupportedContent">
         <ul class="navbar-nav mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="/">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/pilot"> Pilot</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/Camera1">Camera 1</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/Camera2">Camera 2</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/resources">Resources</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/graphs">Graphs</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/pid-tuning">PID Tuning</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/debug">Debug</a>
-          </li>
-          <li class="nav-item">
-  <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#configModal">
-    ⚙️
-  </a>
-</li>
-
+          <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="/pilot">Pilot</a></li>
+          <li class="nav-item"><a class="nav-link" href="/debug">Debug</a></li>
+          <li class="nav-item"><a class="nav-link" href="/pid-tuning">PID Tuning</a></li>
+          <li class="nav-item"><a class="nav-link" href="/tooling">Tooling</a></li>
+          <li class="nav-item"><a class="nav-link" href="/config">Config</a></li>
+          <li class="nav-item"><a class="nav-link" href="/ip-camera">IP Camera</a></li>
+          <li class="nav-item"><a class="nav-link" href="/connection">Connection</a></li>
         </ul>
       </div>
     </div>
   </nav>
 
-  <!-- Header -->
   <header class="header" id="page-header">
-    <h1>ROV Mission Dashboard</h1>
+    <h1>UiASub Topside</h1>
   </header>
 
-  <!-- Main Content -->
   <main class="container my-4" id="main-content">
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Footer -->
   <footer class="footer" id="page-footer">
     <p>&copy; 2025 UiASub.</p>
     <div class="social-links">
@@ -82,11 +54,7 @@
     </div>
   </footer>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Custom JS -->
-  <script src="/static/js/configuration.js"></script>
-  <!-- Fest Easter egg: type "fest" to celebrate 🎉 -->
   <script src="/static/js/fest.js"></script>
   {% block extra_scripts %}{% endblock %}
 </body>

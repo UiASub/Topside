@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Tooling - UiASub Topside{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">Main Lights</h5>
+        <label for="light-slider" class="form-label">
+          Brightness: <span id="light-value">0</span>%
+        </label>
+        <input type="range" class="form-range" id="light-slider" min="0" max="80" step="1" value="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card custom-card h-100">
+      <div class="card-body">
+        <h5 class="card-title">Manipulator</h5>
+        <label for="manipulator-slider" class="form-label">
+          Target: <span id="manipulator-target-value">0</span> deg
+        </label>
+        <input type="range" class="form-range" id="manipulator-slider" min="-50" max="50" step="1" value="0">
+        <div class="small text-muted mt-3">
+          Applied: <span id="manipulator-applied-value">--</span> deg /
+          <span id="manipulator-pulse-value">--</span> us
+        </div>
+        <div class="small text-muted">Source: <span id="manipulator-source-value">--</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/lights.js"></script>
+<script src="/static/js/manipulator.js"></script>
+{% endblock %}
