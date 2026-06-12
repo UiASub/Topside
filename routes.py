@@ -2,6 +2,7 @@ import ipaddress
 import json
 import math
 import re
+import subprocess
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -42,7 +43,9 @@ _DEFAULT_ACCEL_AXES = {"x": "+x", "y": "+y", "z": "+z"}
 _DEFAULT_OFFSET = {"x": 0.0, "y": 0.0, "z": 0.0}
 ATTITUDE_LIMITS_DEG = {"roll": 180.0, "pitch": 90.0, "yaw": 180.0}
 CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
+TRANSLATIONAL_AXES = ("surge", "sway", "heave")
 ATTITUDE_AXES = ("roll", "pitch", "yaw")
+DEFAULT_PID_SETPOINT_RATES = {axis: 90.0 for axis in ATTITUDE_AXES}
 DEFAULT_IP_CAMERA_IP = "10.77.0.4"
 
 
@@ -69,6 +72,54 @@ def _zero_pid_gains():
     return {axis: {"kp": 0.0, "ki": 0.0, "kd": 0.0} for axis in PID_AXES}
 
 
+def _attitude_pid_gains(gains):
+    return {axis: gains.get(axis, {"kp": 0.0, "ki": 0.0, "kd": 0.0}) for axis in ATTITUDE_AXES}
+
+
+def _mcu_pid_gains(gains):
+    packet = _zero_pid_gains()
+    for axis in ATTITUDE_AXES:
+        axis_gains = gains.get(axis, {}) if isinstance(gains, dict) else {}
+        cleaned = {}
+        for key in ("kp", "ki", "kd"):
+            try:
+                cleaned[key] = float(axis_gains.get(key, 0.0))
+            except (AttributeError, TypeError, ValueError):
+                cleaned[key] = 0.0
+        packet[axis] = {
+            "kp": cleaned["kp"],
+            "ki": cleaned["ki"],
+            "kd": cleaned["kd"],
+        }
+    return packet
+
+
+def _clean_pid_rates(data):
+    rates = {}
+    for axis in ATTITUDE_AXES:
+        try:
+            value = float(data.get(axis, DEFAULT_PID_SETPOINT_RATES[axis]))
+        except (AttributeError, TypeError, ValueError):
+            value = DEFAULT_PID_SETPOINT_RATES[axis]
+        if not math.isfinite(value):
+            value = DEFAULT_PID_SETPOINT_RATES[axis]
+        rates[axis] = _clamp(value, 0.0, 90.0)
+    return rates
+
+
+def _load_pid_rates():
+    return _clean_pid_rates(config_handler.get_section("pid_setpoint_rates") or {})
+
+
+def _save_pid_rates(rates):
+    cleaned = _clean_pid_rates(rates)
+    config_handler.update_data({"pid_setpoint_rates": cleaned})
+    ctrl = current_app.config.get("CONTROLLER")
+    if ctrl and hasattr(ctrl, "set_pid_rates"):
+        ctrl.set_pid_rates(cleaned)
+    return cleaned
+
+
 def _coerce_attitude_setpoints(data):
     axes = {}
     for axis in ATTITUDE_AXES:
@@ -87,15 +138,80 @@ def _coerce_attitude_setpoints(data):
     return axes
 
 
+def _imu_attitude_sanity(stats):
+    age_ms = stats.get("age_ms")
+    raw = stats.get("last_data") or {}
+    reasons = []
+    numeric = {}
+
+    if age_ms is None:
+        reasons.append("IMU data is missing")
+    elif age_ms > 2000:
+        reasons.append("IMU data is stale")
+
+    for axis in ATTITUDE_AXES:
+        value = raw.get(axis)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            reasons.append(f"{axis} is missing or not numeric")
+            continue
+        if not math.isfinite(value):
+            reasons.append(f"{axis} is NaN or infinite")
+            continue
+        limit = ATTITUDE_LIMITS_DEG[axis]
+        if value < -limit or value > limit:
+            reasons.append(f"{axis} is outside -{limit:.0f}..{limit:.0f}")
+        numeric[axis] = value
+
+    setpoints = _coerce_attitude_setpoints(numeric)
+    usable = len(setpoints) == len(ATTITUDE_AXES)
+    return {
+        "ok": usable and not reasons,
+        "usable": usable,
+        "reason": "; ".join(reasons),
+        "raw": raw,
+        "age_ms": age_ms,
+        "setpoints": setpoints,
+    }
+
+
+def _send_active_pid_setpoints(ctrl, client):
+    setpoints = ctrl.get_pid_setpoints() if ctrl and hasattr(ctrl, "get_pid_setpoints") else {}
+    if not client:
+        return {}
+    client.clear_override()
+    if setpoints:
+        return client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
+    return client.get_state()
+
+
+def _git_info():
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=1.0,
+        ).strip()
+    except Exception:
+        branch = "unknown"
+    return {"branch": branch}
+
+
 def _neutralize_thruster_command():
     """Force topside manual command output to neutral axes."""
     neutral = _neutral_axis_values()
     ctrl = current_app.config.get("CONTROLLER")
     manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
     if ctrl:
-        ctrl.set_debug_override(neutral)
+        if hasattr(ctrl, "clear_debug_override"):
+            ctrl.clear_debug_override()
+        if hasattr(ctrl, "apply_manual_axes_once"):
+            ctrl.apply_manual_axes_once(neutral, source="HTTP")
     bm = current_app.config.get("BITMASK")
-    if bm:
+    if bm and not ctrl:
         bm.set_from_axes(**neutral, manip=manip)
     return neutral
 
@@ -533,16 +649,63 @@ def register_routes(app):
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
         state = override.get_state() if override else {}
         controller_state = controller.get_input_status() if controller else {}
+        control_state = controller.get_control_state() if controller and hasattr(controller, "get_control_state") else {}
         return jsonify(
             {
                 "ok": True,
                 "uplink": uplink,
                 "controller": controller_state,
+                "control_state": control_state,
                 "udp_rx_count": udp_rx,
                 "udp_rx_errors": udp_err,
                 "override": state,
             }
         )
+
+    @app.route("/api/control/state", methods=["GET"])
+    def control_state():
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl or not hasattr(ctrl, "get_control_state"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        return jsonify({"ok": True, "state": ctrl.get_control_state()})
+
+    @app.route("/api/control/killswitch", methods=["POST"])
+    def control_killswitch():
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl or not hasattr(ctrl, "kill"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        state = ctrl.kill()
+        zero_gains = _zero_pid_gains()
+        confirmed, attempts = send_pid_gains(zero_gains, timeout=0.5, max_retries=2)
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if client:
+            try:
+                client.clear_override()
+            except Exception:
+                pass
+        return jsonify(
+            {
+                "ok": True,
+                "state": state,
+                "pid_gains_zeroed": confirmed is not None,
+                "pid_zero_attempts": attempts,
+                "pid_gains": _attitude_pid_gains(confirmed or zero_gains),
+            }
+        )
+
+    @app.route("/api/control/rearm", methods=["POST"])
+    def control_rearm():
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl or not hasattr(ctrl, "rearm"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        state = ctrl.rearm()
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if client:
+            try:
+                client.clear_override()
+            except Exception:
+                pass
+        return jsonify({"ok": True, "state": state})
 
     @app.route("/api/control/telemetry", methods=["GET"])
     def control_telemetry():
@@ -578,6 +741,10 @@ def register_routes(app):
             return jsonify({"ok": False, "error": str(exc)}), 503
         return jsonify({"ok": True, "reset": result})
 
+    @app.route("/api/system/git", methods=["GET"])
+    def system_git():
+        return jsonify({"ok": True, "git": _git_info()})
+
     @app.route("/api/setpoint/status", methods=["GET"])
     def setpoint_status():
         client = current_app.config.get("SETPOINT_OVERRIDE")
@@ -593,43 +760,59 @@ def register_routes(app):
         or normalized axes in [-1..1] via "axes": and optional "rate_hz"
         """
         data = request.get_json(force=True, silent=True) or {}
-        bm = current_app.config["BITMASK"]
+        bm = current_app.config.get("BITMASK")
+        ctrl = current_app.config.get("CONTROLLER")
+
+        if ctrl and hasattr(ctrl, "is_killed") and ctrl.is_killed():
+            _neutralize_thruster_command()
+            return jsonify({"ok": False, "error": "Controls are killed", "state": ctrl.get_control_state()}), 423
 
         # allow normalized axes
         axes = data.get("axes")
         if isinstance(axes, dict):
             axes = dict(axes)
-            ctrl = current_app.config.get("CONTROLLER")
-            if "manip" not in axes and ctrl:
-                axes["manip"] = ctrl.get_manipulator()["setpoint_norm"]
-            bm.set_from_axes(**axes)
+            if ctrl and hasattr(ctrl, "apply_manual_axes_once"):
+                ctrl.apply_manual_axes_once(axes, source="HTTP")
+            elif bm:
+                bm.set_from_axes(**axes)
 
         # allow raw fields
         allowed = {"surge", "sway", "heave", "roll", "pitch", "yaw", "light", "manip"}
         raw = {k: int(v) for k, v in data.items() if k in allowed}
         if raw:
-            bm.set_command(**raw)
+            raw_axes = {axis: raw[axis] / 127.0 for axis in CONTROL_AXES if axis in raw}
+            if raw_axes and ctrl and hasattr(ctrl, "apply_manual_axes_once"):
+                ctrl.apply_manual_axes_once(raw_axes, source="HTTP")
+            elif raw_axes and bm:
+                bm.set_command(**{axis: raw[axis] for axis in raw_axes})
+            non_axes = {key: value for key, value in raw.items() if key not in CONTROL_AXES}
+            if non_axes and bm:
+                bm.set_command(**non_axes)
 
         # optional live rate change
-        if "rate_hz" in data:
+        if bm and "rate_hz" in data:
             try:
                 rate = float(data["rate_hz"])
                 bm.period = 1.0 / rate if rate > 0 else 0.0
             except Exception:
                 pass
 
-        return jsonify({"ok": True, "now": bm.get_command()})
+        now = bm.get_command() if bm else {}
+        state = ctrl.get_control_state() if ctrl and hasattr(ctrl, "get_control_state") else {}
+        return jsonify({"ok": True, "now": now, "state": state})
 
     @app.route("/api/rov/status", methods=["GET"])
     def get_rov_status():
         bm = current_app.config["BITMASK"]
         resource = current_app.config.get("RESOURCE")
+        ctrl = current_app.config.get("CONTROLLER")
         udp_rx, udp_err = resource.get_udp_counters() if resource else (0, 0)
         return jsonify(
             {
                 "ok": True,
                 "command": bm.get_command(),
                 "uplink": bm.get_uplink_status(),
+                "control_state": ctrl.get_control_state() if ctrl and hasattr(ctrl, "get_control_state") else {},
                 "resource": {
                     "udp_rx_count": udp_rx,
                     "udp_rx_errors": udp_err,
@@ -742,8 +925,12 @@ def register_routes(app):
         """Set debug override axes as raw virtual joystick input via the bitmask command link."""
         data = request.get_json(force=True, silent=True) or {}
         bm = current_app.config.get("BITMASK")
-        if not bm:
+        ctrl = current_app.config.get("CONTROLLER")
+        if not bm and not ctrl:
             return jsonify({"ok": False, "error": "Bitmask client unavailable"}), 503
+        if ctrl and hasattr(ctrl, "is_killed") and ctrl.is_killed():
+            _neutralize_thruster_command()
+            return jsonify({"ok": False, "error": "Controls are killed", "state": ctrl.get_control_state()}), 423
         axes = {}
         for key in ("surge", "sway", "heave", "roll", "pitch", "yaw"):
             if key in data:
@@ -752,14 +939,13 @@ def register_routes(app):
         if not axes:
             return jsonify({"ok": False, "error": "No axes supplied"}), 400
 
-        ctrl = current_app.config.get("CONTROLLER")
-        manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
-        bm.set_from_axes(**axes, manip=manip)
-
-        if ctrl:
+        if ctrl and hasattr(ctrl, "set_debug_override"):
             ctrl.set_debug_override(axes)
+        elif bm:
+            bm.set_from_axes(**axes)
 
-        return jsonify({"ok": True, "override": axes})
+        state = ctrl.get_control_state() if ctrl and hasattr(ctrl, "get_control_state") else {}
+        return jsonify({"ok": True, "override": axes, "state": state})
 
     @app.route("/api/debug/attitude_setpoint", methods=["POST"])
     def debug_attitude_setpoint():
@@ -793,92 +979,173 @@ def register_routes(app):
         if ctrl:
             ctrl.clear_debug_override()
 
-        # Zero out the bitmask axes (slider override path)
-        bm = current_app.config.get("BITMASK")
-        if bm:
-            manip = ctrl.get_manipulator()["setpoint_norm"] if ctrl else 0.0
-            bm.set_from_axes(surge=0, sway=0, heave=0, roll=0, pitch=0, yaw=0, manip=manip)
-
-        # Clear any setpoint override on port 5007 (attitude override path)
         client = current_app.config.get("SETPOINT_OVERRIDE")
         if client:
             try:
-                client.clear_override()
+                if ctrl and hasattr(ctrl, "is_pid_enabled") and ctrl.is_pid_enabled():
+                    _send_active_pid_setpoints(ctrl, client)
+                else:
+                    client.clear_override()
             except Exception:
                 pass
 
-        return jsonify({"ok": True})
+        state = ctrl.get_control_state() if ctrl and hasattr(ctrl, "get_control_state") else {}
+        return jsonify({"ok": True, "state": state})
 
     @app.route("/api/pid/start", methods=["POST"])
     def start_pid_hold():
         """Start PID tuning from the current attitude and neutral manual command axes."""
+        data = request.get_json(force=True, silent=True) or {}
+        force = bool(data.get("force"))
         imu = current_app.config.get("IMU")
         client = current_app.config.get("SETPOINT_OVERRIDE")
+        ctrl = current_app.config.get("CONTROLLER")
         if not imu:
             return jsonify({"ok": False, "error": "IMU receiver not running"}), 503
         if not client:
             return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+        if not ctrl or not hasattr(ctrl, "start_pid"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        if ctrl.is_killed():
+            return jsonify({"ok": False, "error": "Controls are killed", "state": ctrl.get_control_state()}), 423
 
         stats = imu.get_stats()
-        age_ms = stats.get("age_ms")
-        if age_ms is None or age_ms > 2000:
-            return jsonify({"ok": False, "error": "IMU data is stale; PID start was blocked"}), 503
+        sanity = _imu_attitude_sanity(stats)
+        if not sanity["usable"]:
+            return jsonify({"ok": False, "error": sanity["reason"] or "Current attitude is incomplete", "sanity": sanity}), 503
+        if not sanity["ok"] and not force:
+            return jsonify({"ok": False, "error": sanity["reason"], "sanity": sanity, "force_supported": True}), 409
 
-        attitude = stats.get("last_data") or {}
-        try:
-            attitude_setpoints = _coerce_attitude_setpoints({axis: float(attitude[axis]) for axis in ATTITUDE_AXES})
-        except (KeyError, TypeError, ValueError):
-            return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
-        if len(attitude_setpoints) != len(ATTITUDE_AXES):
-            return jsonify({"ok": False, "error": "Current attitude is incomplete"}), 503
-
-        neutral = _neutralize_thruster_command()
-        setpoints = {**neutral, **attitude_setpoints}
+        pending = ctrl.get_pid_setpoints() if hasattr(ctrl, "get_pid_setpoints") else {}
+        setpoints = {**sanity["setpoints"], **pending}
+        ctrl.start_pid(setpoints)
         try:
             client.clear_override()
-            state = client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
+            override_state = client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
         except Exception as exc:  # pylint: disable=broad-except
             client.set_error(str(exc))
-            return jsonify({"ok": False, "error": str(exc), "neutralized": True}), 503
+            ctrl.stop_pid(clear=False)
+            return jsonify({"ok": False, "error": str(exc), "sanity": sanity}), 503
 
         return jsonify(
             {
                 "ok": True,
                 "setpoints": setpoints,
-                "state": state,
-                "neutralized": True,
+                "state": ctrl.get_control_state(),
+                "override_state": override_state,
+                "sanity": sanity,
+                "forced": force and not sanity["ok"],
                 "units": "deg",
             }
         )
 
     @app.route("/api/pid/setpoints", methods=["POST"])
     def set_pid_attitude_setpoints():
-        """Send roll/pitch/yaw PID attitude setpoints in VN-100 degrees."""
+        """Save roll/pitch/yaw PID attitude setpoints in VN-100 degrees."""
         data = request.get_json(force=True, silent=True) or {}
         client = current_app.config.get("SETPOINT_OVERRIDE")
-        if not client:
-            return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl or not hasattr(ctrl, "set_pid_setpoints"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        if ctrl.is_killed():
+            return jsonify({"ok": False, "error": "Controls are killed", "state": ctrl.get_control_state()}), 423
         axes = _coerce_attitude_setpoints(data)
         if not axes:
             return jsonify({"ok": False, "error": "No valid attitude setpoints supplied"}), 400
-        try:
-            state = client.send_override(axes, replay_attempts=5, replay_delay=0.1)
-        except Exception as exc:  # pylint: disable=broad-except
-            client.set_error(str(exc))
-            return jsonify({"ok": False, "error": str(exc)}), 503
+        setpoints = ctrl.set_pid_setpoints(axes)
+        pid_active = ctrl.is_pid_enabled() if hasattr(ctrl, "is_pid_enabled") else False
+        if pid_active:
+            if not client:
+                return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+            try:
+                state = client.send_override(setpoints, replay_attempts=5, replay_delay=0.1)
+            except Exception as exc:  # pylint: disable=broad-except
+                client.set_error(str(exc))
+                return jsonify({"ok": False, "error": str(exc)}), 503
+        else:
+            state = client.get_state() if client and hasattr(client, "get_state") else {}
         return jsonify(
             {
                 "ok": True,
-                "sent": axes,
+                "sent": setpoints,
                 "limits": ATTITUDE_LIMITS_DEG,
                 "state": state,
+                "control_state": ctrl.get_control_state(),
+                "pid_active": pid_active,
                 "units": "deg",
             }
         )
 
+    @app.route("/api/pid/setpoints/<axis>", methods=["DELETE"])
+    def clear_pid_attitude_setpoint(axis):
+        """Clear one saved or live roll/pitch/yaw PID setpoint."""
+        axis = axis.lower()
+        if axis not in ATTITUDE_AXES:
+            return jsonify({"ok": False, "error": "Invalid PID axis"}), 400
+        ctrl = current_app.config.get("CONTROLLER")
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if not ctrl or not hasattr(ctrl, "clear_pid_setpoint"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        remaining = ctrl.clear_pid_setpoint(axis)
+        pid_active = ctrl.is_pid_enabled() if hasattr(ctrl, "is_pid_enabled") else False
+        if pid_active:
+            if not client:
+                return jsonify({"ok": False, "error": "Setpoint override client unavailable"}), 503
+            try:
+                state = _send_active_pid_setpoints(ctrl, client)
+            except Exception as exc:  # pylint: disable=broad-except
+                client.set_error(str(exc))
+                return jsonify({"ok": False, "error": str(exc)}), 503
+        else:
+            state = client.get_state() if client and hasattr(client, "get_state") else {}
+        return jsonify(
+            {
+                "ok": True,
+                "cleared": axis,
+                "remaining": remaining,
+                "state": state,
+                "control_state": ctrl.get_control_state(),
+                "pid_active": pid_active,
+            }
+        )
+
+    @app.route("/api/pid/stop", methods=["POST"])
+    def stop_pid_hold():
+        """Stop PID and optionally clear attitude setpoints."""
+        data = request.get_json(force=True, silent=True) or {}
+        clear = bool(data.get("clear", True))
+        ctrl = current_app.config.get("CONTROLLER")
+        if not ctrl or not hasattr(ctrl, "stop_pid"):
+            return jsonify({"ok": False, "error": "Controller not available"}), 503
+        state = ctrl.stop_pid(clear=clear)
+        client = current_app.config.get("SETPOINT_OVERRIDE")
+        if client:
+            try:
+                client.clear_override()
+            except Exception:
+                pass
+        return jsonify({"ok": True, "state": state})
+
+    @app.route("/api/pid/rates", methods=["GET", "POST"])
+    def pid_setpoint_rates():
+        """Get or update roll/pitch/yaw setpoint rates in deg/s."""
+        if request.method == "GET":
+            rates = _load_pid_rates()
+            ctrl = current_app.config.get("CONTROLLER")
+            if ctrl and hasattr(ctrl, "set_pid_rates"):
+                ctrl.set_pid_rates(rates)
+            return jsonify({"ok": True, "rates": rates, "units": "deg/s"})
+
+        data = request.get_json(force=True, silent=True) or {}
+        rates = _save_pid_rates(data)
+        return jsonify({"ok": True, "rates": rates, "units": "deg/s"})
+
     @app.route("/api/pid/zero_all", methods=["POST"])
     def zero_all_pid():
         """Force neutral manual command axes and send zero PID gains to the MCU."""
+        ctrl = current_app.config.get("CONTROLLER")
+        if ctrl and hasattr(ctrl, "stop_pid"):
+            ctrl.stop_pid()
         neutral = _neutralize_thruster_command()
         client = current_app.config.get("SETPOINT_OVERRIDE")
         if client:
@@ -919,26 +1186,17 @@ def register_routes(app):
         gains = request_pid_gains(timeout=2.0)
         if gains is None:
             return jsonify({"ok": False, "error": "No response from MCU"}), 504
-        return jsonify({"ok": True, "gains": gains})
+        return jsonify({"ok": True, "gains": _attitude_pid_gains(gains), "raw_gains": gains})
 
     @app.route("/api/pid/gains", methods=["POST"])
     def set_pid_gains():
         """Send PID gains to the MCU via UDP. Expects JSON: {axis: {kp, ki, kd}, ...}."""
         data = request.get_json(force=True, silent=True) or {}
-        gains = {}
-        for axis in PID_AXES:
-            if axis in data and isinstance(data[axis], dict):
-                gains[axis] = {
-                    "kp": float(data[axis].get("kp", 0.0)),
-                    "ki": float(data[axis].get("ki", 0.0)),
-                    "kd": float(data[axis].get("kd", 0.0)),
-                }
-            else:
-                gains[axis] = {"kp": 0.0, "ki": 0.0, "kd": 0.0}
+        gains = _mcu_pid_gains(data)
         confirmed, attempts = send_pid_gains(gains, timeout=1.0, max_retries=3)
         if confirmed is None:
             return jsonify({"ok": False, "error": "No response from MCU after %d attempts" % attempts}), 504
-        return jsonify({"ok": True, "gains": confirmed, "attempts": attempts})
+        return jsonify({"ok": True, "gains": _attitude_pid_gains(confirmed), "raw_gains": confirmed, "attempts": attempts})
 
     # --- PID config save/load ---
     @app.route("/api/pid/configs", methods=["GET"])
@@ -958,7 +1216,7 @@ def register_routes(app):
         if not isinstance(gains, dict):
             return jsonify({"ok": False, "error": "Missing gains data"}), 400
         configs = _load_pid_configs()
-        configs[name] = gains
+        configs[name] = _mcu_pid_gains(gains)
         _save_pid_configs(configs)
         return jsonify({"ok": True, "name": name})
 
@@ -968,7 +1226,7 @@ def register_routes(app):
         configs = _load_pid_configs()
         if name not in configs:
             return jsonify({"ok": False, "error": "Config not found"}), 404
-        return jsonify({"ok": True, "name": name, "gains": configs[name]})
+        return jsonify({"ok": True, "name": name, "gains": _attitude_pid_gains(configs[name]), "raw_gains": configs[name]})
 
     @app.route("/api/pid/configs/<name>", methods=["DELETE"])
     def delete_pid_config(name):

@@ -15,7 +15,17 @@
         "z": "+z"
     },
     "ip_camera": {
-        "active_ip": "10.77.0.4",
-        "presets": []
+        "active_ip": "10.77.0.3",
+        "presets": [
+            {
+                "name": "Main IP-camera",
+                "ip": "10.77.0.3"
+            }
+        ]
+    },
+    "pid_setpoint_rates": {
+        "roll": 90.0,
+        "pitch": 90.0,
+        "yaw": 90.0
     }
 }

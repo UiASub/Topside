@@ -120,11 +120,13 @@ class BitmaskClient:
             return {
                 "sequence": self._seq,
                 "last_send_age_ms": send_age,
+                "last_send_timestamp": None if self._last_send_time == 0 else self._last_send_time,
                 "last_ack_age_ms": ack_age,
                 "last_ack_count": self._last_ack_count,
                 "watchdog_timeout": self._watchdog_timeout,
                 "watchdog_resends": self._watchdog_resends,
                 "last_command": self._last_command_snapshot or {},
+                "last_packet_hex": self._last_packet.hex() if self._last_packet else None,
             }
 
     # convenience: set from normalized axes

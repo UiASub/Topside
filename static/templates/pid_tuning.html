@@ -15,15 +15,50 @@
 <div class="pid-page-shell">
   <div class="pid-action-bar">
     <div class="pid-action-status">
-      <span class="pid-kicker">PID Tuning</span>
-      <span id="pid-page-status" class="badge bg-secondary">READY</span>
-      <span id="pid-link-status" class="badge bg-secondary">LINK IDLE</span>
-      <span class="pid-muted">IMU <span id="pid-imu-age">--</span> ms</span>
+      <div class="pid-status-card pid-status-card-wide">
+        <span class="pid-status-label">Active control</span>
+        <span id="control-path-status" class="pid-status-value">PS4 Controller</span>
+      </div>
+      <div class="pid-status-card">
+        <span class="pid-status-label">PID</span>
+        <span id="pid-mode-status" class="badge bg-secondary">OFF</span>
+      </div>
+      <div class="pid-status-card">
+        <span class="pid-status-label">Branch</span>
+        <span id="pid-branch" class="pid-status-value">--</span>
+      </div>
+      <div class="pid-status-card">
+        <span class="pid-status-label">IMU</span>
+        <span class="pid-status-value"><span id="pid-imu-age">--</span> ms</span>
+      </div>
     </div>
     <div class="pid-action-controls">
-      <button type="button" class="btn btn-sm btn-primary js-start-pid">Start PID</button>
-      <button type="button" class="btn btn-sm btn-danger pid-zero-btn js-zero-all-pid">ZERO PID + THRUST</button>
+      <button type="button" id="btn-toggle-pid" class="btn btn-primary pid-toggle-btn">Start PID</button>
+      <button type="button" id="btn-rearm" class="btn btn-sm btn-warning">Re-arm</button>
+      <button type="button" id="btn-killswitch" class="btn btn-lg btn-danger pid-kill-btn">KILLSWITCH</button>
     </div>
+  </div>
+
+  <div class="pid-axis-readouts">
+    {% for axis, label in rotational_axes %}
+    <section class="pid-axis-readout" data-axis="{{ axis }}">
+      <div class="pid-axis-readout-title">{{ label }}</div>
+      <div class="pid-axis-readout-grid">
+        <div class="pid-axis-readout-cell">
+          <span class="pid-status-label">Position</span>
+          <span id="readout-{{ axis }}-position" class="pid-readout-number">--</span>
+        </div>
+        <div class="pid-axis-readout-cell">
+          <span class="pid-status-label">Setpoint</span>
+          <span id="readout-{{ axis }}-setpoint" class="pid-readout-number">--</span>
+        </div>
+        <div class="pid-axis-readout-cell">
+          <span class="pid-status-label">Error</span>
+          <span id="readout-{{ axis }}-error" class="pid-readout-number pid-readout-error">--</span>
+        </div>
+      </div>
+    </section>
+    {% endfor %}
   </div>
 
   <div class="pid-layout-grid">
@@ -78,13 +113,13 @@
                 <span class="input-group-text">deg</span>
               </div>
               <button type="button" class="btn btn-sm btn-outline-info js-use-current" data-axis="{{ axis }}">Use Current</button>
+              <button type="button" class="btn btn-sm btn-outline-danger js-clear-axis" data-axis="{{ axis }}">Clear</button>
             </div>
             {% endfor %}
           </div>
           <div class="pid-button-row">
-            <button type="button" id="btn-send-setpoints" class="btn btn-sm btn-success">Send Setpoints</button>
-            <button type="button" class="btn btn-sm btn-primary js-start-pid">Start PID from IMU</button>
-            <button type="button" id="btn-clear-setpoints" class="btn btn-sm btn-outline-secondary">Clear Setpoints</button>
+            <button type="button" id="btn-send-setpoints" class="btn btn-sm btn-success">Save Setpoints</button>
+            <button type="button" id="btn-clear-setpoints" class="btn btn-sm btn-outline-secondary">Stop and Clear</button>
           </div>
           <div id="setpoint-feedback" class="pid-feedback">Waiting for input.</div>
         </div>
@@ -101,7 +136,6 @@
           <div class="pid-button-row">
             <button type="button" id="btn-pid-request" class="btn btn-sm btn-info">Request Current</button>
             <button type="button" id="btn-pid-send" class="btn btn-sm btn-success">Send to MCU</button>
-            <button type="button" class="btn btn-sm btn-danger js-zero-all-pid">ZERO PID + THRUST</button>
           </div>
 
           <div class="pid-gain-box">
@@ -112,22 +146,6 @@
               <div class="pid-gain-head">I</div>
               <div class="pid-gain-head">D</div>
               {% for axis, label in rotational_axes %}
-              <label class="pid-axis-label" for="pid-{{ axis }}-kp">{{ label }}</label>
-              <input id="pid-{{ axis }}-kp" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
-              <input id="pid-{{ axis }}-ki" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
-              <input id="pid-{{ axis }}-kd" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
-              {% endfor %}
-            </div>
-          </div>
-
-          <div class="pid-gain-box">
-            <div class="pid-box-title">Surge, Sway, Heave</div>
-            <div class="pid-gain-grid">
-              <div class="pid-gain-head">Axis</div>
-              <div class="pid-gain-head">P</div>
-              <div class="pid-gain-head">I</div>
-              <div class="pid-gain-head">D</div>
-              {% for axis, label in translational_axes %}
               <label class="pid-axis-label" for="pid-{{ axis }}-kp">{{ label }}</label>
               <input id="pid-{{ axis }}-kp" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
               <input id="pid-{{ axis }}-ki" class="form-control form-control-sm pid-input" type="number" step="any" value="0">
@@ -153,7 +171,12 @@
         <div class="card-body">
           <div class="pid-panel-header">
             <h5 class="card-title mb-0">Telemetry and Link</h5>
-            <span id="telemetry-age" class="badge bg-secondary">NO TELEMETRY</span>
+            <div class="pid-button-row">
+              <span id="telemetry-age" class="badge bg-secondary">NO TELEMETRY</span>
+              <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#pid-debug-details">
+                Debug
+              </button>
+            </div>
           </div>
           <div class="table-responsive">
             <table class="table table-dark table-sm align-middle pid-telemetry-table mb-0">
@@ -170,7 +193,9 @@
               </tbody>
             </table>
           </div>
-          <pre id="rov-status" class="pid-command-preview">Loading...</pre>
+          <div class="collapse show" id="pid-debug-details">
+            <pre id="rov-status" class="pid-command-preview">Loading...</pre>
+          </div>
         </div>
       </section>
     </div>

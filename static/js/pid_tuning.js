@@ -12,10 +12,12 @@
   let sendTimer = null;
   let latestImu = {};
   let latestTelemetry = null;
+  let latestControlState = {};
   const localSetpoints = { roll: NaN, pitch: NaN, yaw: NaN };
 
-  const pageStatus = document.getElementById("pid-page-status");
-  const linkStatus = document.getElementById("pid-link-status");
+  const controlPathStatus = document.getElementById("control-path-status");
+  const pidModeStatus = document.getElementById("pid-mode-status");
+  const branchStatus = document.getElementById("pid-branch");
   const imuAge = document.getElementById("pid-imu-age");
   const pidStatus = document.getElementById("pid-status");
   const setpointStatus = document.getElementById("setpoint-status");
@@ -39,8 +41,9 @@
     return wrapped;
   }
 
-  function angleError(setpoint, position) {
+  function axisError(axis, setpoint, position) {
     if (!isFiniteNumber(setpoint) || !isFiniteNumber(position)) return NaN;
+    if (axis === "pitch") return setpoint - position;
     return normalizeAngle(setpoint - position);
   }
 
@@ -48,10 +51,6 @@
     if (!el) return;
     el.textContent = text;
     el.className = "badge " + cls;
-  }
-
-  function setPageStatus(text, cls) {
-    setBadge(pageStatus, text, cls || "bg-secondary");
   }
 
   function setPidStatus(text, cls) {
@@ -68,6 +67,73 @@
     setpointFeedback.className = "pid-feedback " + (cls || "");
   }
 
+  function controlPathLabel(path, killed) {
+    if (killed) return "Controls locked";
+    if (path === "Override Controls") return "Override sliders";
+    if (path === "PS4") return "PS4 Controller";
+    return path || "PS4 Controller";
+  }
+
+  function setControlPathStatus(path, killed) {
+    if (!controlPathStatus) return;
+    controlPathStatus.textContent = controlPathLabel(path, killed);
+    controlPathStatus.className = "pid-status-value " + (killed ? "text-danger" : path === "Override Controls" ? "text-warning" : "text-info");
+  }
+
+  function syncLocalSetpoints(setpoints, options) {
+    const clearMissing = !options || options.clearMissing !== false;
+    ROT_AXES.forEach((axis) => {
+      const hasAxis = setpoints && Object.prototype.hasOwnProperty.call(setpoints, axis);
+      const value = hasAxis ? Number(setpoints[axis]) : NaN;
+      const el = document.getElementById("setpoint-" + axis);
+      if (Number.isFinite(value)) {
+        localSetpoints[axis] = value;
+        if (el && document.activeElement !== el) el.value = value.toFixed(1);
+      } else {
+        localSetpoints[axis] = NaN;
+        if (clearMissing && el && document.activeElement !== el) el.value = "";
+      }
+    });
+  }
+
+  function setControlsDisabled(killed) {
+    document.querySelectorAll("#btn-toggle-pid, #btn-enable, #btn-send-setpoints, .js-clear-axis").forEach((el) => {
+      el.disabled = killed;
+    });
+    const btnKill = document.getElementById("btn-killswitch");
+    const btnRearm = document.getElementById("btn-rearm");
+    if (btnKill) btnKill.disabled = killed;
+    if (btnRearm) btnRearm.disabled = !killed;
+  }
+
+  function updatePidToggle(pidOn, killed) {
+    const btn = document.getElementById("btn-toggle-pid");
+    if (!btn) return;
+    btn.textContent = pidOn ? "Stop PID" : "Start PID";
+    btn.className = "btn pid-toggle-btn " + (pidOn ? "btn-success" : "btn-primary");
+    btn.disabled = killed;
+  }
+
+  function updateControlBanner(state) {
+    latestControlState = state || {};
+    const killed = latestControlState.killed === true;
+    const pidOn = latestControlState.pid_enabled === true;
+    const path = latestControlState.control_path || "PS4";
+    const setpoints = latestControlState.pid_setpoints || {};
+    const hasSetpoints = ROT_AXES.some((axis) => Number.isFinite(Number(setpoints[axis])));
+    syncLocalSetpoints(setpoints, { clearMissing: false });
+
+    setControlPathStatus(path, killed);
+    setBadge(pidModeStatus, pidOn ? "ON" : "OFF", pidOn ? "bg-success" : "bg-secondary");
+    setSetpointStatus(pidOn ? "ACTIVE" : hasSetpoints ? "SAVED" : "IDLE", pidOn ? "bg-danger" : hasSetpoints ? "bg-info text-dark" : "bg-secondary");
+    updatePidToggle(pidOn, killed);
+    setControlsDisabled(killed);
+    updateAxisReadouts();
+
+    const overrideBadge = document.getElementById("debug-status");
+    setBadge(overrideBadge, latestControlState.override_active ? "ACTIVE" : "INACTIVE", latestControlState.override_active ? "bg-danger" : "bg-secondary");
+  }
+
   function clampSetpoint(axis, value) {
     const limit = Number(attitudeLimits[axis] || 180);
     let next = Number(value);
@@ -78,17 +144,40 @@
 
   function getTelemetrySetpoint(axis) {
     const fromTelemetry = latestTelemetry && latestTelemetry.setpoint ? Number(latestTelemetry.setpoint[axis]) : NaN;
-    if (Number.isFinite(fromTelemetry)) return fromTelemetry;
-    return localSetpoints[axis];
+    const fromLocal = localSetpoints[axis];
+    if (latestControlState.pid_enabled === true && Number.isFinite(fromTelemetry)) return fromTelemetry;
+    if (Number.isFinite(fromLocal)) return fromLocal;
+    return fromTelemetry;
+  }
+
+  function updateAxisReadouts() {
+    ROT_AXES.forEach((axis) => {
+      const setpoint = getTelemetrySetpoint(axis);
+      const position = Number(latestImu[axis]);
+      const error = axisError(axis, setpoint, position);
+      const positionEl = document.getElementById("readout-" + axis + "-position");
+      const setpointEl = document.getElementById("readout-" + axis + "-setpoint");
+      const errorEl = document.getElementById("readout-" + axis + "-error");
+      if (positionEl) positionEl.textContent = fmt(position, 2);
+      if (setpointEl) setpointEl.textContent = fmt(setpoint, 2);
+      if (errorEl) {
+        errorEl.textContent = fmt(error, 2);
+        errorEl.className = "pid-readout-number pid-readout-error";
+        if (!isFiniteNumber(error)) errorEl.className = "pid-readout-number text-muted";
+        else if (Math.abs(error) > 25) errorEl.className = "pid-readout-number text-danger";
+        else if (Math.abs(error) > 10) errorEl.className = "pid-readout-number text-warning";
+      }
+    });
   }
 
   function updateTelemetryTable() {
+    updateAxisReadouts();
     if (!telemetryBody) return;
     const frag = document.createDocumentFragment();
     ROT_AXES.forEach((axis) => {
       const setpoint = getTelemetrySetpoint(axis);
       const position = Number(latestImu[axis]);
-      const error = angleError(setpoint, position);
+      const error = axisError(axis, setpoint, position);
       const tr = document.createElement("tr");
       const tdAxis = document.createElement("td");
       const tdSet = document.createElement("td");
@@ -140,6 +229,26 @@
     updateTelemetryTable();
   }
 
+  async function pollControlState() {
+    try {
+      const res = await fetch("/api/control/state", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) updateControlBanner(data.state || {});
+    } catch (err) {
+      console.debug("Control state polling failed:", err);
+    }
+  }
+
+  async function loadGitBranch() {
+    try {
+      const res = await fetch("/api/system/git", { cache: "no-store" });
+      const data = await res.json();
+      if (branchStatus) branchStatus.textContent = data.ok && data.git ? data.git.branch : "--";
+    } catch (_) {
+      if (branchStatus) branchStatus.textContent = "--";
+    }
+  }
+
   function getSliderValue(axis) {
     const slider = document.getElementById("slider-" + axis);
     return slider ? parseInt(slider.value, 10) / 100 : 0;
@@ -175,11 +284,17 @@
   async function sendOverride() {
     if (!overrideActive) return;
     try {
-      await fetch("/api/debug/override", {
+      const res = await fetch("/api/debug/override", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(getAllSliderValues()),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        resetOverrideUi();
+        setFeedback(data.error || "Override blocked.", "text-danger");
+        if (data.state) updateControlBanner(data.state);
+      }
     } catch (err) {
       console.error("Failed to send override:", err);
     }
@@ -221,11 +336,6 @@
     }
   }
 
-  function activateNeutralOverride() {
-    AXES.forEach(resetSlider);
-    enableOverride();
-  }
-
   function readPidFields() {
     const gains = {};
     AXES.forEach((axis) => {
@@ -247,14 +357,6 @@
         }
       });
     });
-  }
-
-  function zeroGainPayload() {
-    const zeros = {};
-    AXES.forEach((axis) => {
-      zeros[axis] = { kp: 0, ki: 0, kd: 0 };
-    });
-    return zeros;
   }
 
   async function requestPidGains() {
@@ -303,75 +405,47 @@
     }
   }
 
-  async function zeroAllPidAndThrusters() {
-    activateNeutralOverride();
-    fillPidFields(zeroGainPayload());
-    setPidStatus("NEUTRALIZING", "bg-warning text-dark");
-    setPageStatus("NEUTRALIZING", "bg-warning text-dark");
-    document.querySelectorAll(".js-zero-all-pid").forEach((btn) => {
-      btn.disabled = true;
-    });
-    try {
-      const res = await fetch("/api/pid/zero_all", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (data.gains) fillPidFields(data.gains);
-      if (res.ok && data.ok) {
-        setPidStatus("ZERO CONFIRMED", "bg-success");
-        setPageStatus("NEUTRAL HOLD", "bg-danger");
-      } else {
-        setPidStatus("NEUTRAL, PID NO REPLY", "bg-danger");
-        setPageStatus("NEUTRAL, CHECK MCU", "bg-danger");
-      }
-    } catch (err) {
-      setPidStatus("NEUTRAL, ERROR", "bg-danger");
-      setPageStatus("NEUTRAL, ERROR", "bg-danger");
-      console.error("Zero PID failed:", err);
-    } finally {
-      document.querySelectorAll(".js-zero-all-pid").forEach((btn) => {
-        btn.disabled = false;
-      });
-    }
-  }
-
   function fillSetpointFields(setpoints) {
-    ROT_AXES.forEach((axis) => {
-      const value = setpoints && Number(setpoints[axis]);
-      if (Number.isFinite(value)) {
-        localSetpoints[axis] = value;
-        const el = document.getElementById("setpoint-" + axis);
-        if (el) el.value = value.toFixed(1);
-      }
-    });
+    syncLocalSetpoints(setpoints);
   }
 
-  async function startPid() {
-    activateNeutralOverride();
+  async function startPid(force) {
     setSetpointStatus("STARTING", "bg-warning text-dark");
-    setPageStatus("STARTING PID", "bg-warning text-dark");
-    document.querySelectorAll(".js-start-pid").forEach((btn) => {
-      btn.disabled = true;
-    });
+    const toggleBtn = document.getElementById("btn-toggle-pid");
+    if (toggleBtn) toggleBtn.disabled = true;
     try {
-      const res = await fetch("/api/pid/start", { method: "POST" });
+      const res = await fetch("/api/pid/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: force === true }),
+      });
       const data = await res.json();
       if (data.ok) {
         fillSetpointFields(data.setpoints || {});
+        if (data.state) updateControlBanner(data.state);
         setSetpointStatus("ACTIVE", "bg-danger");
-        setPageStatus("PID HOLD ACTIVE", "bg-success");
-        setFeedback("Started from current IMU attitude with neutral manual command axes.", "text-success");
+        setFeedback("Started from current IMU attitude.", "text-success");
+      } else if (res.status === 409 && data.force_supported) {
+        const raw = data.sanity && data.sanity.raw ? JSON.stringify(data.sanity.raw) : "{}";
+        const proceed = window.confirm(
+          "IMU sanity check failed.\n\nReason: " +
+            (data.error || "Unknown") +
+            "\nRaw: " +
+            raw +
+            "\n\nCancel is recommended. Press OK to continue anyway."
+        );
+        if (proceed) await startPid(true);
       } else {
         setSetpointStatus("BLOCKED", "bg-danger");
-        setPageStatus("START BLOCKED", "bg-danger");
         setFeedback(data.error || "Start failed.", "text-danger");
+        if (data.state) updateControlBanner(data.state);
       }
     } catch (err) {
       setSetpointStatus("ERROR", "bg-danger");
-      setPageStatus("START ERROR", "bg-danger");
       setFeedback("Error: " + err.message, "text-danger");
     } finally {
-      document.querySelectorAll(".js-start-pid").forEach((btn) => {
-        btn.disabled = false;
-      });
+      if (toggleBtn) toggleBtn.disabled = false;
+      setControlsDisabled(latestControlState.killed === true);
     }
   }
 
@@ -405,11 +479,15 @@
       const data = await res.json();
       if (data.ok) {
         fillSetpointFields(data.sent || {});
-        setSetpointStatus("ACTIVE", "bg-danger");
-        setFeedback("Sent setpoints: " + Object.entries(data.sent || {}).map(([k, v]) => k + "=" + v.toFixed(1)).join(", "), "text-success");
+        if (data.control_state) updateControlBanner(data.control_state);
+        const pidActive = data.pid_active === true || (data.control_state && data.control_state.pid_enabled === true);
+        const text = Object.entries(data.sent || {}).map(([k, v]) => k + "=" + v.toFixed(1)).join(", ");
+        setSetpointStatus(pidActive ? "ACTIVE" : "SAVED", pidActive ? "bg-danger" : "bg-info text-dark");
+        setFeedback((pidActive ? "Updated active setpoints: " : "Saved setpoints: ") + text, "text-success");
       } else {
         setSetpointStatus("ERROR", "bg-danger");
         setFeedback(data.error || "Setpoint send failed.", "text-danger");
+        if (data.state) updateControlBanner(data.state);
       }
     } catch (err) {
       setSetpointStatus("ERROR", "bg-danger");
@@ -417,16 +495,69 @@
     }
   }
 
-  async function clearSetpoints() {
+  async function stopPid(clearSaved) {
+    const clear = clearSaved === true;
     try {
-      await fetch("/api/debug/clear", { method: "POST" });
-      ROT_AXES.forEach((axis) => {
-        localSetpoints[axis] = NaN;
+      const res = await fetch("/api/pid/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (clear) syncLocalSetpoints({});
+      else if (data.state && data.state.pid_setpoints) syncLocalSetpoints(data.state.pid_setpoints, { clearMissing: false });
       resetOverrideUi();
-      setSetpointStatus("IDLE", "bg-secondary");
-      setPageStatus("READY", "bg-secondary");
-      setFeedback("Setpoints cleared.", "text-light");
+      if (data.state) updateControlBanner(data.state);
+      setSetpointStatus(clear ? "IDLE" : "SAVED", clear ? "bg-secondary" : "bg-info text-dark");
+      setFeedback(clear ? "Setpoints cleared." : "PID stopped. Setpoints kept.", "text-light");
+    } catch (err) {
+      setFeedback("Error: " + err.message, "text-danger");
+    }
+  }
+
+  function clearSetpoints() {
+    return stopPid(true);
+  }
+
+  async function clearAxis(axis) {
+    try {
+      const res = await fetch("/api/pid/setpoints/" + encodeURIComponent(axis), { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        syncLocalSetpoints(data.remaining || {});
+        if (data.control_state) updateControlBanner(data.control_state);
+        setFeedback(axis + " setpoint cleared.", "text-success");
+      } else {
+        setFeedback(data.error || "Clear failed.", "text-danger");
+      }
+    } catch (err) {
+      setFeedback("Error: " + err.message, "text-danger");
+    }
+  }
+
+  async function killControls() {
+    try {
+      const res = await fetch("/api/control/killswitch", { method: "POST" });
+      const data = await res.json();
+      AXES.forEach(resetSlider);
+      resetOverrideUi();
+      syncLocalSetpoints({});
+      if (data.state) updateControlBanner(data.state);
+      setFeedback(res.ok ? "Controls killed." : data.error || "Killswitch failed.", res.ok ? "text-danger" : "text-warning");
+    } catch (err) {
+      setFeedback("Error: " + err.message, "text-danger");
+    }
+  }
+
+  async function rearmControls() {
+    try {
+      const res = await fetch("/api/control/rearm", { method: "POST" });
+      const data = await res.json();
+      AXES.forEach(resetSlider);
+      resetOverrideUi();
+      syncLocalSetpoints({});
+      if (data.state) updateControlBanner(data.state);
+      setFeedback(res.ok ? "Controls re-armed." : data.error || "Re-arm failed.", res.ok ? "text-success" : "text-danger");
     } catch (err) {
       setFeedback("Error: " + err.message, "text-danger");
     }
@@ -436,21 +567,37 @@
     try {
       const res = await fetch("/api/rov/status");
       const data = await res.json();
+      const control = data.control_state || latestControlState || {};
+      const uplink = data.uplink || {};
+      if (data.control_state) updateControlBanner(data.control_state);
       if (rovStatus) {
         rovStatus.textContent = JSON.stringify(
-          { command: data.command, uplink: data.uplink, resource: data.resource },
+          {
+            control_path: controlPathLabel(control.control_path, control.killed === true),
+            pid_enabled: control.pid_enabled,
+            active_setpoints: control.pid_setpoints,
+            manual_command_before_pid: control.manual_command_before_pid,
+            pid_output: latestTelemetry && latestTelemetry.output ? latestTelemetry.output : {},
+            final_topside_command: data.command,
+            raw_payload: uplink.last_packet_hex,
+            timestamp: uplink.last_send_timestamp,
+            sequence: uplink.sequence,
+            link: {
+              ack_age_ms: uplink.last_ack_age_ms,
+              watchdog_resends: uplink.watchdog_resends,
+            },
+            telemetry: {
+              sequence: latestTelemetry ? latestTelemetry.sequence : null,
+              timestamp: latestTelemetry ? latestTelemetry.timestamp : null,
+            },
+            resource: data.resource,
+          },
           null,
           2
         );
       }
-      const ackAge = data.uplink && isFiniteNumber(data.uplink.last_ack_age_ms) ? data.uplink.last_ack_age_ms : null;
-      if (ackAge == null) setBadge(linkStatus, "LINK IDLE", "bg-secondary");
-      else if (ackAge < 1000) setBadge(linkStatus, "LINK LIVE", "bg-success");
-      else if (ackAge < 3000) setBadge(linkStatus, "LINK STALE", "bg-warning text-dark");
-      else setBadge(linkStatus, "LINK DEGRADED", "bg-danger");
     } catch (err) {
       if (rovStatus) rovStatus.textContent = "Error fetching status";
-      setBadge(linkStatus, "LINK ERROR", "bg-danger");
     }
   }
 
@@ -547,8 +694,13 @@
   }
 
   function wireEvents() {
-    document.querySelectorAll(".js-start-pid").forEach((btn) => btn.addEventListener("click", startPid));
-    document.querySelectorAll(".js-zero-all-pid").forEach((btn) => btn.addEventListener("click", zeroAllPidAndThrusters));
+    const btnTogglePid = document.getElementById("btn-toggle-pid");
+    if (btnTogglePid) {
+      btnTogglePid.addEventListener("click", () => {
+        if (latestControlState.pid_enabled === true) stopPid(false);
+        else startPid();
+      });
+    }
 
     const btnEnable = document.getElementById("btn-enable");
     const btnDisable = document.getElementById("btn-disable");
@@ -579,6 +731,15 @@
     if (btnSendSetpoints) btnSendSetpoints.addEventListener("click", sendSetpoints);
     if (btnClearSetpoints) btnClearSetpoints.addEventListener("click", clearSetpoints);
 
+    document.querySelectorAll(".js-clear-axis").forEach((btn) => {
+      btn.addEventListener("click", () => clearAxis(btn.dataset.axis));
+    });
+
+    const btnKill = document.getElementById("btn-killswitch");
+    const btnRearm = document.getElementById("btn-rearm");
+    if (btnKill) btnKill.addEventListener("click", killControls);
+    if (btnRearm) btnRearm.addEventListener("click", rearmControls);
+
     const btnPidRequest = document.getElementById("btn-pid-request");
     const btnPidSend = document.getElementById("btn-pid-send");
     if (btnPidRequest) btnPidRequest.addEventListener("click", requestPidGains);
@@ -594,8 +755,11 @@
 
   wireEvents();
   refreshConfigList();
+  loadGitBranch();
+  pollControlState();
   pollImuAndTelemetry();
   pollRovStatus();
+  setInterval(pollControlState, 500);
   setInterval(pollImuAndTelemetry, 200);
   setInterval(pollRovStatus, 500);
 })();
