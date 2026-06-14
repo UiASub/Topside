@@ -138,7 +138,7 @@ def test_sdl_gamecontroller_mapping_normalizes_linux_playstation_layout(monkeypa
     assert command["surge"] == pytest.approx(0.5, rel=1e-3)
     assert command["sway"] == pytest.approx(0.25, rel=1e-3)
     assert command["heave"] == pytest.approx(0.125, rel=1e-3)
-    assert command["yaw"] == pytest.approx(0.375, rel=1e-3)
+    assert command["yaw"] == pytest.approx(-0.375, rel=1e-3)
     assert command["pitch"] == 0.0
     assert command["roll"] == 0.0
     assert command["manip"] == pytest.approx(-0.0144, rel=1e-3)
@@ -150,12 +150,14 @@ def test_sdl_gamecontroller_mapping_normalizes_linux_playstation_layout(monkeypa
     assert status["buttons"][12] == 1.0
 
 
-def test_sdl_left_shoulder_switches_left_stick_to_pitch_and_roll(monkeypatch):
+def test_sdl_left_shoulder_switches_right_stick_to_pitch_and_roll(monkeypatch):
     monkeypatch.setattr(pygame.event, "get", lambda: [])
     sdl = FakeSdlController(
         axes={
-            pygame.CONTROLLER_AXIS_LEFTX: -32768,
-            pygame.CONTROLLER_AXIS_LEFTY: 32767,
+            pygame.CONTROLLER_AXIS_LEFTX: 8192,
+            pygame.CONTROLLER_AXIS_LEFTY: -16384,
+            pygame.CONTROLLER_AXIS_RIGHTX: -32768,
+            pygame.CONTROLLER_AXIS_RIGHTY: 32767,
         },
         buttons={pygame.CONTROLLER_BUTTON_LEFTSHOULDER},
     )
@@ -164,8 +166,10 @@ def test_sdl_left_shoulder_switches_left_stick_to_pitch_and_roll(monkeypatch):
     ctrl.update()
 
     command = ctrl.bm.calls[-1]
-    assert command["surge"] == 0.0
-    assert command["sway"] == 0.0
+    assert command["surge"] == pytest.approx(0.5, rel=1e-3)
+    assert command["sway"] == pytest.approx(0.25, rel=1e-3)
+    assert command["heave"] == 0.0
+    assert command["yaw"] == 0.0
     assert command["pitch"] == -1.0
     assert command["roll"] == -1.0
     status = ctrl.get_input_status()
@@ -193,7 +197,7 @@ def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypa
     assert command["surge"] == 0.5
     assert command["sway"] == 0.25
     assert command["heave"] == 0.2
-    assert command["yaw"] == 0.4
+    assert command["yaw"] == -0.4
     assert command["manip"] == pytest.approx(-0.0144, rel=1e-3)
     assert command["light"] == pytest.approx(0.1, rel=1e-3)
     status = ctrl.get_input_status()
