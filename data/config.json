@@ -5,9 +5,9 @@
         "z": -50.0
     },
     "imu_axes": {
-        "yaw": "+yaw",
-        "pitch": "+pitch",
-        "roll": "+roll"
+        "yaw": "-yaw",
+        "pitch": "-pitch",
+        "roll": "-roll"
     },
     "accel_axes": {
         "x": "+x",
@@ -24,8 +24,8 @@
         ]
     },
     "pid_setpoint_rates": {
-        "roll": 90.0,
-        "pitch": 90.0,
+        "roll": 20.0,
+        "pitch": 20.0,
         "yaw": 90.0
     }
 }
