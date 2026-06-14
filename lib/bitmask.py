@@ -77,6 +77,7 @@ class BitmaskClient:
         self._last_ack_count = None
         self._watchdog_timeout = watchdog_timeout
         self._watchdog_resends = 0
+        self._last_watchdog_resend_time = 0.0
         self._last_command_snapshot: dict | None = None
 
     def start(self):
@@ -85,7 +86,8 @@ class BitmaskClient:
         self._sender = UdpSender(self.host, self.port)
         self._stop.clear()
         with self._status_lock:
-            self._last_ack_time = time.monotonic()
+            self._last_ack_time = 0.0
+            self._last_ack_count = None
         self._thread.start()
         self._watchdog_thread.start()
 
@@ -117,6 +119,11 @@ class BitmaskClient:
             now = time.monotonic()
             send_age = None if self._last_send_time == 0 else max(0.0, now - self._last_send_time) * 1000.0
             ack_age = None if self._last_ack_time == 0 else max(0.0, now - self._last_ack_time) * 1000.0
+            resend_age = (
+                None
+                if self._last_watchdog_resend_time == 0
+                else max(0.0, now - self._last_watchdog_resend_time) * 1000.0
+            )
             return {
                 "sequence": self._seq,
                 "last_send_age_ms": send_age,
@@ -125,6 +132,7 @@ class BitmaskClient:
                 "last_ack_count": self._last_ack_count,
                 "watchdog_timeout": self._watchdog_timeout,
                 "watchdog_resends": self._watchdog_resends,
+                "last_watchdog_resend_age_ms": resend_age,
                 "last_command": self._last_command_snapshot or {},
                 "last_packet_hex": self._last_packet.hex() if self._last_packet else None,
             }
@@ -181,20 +189,24 @@ class BitmaskClient:
             udp_rx_count, _errors = counters()
             now = time.monotonic()
             with self._status_lock:
+                if self._last_ack_count is None:
+                    self._last_ack_count = udp_rx_count
+                    continue
                 if udp_rx_count != self._last_ack_count:
                     self._last_ack_count = udp_rx_count
                     self._last_ack_time = now
                     continue
                 # No new acks yet
-                if self._last_packet and (now - self._last_ack_time) > self._watchdog_timeout:
+                resend_due = (now - self._last_watchdog_resend_time) > self._watchdog_timeout
+                if self._last_packet and (now - self._last_ack_time) > self._watchdog_timeout and resend_due:
                     sender = self._sender
                     if sender:
                         try:
                             sender.send(self._last_packet)
                             self._watchdog_resends += 1
+                            self._last_watchdog_resend_time = now
                         except Exception:
                             pass
-                    self._last_ack_time = now
 
 
 # simple initializer

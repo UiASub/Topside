@@ -107,6 +107,53 @@ def test_control_telemetry_includes_manipulator_fields(monkeypatch, tmp_path):
     assert latest["manipulator"] == {"deg": -12.5, "pulse_us": 1375}
 
 
+def test_control_telemetry_v2_decodes_debug_fields(monkeypatch, tmp_path):
+    monkeypatch.setattr(control_telem, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(control_telem, "CONTROL_LOG", tmp_path / "control_telemetry.ndjson")
+    receiver = control_telem.ControlTelemetryReceiver(data_handler=DummyHandler())
+    receiver.disable_capture()
+
+    sequence = 9
+    uptime_ms = 123456
+    command_age_ms = 42
+    flags = 0x06
+    override_mask = 0b001000
+    pid_active_mask = 0b111000
+    pilot = [0, 1, -2, 64, -64, 127]
+    light = 80
+    manip = -10
+    setpoints = [float(i) for i in range(6)]
+    measurements = [value + 0.1 for value in setpoints]
+    outputs = [value / 10 for value in setpoints]
+    errors = [sp - meas for sp, meas in zip(setpoints, measurements)]
+    gains = []
+    for idx in range(6):
+        gains.extend([idx + 0.1, idx + 0.2, idx + 0.3])
+
+    body = (
+        struct.pack("!III", sequence, uptime_ms, command_age_ms)
+        + struct.pack(control_telem.NEW_META_FORMAT, flags, override_mask, pid_active_mask, *pilot, light, manip)
+        + struct.pack("<" + "f" * control_telem.NEW_FLOAT_COUNT, *(setpoints + measurements + outputs + errors + gains))
+        + struct.pack("<fH", 7.5, 1575)
+    )
+    packet = body + struct.pack("!I", crc.crc32_ieee(body))
+
+    receiver._handle_packet(packet, ("10.77.0.2", 5005))  # pylint: disable=protected-access
+
+    latest = receiver.get_latest()
+    assert latest["protocol_version"] == 2
+    assert latest["sequence"] == sequence
+    assert latest["mcu_uptime_ms"] == uptime_ms
+    assert latest["last_command_age_ms"] == command_age_ms
+    assert latest["flags"] == {"timeout": False, "override": True, "pid": True}
+    assert latest["override_mask"] == override_mask
+    assert latest["pid_active_mask"] == pid_active_mask
+    assert latest["pilot_raw"]["yaw"] == 127
+    assert latest["measurement"]["roll"] == pytest.approx(3.1, rel=1e-4)
+    assert latest["gains"]["roll"] == {"kp": 3.1, "ki": 3.2, "kd": 3.3}
+    assert latest["manipulator"] == {"deg": 7.5, "pulse_us": 1575}
+
+
 def test_resource_telemetry_updates_json_handler(monkeypatch, tmp_path):
     monkeypatch.setattr(resource_telem, "LOG_DIR", tmp_path)
     monkeypatch.setattr(resource_telem, "RESOURCE_LOG", tmp_path / "resource_monitor.ndjson")

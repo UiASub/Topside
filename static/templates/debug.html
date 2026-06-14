@@ -39,7 +39,7 @@
 </div>
 
 <div class="row g-4 mt-1">
-  <div class="col-lg-6">
+  <div class="col-12">
     <div class="card custom-card h-100">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -47,45 +47,6 @@
           <small class="text-light-muted">/api/rov/status</small>
         </div>
         <pre id="rov-status" class="text-light mb-0 debug-pre">Loading...</pre>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Nucleo Control Telemetry</h5>
-          <small class="text-light-muted">Updated <span id="control-telemetry-age">--</span> ms ago</small>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-dark table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Axis</th>
-                <th>Setpoint</th>
-                <th>Output</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody id="control-telemetry-body">
-              <tr><td colspan="4" class="text-center text-muted">Waiting for packets...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <div class="card custom-card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="card-title mb-0">Zephyr Log Stream</h5>
-          <small class="text-light-muted">/api/logs/live</small>
-        </div>
-        <div id="log-stream" class="log-stream border border-secondary rounded"></div>
       </div>
     </div>
   </div>

@@ -64,6 +64,8 @@ class ResourceReceiver:
         self._last_seq = None
         self._packets_lost = 0
         self._last_data = {}
+        self._last_received_ts = None
+        self._last_addr = None
 
         self._last_diag_log = 0.0
         LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -89,12 +91,19 @@ class ResourceReceiver:
     def get_stats(self) -> dict:
         """Get receiver statistics."""
         with self._lock:
+            age_ms = (
+                None
+                if self._last_received_ts is None
+                else max(0.0, (time.time() - self._last_received_ts) * 1000.0)
+            )
             return {
                 "packet_count": self._packet_count,
                 "crc_errors": self._crc_errors,
                 "packets_lost": self._packets_lost,
                 "last_seq": self._last_seq,
                 "last_data": self._last_data.copy(),
+                "last_age_ms": age_ms,
+                "last_addr": list(self._last_addr) if self._last_addr else None,
             }
 
     def _process_packet(self, data: bytes, addr: tuple):
@@ -160,6 +169,8 @@ class ResourceReceiver:
 
             self._last_seq = sequence
             self._last_data = telemetry.copy()
+            self._last_received_ts = time.time()
+            self._last_addr = addr
 
         # Update data.json with new resource values
         try:

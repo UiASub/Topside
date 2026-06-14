@@ -200,6 +200,53 @@ def _git_info():
     return {"branch": branch}
 
 
+def _live_from_age(age_ms, max_age_ms):
+    return age_ms is not None and age_ms <= max_age_ms
+
+
+def _connection_proof_payload():
+    bm = current_app.config.get("BITMASK")
+    resource = current_app.config.get("RESOURCE")
+    imu = current_app.config.get("IMU")
+
+    uplink = bm.get_uplink_status() if bm else {}
+    resource_stats = resource.get_stats() if resource and hasattr(resource, "get_stats") else {}
+    imu_stats = imu.get_stats() if imu and hasattr(imu, "get_stats") else {}
+
+    proofs = [
+        {
+            "name": "Command ACK",
+            "active": _live_from_age(uplink.get("last_ack_age_ms"), 2500),
+            "age_ms": uplink.get("last_ack_age_ms"),
+            "detail": "Nucleo UDP counter changed after Topside command packets",
+        },
+        {
+            "name": "Resource telemetry",
+            "active": _live_from_age(resource_stats.get("last_age_ms"), 2500),
+            "age_ms": resource_stats.get("last_age_ms"),
+            "detail": "Nucleo resource packet on UDP 12346",
+        },
+        {
+            "name": "IMU telemetry",
+            "active": _live_from_age(imu_stats.get("age_ms"), 1200),
+            "age_ms": imu_stats.get("age_ms"),
+            "detail": "Nucleo IMU packet on UDP 5002",
+        },
+    ]
+    connected = any(proof["active"] for proof in proofs)
+    status = "live" if connected else "offline"
+    return {
+        "ok": True,
+        "connected": connected,
+        "status": status,
+        "generated_at": time.time(),
+        "proofs": proofs,
+        "uplink": uplink,
+        "resource": resource_stats,
+        "imu": imu_stats,
+    }
+
+
 def _neutralize_thruster_command():
     """Force topside manual command output to neutral axes."""
     neutral = _neutral_axis_values()
@@ -662,6 +709,11 @@ def register_routes(app):
             }
         )
 
+    @app.route("/api/connection/status", methods=["GET"])
+    def connection_status():
+        """Return live Nucleo contact proof from all receiver paths."""
+        return jsonify(_connection_proof_payload())
+
     @app.route("/api/control/state", methods=["GET"])
     def control_state():
         ctrl = current_app.config.get("CONTROLLER")
@@ -711,7 +763,8 @@ def register_routes(app):
     def control_telemetry():
         receiver = current_app.config.get("CONTROL_TELEM")
         latest = receiver.get_latest() if receiver else data_handler.get_section("control_telemetry")
-        return jsonify({"ok": bool(latest), "telemetry": latest or {}})
+        stats = receiver.get_stats() if receiver and hasattr(receiver, "get_stats") else {}
+        return jsonify({"ok": bool(latest), "telemetry": latest or {}, "stats": stats})
 
     @app.route("/api/control/telemetry/history", methods=["GET"])
     def control_telemetry_history():
@@ -728,7 +781,8 @@ def register_routes(app):
         limit = max(1, min(500, limit))
         log_stream = current_app.config.get("LOG_STREAM")
         entries = log_stream.get_recent(limit) if log_stream else []
-        return jsonify({"ok": True, "logs": entries})
+        stats = log_stream.get_stats() if log_stream and hasattr(log_stream, "get_stats") else {}
+        return jsonify({"ok": True, "logs": entries, "stats": stats})
 
     @app.route("/api/system/reset", methods=["POST"])
     def system_reset():

@@ -150,11 +150,49 @@
     return fromTelemetry;
   }
 
+  function bitForAxis(axis) {
+    const index = AXES.indexOf(axis);
+    return index < 0 ? 0 : 1 << index;
+  }
+
+  function getAxisMode(axis) {
+    if (!latestTelemetry) return "--";
+    const flags = latestTelemetry.flags || {};
+    if (flags.timeout) return "TIMEOUT";
+    const bit = bitForAxis(axis);
+    if ((latestTelemetry.override_mask || 0) & bit) return "OVR";
+    if ((latestTelemetry.pid_active_mask || 0) & bit) return "PID";
+    return latestTelemetry.protocol_version === 1 ? "LEGACY" : "PASS";
+  }
+
+  function getAxisMeasurement(axis) {
+    const fromTelemetry = latestTelemetry && latestTelemetry.measurement ? Number(latestTelemetry.measurement[axis]) : NaN;
+    if (Number.isFinite(fromTelemetry)) return fromTelemetry;
+    return Number(latestImu[axis]);
+  }
+
+  function getAxisError(axis, setpoint, position) {
+    const fromTelemetry = latestTelemetry && latestTelemetry.error ? Number(latestTelemetry.error[axis]) : NaN;
+    if (Number.isFinite(fromTelemetry)) return fromTelemetry;
+    return axisError(axis, setpoint, position);
+  }
+
+  function getAxisOutput(axis) {
+    const value = latestTelemetry && latestTelemetry.output ? Number(latestTelemetry.output[axis]) : NaN;
+    return Number.isFinite(value) ? value : NaN;
+  }
+
+  function getAxisGains(axis) {
+    const gains = latestTelemetry && latestTelemetry.gains ? latestTelemetry.gains[axis] : null;
+    if (!gains) return "--";
+    return "P " + fmt(Number(gains.kp), 2) + " I " + fmt(Number(gains.ki), 2) + " D " + fmt(Number(gains.kd), 2);
+  }
+
   function updateAxisReadouts() {
     ROT_AXES.forEach((axis) => {
       const setpoint = getTelemetrySetpoint(axis);
-      const position = Number(latestImu[axis]);
-      const error = axisError(axis, setpoint, position);
+      const position = getAxisMeasurement(axis);
+      const error = getAxisError(axis, setpoint, position);
       const positionEl = document.getElementById("readout-" + axis + "-position");
       const setpointEl = document.getElementById("readout-" + axis + "-setpoint");
       const errorEl = document.getElementById("readout-" + axis + "-error");
@@ -176,20 +214,28 @@
     const frag = document.createDocumentFragment();
     ROT_AXES.forEach((axis) => {
       const setpoint = getTelemetrySetpoint(axis);
-      const position = Number(latestImu[axis]);
-      const error = axisError(axis, setpoint, position);
+      const position = getAxisMeasurement(axis);
+      const error = getAxisError(axis, setpoint, position);
+      const output = getAxisOutput(axis);
       const tr = document.createElement("tr");
       const tdAxis = document.createElement("td");
+      const tdMode = document.createElement("td");
       const tdSet = document.createElement("td");
       const tdPos = document.createElement("td");
       const tdErr = document.createElement("td");
+      const tdOut = document.createElement("td");
+      const tdGains = document.createElement("td");
       tdAxis.textContent = axis.toUpperCase();
+      tdMode.textContent = getAxisMode(axis);
       tdSet.textContent = fmt(setpoint, 2);
       tdPos.textContent = fmt(position, 2);
       tdErr.textContent = fmt(error, 2);
+      tdOut.textContent = fmt(output, 2);
+      tdGains.textContent = getAxisGains(axis);
       if (isFiniteNumber(error) && Math.abs(error) > 10) tdErr.className = "text-warning";
       if (isFiniteNumber(error) && Math.abs(error) > 25) tdErr.className = "text-danger";
-      tr.append(tdAxis, tdSet, tdPos, tdErr);
+      if (latestTelemetry && latestTelemetry.flags && latestTelemetry.flags.timeout) tr.className = "table-danger";
+      tr.append(tdAxis, tdMode, tdSet, tdPos, tdErr, tdOut, tdGains);
       frag.appendChild(tr);
     });
     telemetryBody.innerHTML = "";
@@ -200,6 +246,7 @@
     if (!telemetryAge) return;
     const ageMs = snapshot && snapshot.timestamp ? Math.max(0, Date.now() - snapshot.timestamp * 1000) : null;
     if (ageMs == null) setBadge(telemetryAge, "NO TELEMETRY", "bg-secondary");
+    else if (snapshot.flags && snapshot.flags.timeout) setBadge(telemetryAge, "NUCLEO TIMEOUT", "bg-danger");
     else if (ageMs < 750) setBadge(telemetryAge, ageMs.toFixed(0) + " ms", "bg-success");
     else if (ageMs < 2500) setBadge(telemetryAge, ageMs.toFixed(0) + " ms", "bg-warning text-dark");
     else setBadge(telemetryAge, "STALE", "bg-danger");
@@ -577,7 +624,11 @@
             pid_enabled: control.pid_enabled,
             active_setpoints: control.pid_setpoints,
             manual_command_before_pid: control.manual_command_before_pid,
+            mcu_flags: latestTelemetry && latestTelemetry.flags ? latestTelemetry.flags : {},
+            mcu_command_age_ms: latestTelemetry ? latestTelemetry.last_command_age_ms : null,
+            mcu_measurement: latestTelemetry && latestTelemetry.measurement ? latestTelemetry.measurement : {},
             pid_output: latestTelemetry && latestTelemetry.output ? latestTelemetry.output : {},
+            pid_gains_mcu: latestTelemetry && latestTelemetry.gains ? latestTelemetry.gains : {},
             final_topside_command: data.command,
             raw_payload: uplink.last_packet_hex,
             timestamp: uplink.last_send_timestamp,
