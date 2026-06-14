@@ -11,9 +11,6 @@
   const btnStopAll = document.getElementById("btn-stop-all");
   const statusBadge = document.getElementById("debug-status");
   const rovStatus = document.getElementById("rov-status");
-  const telemetryBody = document.getElementById("control-telemetry-body");
-  const telemetryAge = document.getElementById("control-telemetry-age");
-  const logStreamEl = document.getElementById("log-stream");
 
   function slider(axis) {
     return document.getElementById("slider-" + axis);
@@ -120,93 +117,6 @@
     }
   }
 
-  function fmtMs(value) {
-    if (value == null || Number.isNaN(value)) return "--";
-    return value.toFixed(0);
-  }
-
-  function fmtFloat(value) {
-    if (value == null || Number.isNaN(value)) return "NaN";
-    return Number(value).toFixed(2);
-  }
-
-  function renderTelemetryTable(snapshot) {
-    if (!telemetryBody) return;
-    const setpoint = (snapshot && snapshot.setpoint) || {};
-    const output = (snapshot && snapshot.output) || {};
-    const error = (snapshot && snapshot.error) || {};
-    const frag = document.createDocumentFragment();
-    AXES.forEach((axis) => {
-      const tr = document.createElement("tr");
-      [axis.toUpperCase(), fmtFloat(setpoint[axis]), fmtFloat(output[axis]), fmtFloat(error[axis])].forEach((text) => {
-        const td = document.createElement("td");
-        td.textContent = text;
-        tr.appendChild(td);
-      });
-      frag.appendChild(tr);
-    });
-    telemetryBody.innerHTML = "";
-    telemetryBody.appendChild(frag);
-  }
-
-  async function pollControlTelemetry() {
-    try {
-      const res = await fetch("/api/control/telemetry", { cache: "no-store" });
-      const data = await res.json();
-      if (!data.ok) return;
-      const snapshot = data.telemetry || {};
-      renderTelemetryTable(snapshot);
-      if (telemetryAge) {
-        const ageMs = snapshot.timestamp ? Math.max(0, Date.now() - snapshot.timestamp * 1000) : null;
-        telemetryAge.textContent = fmtMs(ageMs);
-      }
-    } catch (error) {
-      console.error("control telemetry poll failed", error);
-    }
-  }
-
-  function renderLogs(entries) {
-    if (!logStreamEl) return;
-    const frag = document.createDocumentFragment();
-    entries.forEach((entry) => {
-      const row = document.createElement("div");
-      row.className = "d-flex justify-content-between border-bottom border-secondary py-1";
-
-      const body = document.createElement("div");
-      const badge = document.createElement("span");
-      const level = entry.level || "I";
-      const levelMap = { I: "bg-info text-dark", W: "bg-warning text-dark", R: "bg-danger", D: "bg-secondary" };
-      badge.className = "badge me-2 " + (levelMap[level] || "bg-secondary");
-      badge.textContent = level;
-      body.appendChild(badge);
-
-      const msg = document.createElement("span");
-      msg.textContent = entry.message || "";
-      body.appendChild(msg);
-
-      const ts = document.createElement("span");
-      ts.className = "text-light-muted small ms-3";
-      ts.textContent = (entry.ts ? new Date(entry.ts * 1000) : new Date()).toLocaleTimeString();
-
-      row.appendChild(body);
-      row.appendChild(ts);
-      frag.appendChild(row);
-    });
-    logStreamEl.innerHTML = "";
-    logStreamEl.appendChild(frag);
-    logStreamEl.scrollTop = logStreamEl.scrollHeight;
-  }
-
-  async function pollLogs() {
-    try {
-      const res = await fetch("/api/logs/live?limit=50", { cache: "no-store" });
-      const data = await res.json();
-      if (data.ok) renderLogs(data.logs || []);
-    } catch (error) {
-      console.error("log stream poll failed", error);
-    }
-  }
-
   if (btnEnable) btnEnable.addEventListener("click", enableOverride);
   if (btnDisable) btnDisable.addEventListener("click", stopAll);
   if (btnResetAll) btnResetAll.addEventListener("click", () => AXES.forEach(resetSlider));
@@ -222,8 +132,4 @@
 
   pollStatus();
   setInterval(pollStatus, 500);
-  pollControlTelemetry();
-  setInterval(pollControlTelemetry, 500);
-  pollLogs();
-  setInterval(pollLogs, 1500);
 })();

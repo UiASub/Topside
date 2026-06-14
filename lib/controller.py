@@ -20,9 +20,37 @@ else:
 
 from lib.bitmask import BitmaskClient
 
+CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
+ATTITUDE_AXES = ("roll", "pitch", "yaw")
+ATTITUDE_LIMITS_DEG = {"roll": 180.0, "pitch": 90.0, "yaw": 180.0}
+DEFAULT_PID_SETPOINT_RATES = {axis: 90.0 for axis in ATTITUDE_AXES}
+
 
 def _use_sdl_gamecontroller():
     return sys.platform.startswith("linux") and sdl_controller is not None
+
+
+def _clamp(value, lower, upper):
+    return max(lower, min(upper, float(value)))
+
+
+def _normalize_angle_deg(value):
+    wrapped = ((float(value) + 180.0) % 360.0) - 180.0
+    if wrapped == -180.0 and float(value) > 0:
+        return 180.0
+    return wrapped
+
+
+def _clamp_setpoint(axis, value):
+    value = float(value)
+    if axis in ("roll", "yaw"):
+        value = _normalize_angle_deg(value)
+    limit = ATTITUDE_LIMITS_DEG[axis]
+    return _clamp(value, -limit, limit)
+
+
+def _neutral_axes():
+    return {axis: 0.0 for axis in CONTROL_AXES}
 
 
 def _controller_errors():
@@ -83,6 +111,17 @@ class Controller:
         self._debug_lock = threading.Lock()
         self._input_status_lock = threading.Lock()
         self._input_status = self._empty_input_status()
+        self._runtime_lock = threading.RLock()
+        self._killed = False
+        self._pid_enabled = False
+        self._pid_setpoints = {}
+        self._pid_setpoint_rates = dict(DEFAULT_PID_SETPOINT_RATES)
+        self._last_pid_update = time.monotonic()
+        self._last_manual_command = _neutral_axes()
+        self._last_output_command = _neutral_axes()
+        self._last_runtime_source = "PS4"
+        self._last_pid_error = None
+        self._setpoint_client = None
         self._try_connect()
 
     def _try_connect(self):
@@ -157,6 +196,146 @@ class Controller:
                 "name": self._input_status["name"],
                 "buttons": list(self._input_status["buttons"]),
             }
+
+    # --- Control runtime state ---
+    def set_setpoint_client(self, client):
+        self._setpoint_client = client
+
+    def is_killed(self):
+        with self._runtime_lock:
+            return self._killed
+
+    def is_pid_enabled(self):
+        with self._runtime_lock:
+            return self._pid_enabled
+
+    def get_pid_setpoints(self):
+        with self._runtime_lock:
+            return dict(self._pid_setpoints)
+
+    def get_pid_rates(self):
+        with self._runtime_lock:
+            return dict(self._pid_setpoint_rates)
+
+    def set_pid_rates(self, rates):
+        with self._runtime_lock:
+            for axis in ATTITUDE_AXES:
+                if axis not in rates:
+                    continue
+                try:
+                    value = float(rates[axis])
+                except (TypeError, ValueError):
+                    continue
+                if value == value:
+                    self._pid_setpoint_rates[axis] = _clamp(value, 0.0, 90.0)
+            return dict(self._pid_setpoint_rates)
+
+    def get_control_state(self):
+        with self._debug_lock:
+            override_active = self._debug_override is not None
+        with self._runtime_lock:
+            if self._killed:
+                control_path = "KILLED"
+            elif override_active:
+                control_path = "Override Controls"
+            else:
+                control_path = "PS4"
+            return {
+                "killed": self._killed,
+                "pid_enabled": self._pid_enabled,
+                "pid_setpoints": dict(self._pid_setpoints),
+                "active_setpoints": dict(self._pid_setpoints) if self._pid_enabled else {},
+                "pid_setpoint_rates": dict(self._pid_setpoint_rates),
+                "control_path": control_path,
+                "override_active": override_active,
+                "manual_command_before_pid": dict(self._last_manual_command),
+                "topside_command": dict(self._last_output_command),
+                "last_pid_error": self._last_pid_error,
+            }
+
+    def kill(self):
+        with self._debug_lock:
+            self._debug_override = None
+        with self._runtime_lock:
+            self._killed = True
+            self._pid_enabled = False
+            self._pid_setpoints = {}
+            self._last_manual_command = _neutral_axes()
+            self._last_output_command = _neutral_axes()
+            self._last_runtime_source = "KILLED"
+        self._reset_command()
+        self._set_input_status(
+            {
+                "connected": self.joystick is not None,
+                "source": "killed",
+                "name": self.joystick.get_name() if self.joystick else None,
+                "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+            }
+        )
+        return self.get_control_state()
+
+    def rearm(self):
+        with self._debug_lock:
+            self._debug_override = None
+        with self._runtime_lock:
+            self._killed = False
+            self._pid_enabled = False
+            self._pid_setpoints = {}
+            self._last_manual_command = _neutral_axes()
+            self._last_output_command = _neutral_axes()
+            self._last_runtime_source = "PS4"
+            self._last_pid_error = None
+            self._last_pid_update = time.monotonic()
+        self._reset_command()
+        return self.get_control_state()
+
+    def start_pid(self, setpoints):
+        cleaned = {}
+        for axis in ATTITUDE_AXES:
+            if axis in setpoints:
+                cleaned[axis] = _clamp_setpoint(axis, setpoints[axis])
+        with self._runtime_lock:
+            if self._killed:
+                return None
+            self._pid_enabled = bool(cleaned)
+            self._pid_setpoints = cleaned
+            self._last_pid_update = time.monotonic()
+            self._last_pid_error = None
+        return self.get_pid_setpoints()
+
+    def stop_pid(self, clear=True):
+        with self._runtime_lock:
+            self._pid_enabled = False
+            if clear:
+                self._pid_setpoints = {}
+            self._last_pid_update = time.monotonic()
+        return self.get_control_state()
+
+    def set_pid_setpoints(self, setpoints):
+        cleaned = {}
+        for axis in ATTITUDE_AXES:
+            if axis in setpoints:
+                cleaned[axis] = _clamp_setpoint(axis, setpoints[axis])
+        with self._runtime_lock:
+            if self._killed:
+                return None
+            self._pid_setpoints.update(cleaned)
+            self._last_pid_update = time.monotonic()
+            self._last_pid_error = None
+            return dict(self._pid_setpoints)
+
+    def clear_pid_setpoint(self, axis):
+        if axis not in ATTITUDE_AXES:
+            return None
+        with self._runtime_lock:
+            self._pid_setpoints.pop(axis, None)
+            if self._pid_enabled and not self._pid_setpoints:
+                self._pid_enabled = False
+            self._last_pid_update = time.monotonic()
+            return dict(self._pid_setpoints)
+
+    def apply_manual_axes_once(self, axes, source="HTTP"):
+        return self._dispatch_manual_axes(axes, source=source)
 
     def calibrate_axes(self):
         """Capture initial axis values to use as offsets (fixes stuck axes)."""
@@ -332,26 +511,98 @@ class Controller:
                 "updated_at": self._manipulator_updated,
             }
 
-    def _reset_command(self):
-        """Reset all axes to neutral/zero."""
+    def _record_output(self, manual_axes, output_axes, source):
+        with self._runtime_lock:
+            self._last_manual_command = dict(manual_axes)
+            self._last_output_command = dict(output_axes)
+            self._last_runtime_source = source
+
+    def _send_axes_to_bitmask(self, axes):
         manip = self.get_manipulator()["setpoint_norm"]
         if self.bm:
             self.bm.set_from_axes(
-                surge=0,
-                sway=0,
-                heave=0,
-                roll=0,
-                pitch=0,
-                yaw=0,
-                light=self.light,  # Keep light at current level
+                surge=axes.get("surge", 0),
+                sway=axes.get("sway", 0),
+                heave=axes.get("heave", 0),
+                roll=axes.get("roll", 0),
+                pitch=axes.get("pitch", 0),
+                yaw=axes.get("yaw", 0),
+                light=self.light,
                 manip=manip,
             )
+
+    def _send_pid_setpoints(self, setpoints):
+        client = self._setpoint_client
+        if not client or not setpoints:
+            return
+        try:
+            client.send_override(setpoints, replay_attempts=1, replay_delay=0.0)
+            with self._runtime_lock:
+                self._last_pid_error = None
+        except Exception as exc:  # pylint: disable=broad-except
+            with self._runtime_lock:
+                self._last_pid_error = str(exc)
+            if hasattr(client, "set_error"):
+                client.set_error(str(exc))
+
+    def _dispatch_manual_axes(self, axes, source):
+        manual = _neutral_axes()
+        for axis in CONTROL_AXES:
+            try:
+                manual[axis] = _clamp(axes.get(axis, 0.0), -1.0, 1.0)
+            except (TypeError, ValueError):
+                manual[axis] = 0.0
+
+        now = time.monotonic()
+        setpoints_to_send = None
+        with self._runtime_lock:
+            if self._killed:
+                output = _neutral_axes()
+                self._last_manual_command = dict(manual)
+                self._last_output_command = dict(output)
+                self._last_runtime_source = "KILLED"
+            else:
+                output = dict(manual)
+                if self._pid_enabled:
+                    dt = _clamp(now - self._last_pid_update, 0.0, 0.25)
+                    self._last_pid_update = now
+                    changed = False
+                    for axis in ATTITUDE_AXES:
+                        output[axis] = 0.0
+                        if axis not in self._pid_setpoints:
+                            continue
+                        delta = manual[axis] * self._pid_setpoint_rates[axis] * dt
+                        if abs(delta) < 0.000001:
+                            continue
+                        self._pid_setpoints[axis] = _clamp_setpoint(axis, self._pid_setpoints[axis] + delta)
+                        changed = True
+                    if changed:
+                        setpoints_to_send = dict(self._pid_setpoints)
+                self._last_manual_command = dict(manual)
+                self._last_output_command = dict(output)
+                self._last_runtime_source = source
+
+        self._send_axes_to_bitmask(output)
+        if setpoints_to_send:
+            self._send_pid_setpoints(setpoints_to_send)
+        return dict(output)
+
+    def _reset_command(self):
+        """Reset all axes to neutral/zero."""
+        neutral = _neutral_axes()
+        self._record_output(neutral, neutral, "KILLED" if self.is_killed() else self._last_runtime_source)
+        self._send_axes_to_bitmask(neutral)
 
     # --- Debug override API ---
     def set_debug_override(self, axes: dict):
         """Enable debug override with the given axis values."""
+        with self._runtime_lock:
+            if self._killed:
+                self._reset_command()
+                return False
         with self._debug_lock:
             self._debug_override = dict(axes)
+        return True
 
     def clear_debug_override(self):
         """Disable debug override; return to physical controller."""
@@ -360,23 +611,26 @@ class Controller:
         self._reset_command()
 
     def update(self):
+        with self._runtime_lock:
+            killed = self._killed
+        if killed:
+            self._reset_command()
+            self._set_input_status(
+                {
+                    "connected": self.joystick is not None,
+                    "source": "killed",
+                    "name": self.joystick.get_name() if self.joystick else None,
+                    "buttons": [0.0] * self.VISUALIZER_BUTTON_COUNT,
+                }
+            )
+            return
+
         # --- Check for debug override first ---
         with self._debug_lock:
             override = self._debug_override.copy() if self._debug_override is not None else None
         if override is not None:
-            manip = self.get_manipulator()["setpoint_norm"]
-            # Debug sliders have priority – send their values directly
-            if self.bm:
-                self.bm.set_from_axes(
-                    surge=override.get("surge", 0),
-                    sway=override.get("sway", 0),
-                    heave=override.get("heave", 0),
-                    roll=override.get("roll", 0),
-                    pitch=override.get("pitch", 0),
-                    yaw=override.get("yaw", 0),
-                    light=self.light,
-                    manip=manip,
-                )
+            self._dispatch_manual_axes(override, source="Override Controls")
+            # Debug sliders have priority over the physical controller.
             self._set_input_status(
                 {
                     "connected": self.joystick is not None,
@@ -439,8 +693,6 @@ class Controller:
         trigger_delta = l2 - r2
         if abs(trigger_delta) > self.DEADZONE:
             self.nudge_manipulator(trigger_delta, self.delay_ms / 1000)
-        manip = self.get_manipulator()["setpoint_norm"]
-
         # This runs while button 9 is held down L1 to make
         # surge and sway controls toggleable to pitch and roll
         left_shoulder = self._read_button(pygame.CONTROLLER_BUTTON_LEFTSHOULDER, 9)
@@ -468,11 +720,10 @@ class Controller:
         self._prev_dpad_down = dpad_down
         self._update_input_status(buttons)
 
-        # Send to ROV!
-        if self.bm:
-            self.bm.set_from_axes(
-                surge=surge, sway=sway, yaw=yaw, pitch=pitch, heave=heave, roll=roll, light=self.light, manip=manip
-            )
+        self._dispatch_manual_axes(
+            {"surge": surge, "sway": sway, "heave": heave, "roll": roll, "pitch": pitch, "yaw": yaw},
+            source="PS4",
+        )
 
     def run_loop(self):
         """Blocking loop that polls controller at ~60 Hz."""

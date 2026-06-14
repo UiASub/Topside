@@ -40,6 +40,31 @@
   <div class="col-12">
     <div class="card custom-card">
       <div class="card-body">
+        <h5 class="card-title mb-3">PID Setpoint Rates</h5>
+        <div class="row g-3 align-items-end">
+          {% for axis in ["roll", "pitch", "yaw"] %}
+          <div class="col-md-3">
+            <label class="form-label small text-light-muted" for="pid-rate-{{ axis }}">{{ axis|capitalize }}</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control bg-dark text-light" id="pid-rate-{{ axis }}" min="0" max="90" step="1" value="90">
+              <span class="input-group-text">deg/s</span>
+            </div>
+          </div>
+          {% endfor %}
+          <div class="col-md-3">
+            <button id="btn-save-pid-rates" class="btn btn-sm btn-primary w-100">Save Rates</button>
+          </div>
+        </div>
+        <div id="pid-rates-feedback" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card custom-card">
+      <div class="card-body">
         <h5 class="card-title mb-3">IMU Axis Mapping</h5>
         <div class="row g-3 align-items-end">
           <div class="col-md-3">

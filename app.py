@@ -120,6 +120,8 @@ app.config["BITMASK"].set_resource_monitor(app.config["RESOURCE"])
 
 # Initialize setpoint override client (UDP port 5007)
 app.config["SETPOINT_OVERRIDE"] = init_setpoint_override(resource_monitor=app.config["RESOURCE"])
+app.config["CONTROLLER"].set_setpoint_client(app.config["SETPOINT_OVERRIDE"])
+app.config["CONTROLLER"].set_pid_rates(_config.get_section("pid_setpoint_rates") or {})
 
 # Start control loop telemetry receiver (UDP port 5005)
 app.config["CONTROL_TELEM"] = init_control_telemetry(port=5005)

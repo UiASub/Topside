@@ -14,6 +14,47 @@ document.addEventListener("DOMContentLoaded", function () {
   const axesYaw = document.getElementById("axes-yaw");
   const axesPitch = document.getElementById("axes-pitch");
   const axesRoll = document.getElementById("axes-roll");
+  const pidRateRoll = document.getElementById("pid-rate-roll");
+  const pidRatePitch = document.getElementById("pid-rate-pitch");
+  const pidRateYaw = document.getElementById("pid-rate-yaw");
+
+  fetch("/api/pid/rates")
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.ok || !data.rates) return;
+      if (pidRateRoll) pidRateRoll.value = data.rates.roll;
+      if (pidRatePitch) pidRatePitch.value = data.rates.pitch;
+      if (pidRateYaw) pidRateYaw.value = data.rates.yaw;
+    })
+    .catch(() => {});
+
+  const savePidRates = document.getElementById("btn-save-pid-rates");
+  if (savePidRates) {
+    savePidRates.addEventListener("click", async function () {
+      try {
+        const res = await fetch("/api/pid/rates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roll: parseFloat(pidRateRoll.value) || 0,
+            pitch: parseFloat(pidRatePitch.value) || 0,
+            yaw: parseFloat(pidRateYaw.value) || 0,
+          }),
+        });
+        const data = await res.json();
+        if (data.ok && data.rates) {
+          pidRateRoll.value = data.rates.roll;
+          pidRatePitch.value = data.rates.pitch;
+          pidRateYaw.value = data.rates.yaw;
+          setFeedback("pid-rates-feedback", "Rates saved", "text-success");
+        } else {
+          setFeedback("pid-rates-feedback", "Failed to save rates", "text-danger");
+        }
+      } catch (error) {
+        setFeedback("pid-rates-feedback", "Error: " + error.message, "text-danger");
+      }
+    });
+  }
 
   fetch("/api/imu/axes")
     .then((r) => r.json())

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row g-4">
-  <div class="col-lg-8">
+  <div class="col-12">
     <div class="card custom-card h-100">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -14,37 +14,43 @@
         <div class="row g-3">
           <div class="col-md-4">
             <div class="stat-box">
-              <div class="stat-label">Last Ack</div>
+              <div class="stat-label">Best Proof Age</div>
+              <div class="stat-value" id="nucleo-best-proof">--</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stat-box">
+              <div class="stat-label">Command Ack</div>
               <div class="stat-value" id="nucleo-last-ack">--</div>
             </div>
           </div>
           <div class="col-md-4">
             <div class="stat-box">
-              <div class="stat-label">UDP RX</div>
-              <div class="stat-value" id="nucleo-udp-rx">--</div>
+              <div class="stat-label">IMU Telemetry</div>
+              <div class="stat-value" id="nucleo-imu-age">--</div>
             </div>
           </div>
-          <div class="col-md-4">
-            <div class="stat-box">
-              <div class="stat-label">RX Errors</div>
-              <div class="stat-value" id="nucleo-udp-errors">--</div>
-            </div>
-          </div>
+        </div>
+        <div class="table-responsive mt-3">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Proof Source</th>
+                <th>Status</th>
+                <th>Age</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="nucleo-proof-body">
+              <tr><td colspan="4" class="text-center text-muted">Waiting for status...</td></tr>
+            </tbody>
+          </table>
         </div>
         <pre id="nucleo-link-details" class="text-light mt-3 mb-0 debug-pre">Loading...</pre>
       </div>
     </div>
   </div>
 
-  <div class="col-lg-4">
-    <div class="card custom-card h-100">
-      <div class="card-body">
-        <h5 class="card-title">ESC Proof</h5>
-        <span class="badge bg-secondary mb-3">UNAVAILABLE</span>
-        <p class="small text-muted mb-0">Real ESC telemetry is not available yet.</p>
-      </div>
-    </div>
-  </div>
 </div>
 
 <div class="row g-4 mt-1">

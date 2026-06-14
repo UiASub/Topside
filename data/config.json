@@ -5,9 +5,9 @@
         "z": -50.0
     },
     "imu_axes": {
-        "yaw": "+yaw",
-        "pitch": "+pitch",
-        "roll": "+roll"
+        "yaw": "-yaw",
+        "pitch": "-pitch",
+        "roll": "-roll"
     },
     "accel_axes": {
         "x": "+x",
@@ -15,7 +15,17 @@
         "z": "+z"
     },
     "ip_camera": {
-        "active_ip": "10.77.0.4",
-        "presets": []
+        "active_ip": "10.77.0.3",
+        "presets": [
+            {
+                "name": "Main IP-camera",
+                "ip": "10.77.0.3"
+            }
+        ]
+    },
+    "pid_setpoint_rates": {
+        "roll": 20.0,
+        "pitch": 20.0,
+        "yaw": 90.0
     }
 }
