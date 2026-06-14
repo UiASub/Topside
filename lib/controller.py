@@ -686,24 +686,25 @@ class Controller:
 
         # --- BITMASK OUTPUT ----
         # Read axes
-        heave = -self._read_axis(pygame.CONTROLLER_AXIS_RIGHTY, 3)  # Right Y (inverted)
-        yaw = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTX, 2)  # Right X
+        right_x = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTX, 2)
+        right_y = self._read_axis(pygame.CONTROLLER_AXIS_RIGHTY, 3)
         r2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERRIGHT, 5)  # R2 trigger
         l2 = self._read_trigger(pygame.CONTROLLER_AXIS_TRIGGERLEFT, 4)  # L2 trigger
         trigger_delta = l2 - r2
         if abs(trigger_delta) > self.DEADZONE:
             self.nudge_manipulator(trigger_delta, self.delay_ms / 1000)
-        # This runs while button 9 is held down L1 to make
-        # surge and sway controls toggleable to pitch and roll
+
         left_shoulder = self._read_button(pygame.CONTROLLER_BUTTON_LEFTSHOULDER, 9)
-        if left_shoulder:  # Pitch and roll control
-            pitch = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
-            roll = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
-            surge = 0.0
-            sway = 0.0
-        else:  # Surge and sway control
-            surge = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
-            sway = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
+        surge = -self._read_axis(pygame.CONTROLLER_AXIS_LEFTY, 1)  # Left Y (inverted)
+        sway = self._read_axis(pygame.CONTROLLER_AXIS_LEFTX, 0)  # Left X
+        if left_shoulder:
+            heave = 0.0
+            yaw = 0.0
+            pitch = -right_y
+            roll = right_x
+        else:
+            heave = -right_y
+            yaw = -right_x
             pitch = 0.0
             roll = 0.0
 

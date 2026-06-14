@@ -24,8 +24,8 @@
         ]
     },
     "pid_setpoint_rates": {
-        "roll": 20.0,
-        "pitch": 20.0,
-        "yaw": 90.0
+        "roll": 45.0,
+        "pitch": 45.0,
+        "yaw": 60.0
     }
 }

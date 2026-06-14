@@ -1,14 +1,14 @@
 {
     "imu": {
-        "yaw": -67.08,
-        "pitch": -1.1,
-        "roll": 179.3,
-        "yr": 0.18,
-        "pr": 0.15,
-        "rr": 0.3,
-        "ax": 0.085,
-        "ay": -0.004,
-        "az": -0.042
+        "yaw": -67.73,
+        "pitch": 9.46,
+        "roll": 161.53,
+        "yr": -0.13,
+        "pr": 0.37,
+        "rr": -0.11,
+        "ax": 0.11,
+        "ay": -0.009,
+        "az": 0.024
     },
     "9dof": {
         "acceleration": {
@@ -74,14 +74,14 @@
         "dptSet": 0.0
     },
     "resources": {
-        "sequence": 49,
-        "uptime_ms": 50908,
-        "cpu_percent": 5,
+        "sequence": 5873,
+        "uptime_ms": 5881564,
+        "cpu_percent": 4,
         "heap_used_percent": 2,
         "heap_free_kb": 501,
         "heap_total_kb": 512,
         "thread_count": 20,
-        "udp_rx_count": 900,
+        "udp_rx_count": 93052,
         "udp_rx_errors": 0
     },
     "control_telemetry": {
