@@ -11,12 +11,129 @@ document.addEventListener("DOMContentLoaded", function () {
     el.className = "small mt-2 " + cls;
   }
 
+  function setInlineFeedback(id, text, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = "small " + cls;
+  }
+
+  function clampGain(value) {
+    const number = parseFloat(value);
+    if (!Number.isFinite(number)) return 1;
+    return Math.max(0, Math.min(1, number));
+  }
+
+  function gainPercent(value) {
+    return Math.round(clampGain(value) * 100) + "%";
+  }
+
   const axesYaw = document.getElementById("axes-yaw");
   const axesPitch = document.getElementById("axes-pitch");
   const axesRoll = document.getElementById("axes-roll");
   const pidRateRoll = document.getElementById("pid-rate-roll");
   const pidRatePitch = document.getElementById("pid-rate-pitch");
   const pidRateYaw = document.getElementById("pid-rate-yaw");
+  const controllerGainMaster = document.getElementById("controller-gain-master");
+  const controllerGainSliders = Array.from(document.querySelectorAll("[data-axis].controller-gain-slider"));
+  let controllerGainSaveTimer = null;
+
+  function setGainBadge(text, cls) {
+    const badge = document.getElementById("controller-gain-status");
+    if (!badge) return;
+    badge.textContent = text;
+    badge.className = "badge " + cls;
+  }
+
+  function updateGainLabels() {
+    const masterValue = document.getElementById("controller-gain-master-value");
+    if (masterValue && controllerGainMaster) masterValue.textContent = gainPercent(controllerGainMaster.value);
+    controllerGainSliders.forEach((slider) => {
+      const value = document.getElementById(slider.id + "-value");
+      if (value) value.textContent = gainPercent(slider.value);
+    });
+  }
+
+  function readControllerGains() {
+    const axes = {};
+    controllerGainSliders.forEach((slider) => {
+      axes[slider.dataset.axis] = clampGain(slider.value);
+    });
+    return {
+      master: controllerGainMaster ? clampGain(controllerGainMaster.value) : 1,
+      axes: axes,
+    };
+  }
+
+  function fillControllerGains(gains) {
+    const safe = gains || {};
+    const axes = safe.axes || {};
+    if (controllerGainMaster) controllerGainMaster.value = clampGain(safe.master == null ? 1 : safe.master);
+    controllerGainSliders.forEach((slider) => {
+      const axis = slider.dataset.axis;
+      slider.value = clampGain(axes[axis] == null ? 1 : axes[axis]);
+    });
+    updateGainLabels();
+  }
+
+  async function saveControllerGains() {
+    try {
+      setGainBadge("SAVING", "bg-warning text-dark");
+      const res = await fetch("/api/controller/gains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(readControllerGains()),
+      });
+      const data = await res.json();
+      if (data.ok && data.gains) {
+        fillControllerGains(data.gains);
+        setGainBadge("SAVED", "bg-success");
+        setInlineFeedback("controller-gain-feedback", "Controller gain saved", "text-success");
+      } else {
+        setGainBadge("ERROR", "bg-danger");
+        setInlineFeedback("controller-gain-feedback", "Failed to save controller gain", "text-danger");
+      }
+    } catch (error) {
+      setGainBadge("ERROR", "bg-danger");
+      setInlineFeedback("controller-gain-feedback", "Error: " + error.message, "text-danger");
+    }
+  }
+
+  function queueControllerGainSave() {
+    updateGainLabels();
+    setGainBadge("CHANGED", "bg-info text-dark");
+    setInlineFeedback("controller-gain-feedback", "Saving...", "text-light-muted");
+    clearTimeout(controllerGainSaveTimer);
+    controllerGainSaveTimer = setTimeout(saveControllerGains, 250);
+  }
+
+  fetch("/api/controller/gains")
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.ok || !data.gains) return;
+      fillControllerGains(data.gains);
+      setGainBadge("READY", "bg-success");
+    })
+    .catch(() => {
+      setGainBadge("ERROR", "bg-danger");
+    });
+
+  [controllerGainMaster].concat(controllerGainSliders).forEach((slider) => {
+    if (!slider) return;
+    slider.addEventListener("input", queueControllerGainSave);
+    slider.addEventListener("change", queueControllerGainSave);
+  });
+
+  const resetControllerGains = document.getElementById("btn-reset-controller-gains");
+  if (resetControllerGains) {
+    resetControllerGains.addEventListener("click", function () {
+      fillControllerGains({
+        master: 1,
+        axes: { surge: 1, sway: 1, heave: 1, roll: 1, pitch: 1, yaw: 1 },
+      });
+      saveControllerGains();
+    });
+  }
 
   fetch("/api/pid/rates")
     .then((r) => r.json())

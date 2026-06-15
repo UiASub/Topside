@@ -95,6 +95,7 @@ def build_controller(controller=None, joystick=None):
     ctrl._pid_enabled = False
     ctrl._pid_setpoints = {}
     ctrl._pid_setpoint_rates = dict(controller_module.DEFAULT_PID_SETPOINT_RATES)
+    ctrl._controller_gains = controller_module._clean_controller_gains(controller_module.DEFAULT_CONTROLLER_GAINS)
     ctrl._last_pid_update = 0.0
     ctrl._last_manual_command = {axis: 0.0 for axis in controller_module.CONTROL_AXES}
     ctrl._last_output_command = {axis: 0.0 for axis in controller_module.CONTROL_AXES}
@@ -336,3 +337,17 @@ def test_pid_off_allows_direct_rotational_manual_control():
     assert output["roll"] == pytest.approx(0.4)
     assert output["pitch"] == pytest.approx(-0.3)
     assert output["yaw"] == pytest.approx(0.2)
+
+
+def test_controller_gains_scale_manual_output():
+    ctrl = build_controller()
+    gains = ctrl.set_controller_gains({"master": 0.5, "axes": {"surge": 0.4, "yaw": 0.2}})
+
+    output = ctrl.apply_manual_axes_once({"surge": 1.0, "sway": 1.0, "yaw": -1.0}, source="HTTP")
+
+    assert gains["master"] == 0.5
+    assert output["surge"] == pytest.approx(0.2)
+    assert output["sway"] == pytest.approx(0.5)
+    assert output["yaw"] == pytest.approx(-0.1)
+    assert ctrl.bm.calls[-1]["surge"] == pytest.approx(0.2)
+    assert ctrl.bm.calls[-1]["yaw"] == pytest.approx(-0.1)

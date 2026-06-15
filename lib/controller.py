@@ -24,6 +24,7 @@ CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
 ATTITUDE_AXES = ("roll", "pitch", "yaw")
 ATTITUDE_LIMITS_DEG = {"roll": 180.0, "pitch": 90.0, "yaw": 180.0}
 DEFAULT_PID_SETPOINT_RATES = {axis: 90.0 for axis in ATTITUDE_AXES}
+DEFAULT_CONTROLLER_GAINS = {"master": 1.0, "axes": {axis: 1.0 for axis in CONTROL_AXES}}
 
 
 def _use_sdl_gamecontroller():
@@ -51,6 +52,29 @@ def _clamp_setpoint(axis, value):
 
 def _neutral_axes():
     return {axis: 0.0 for axis in CONTROL_AXES}
+
+
+def _clean_controller_gains(gains):
+    cleaned = {"master": 1.0, "axes": {axis: 1.0 for axis in CONTROL_AXES}}
+    if not isinstance(gains, dict):
+        return cleaned
+
+    try:
+        cleaned["master"] = _clamp(gains.get("master", 1.0), 0.0, 1.0)
+    except (TypeError, ValueError):
+        pass
+
+    axes = gains.get("axes", {})
+    if not isinstance(axes, dict):
+        axes = gains
+    for axis in CONTROL_AXES:
+        if axis not in axes:
+            continue
+        try:
+            cleaned["axes"][axis] = _clamp(axes[axis], 0.0, 1.0)
+        except (TypeError, ValueError):
+            pass
+    return cleaned
 
 
 def _controller_errors():
@@ -116,6 +140,7 @@ class Controller:
         self._pid_enabled = False
         self._pid_setpoints = {}
         self._pid_setpoint_rates = dict(DEFAULT_PID_SETPOINT_RATES)
+        self._controller_gains = _clean_controller_gains(DEFAULT_CONTROLLER_GAINS)
         self._last_pid_update = time.monotonic()
         self._last_manual_command = _neutral_axes()
         self._last_output_command = _neutral_axes()
@@ -230,6 +255,22 @@ class Controller:
                     self._pid_setpoint_rates[axis] = _clamp(value, 0.0, 90.0)
             return dict(self._pid_setpoint_rates)
 
+    def get_controller_gains(self):
+        with self._runtime_lock:
+            return {
+                "master": self._controller_gains["master"],
+                "axes": dict(self._controller_gains["axes"]),
+            }
+
+    def set_controller_gains(self, gains):
+        cleaned = _clean_controller_gains(gains)
+        with self._runtime_lock:
+            self._controller_gains = cleaned
+            return {
+                "master": cleaned["master"],
+                "axes": dict(cleaned["axes"]),
+            }
+
     def get_control_state(self):
         with self._debug_lock:
             override_active = self._debug_override is not None
@@ -246,6 +287,10 @@ class Controller:
                 "pid_setpoints": dict(self._pid_setpoints),
                 "active_setpoints": dict(self._pid_setpoints) if self._pid_enabled else {},
                 "pid_setpoint_rates": dict(self._pid_setpoint_rates),
+                "controller_gains": {
+                    "master": self._controller_gains["master"],
+                    "axes": dict(self._controller_gains["axes"]),
+                },
                 "control_path": control_path,
                 "override_active": override_active,
                 "manual_command_before_pid": dict(self._last_manual_command),
@@ -556,13 +601,17 @@ class Controller:
         now = time.monotonic()
         setpoints_to_send = None
         with self._runtime_lock:
+            gains = self._controller_gains
+            manual_after_gain = {
+                axis: manual[axis] * gains["master"] * gains["axes"].get(axis, 1.0) for axis in CONTROL_AXES
+            }
             if self._killed:
                 output = _neutral_axes()
-                self._last_manual_command = dict(manual)
+                self._last_manual_command = dict(manual_after_gain)
                 self._last_output_command = dict(output)
                 self._last_runtime_source = "KILLED"
             else:
-                output = dict(manual)
+                output = dict(manual_after_gain)
                 if self._pid_enabled:
                     dt = _clamp(now - self._last_pid_update, 0.0, 0.25)
                     self._last_pid_update = now
@@ -571,14 +620,14 @@ class Controller:
                         output[axis] = 0.0
                         if axis not in self._pid_setpoints:
                             continue
-                        delta = manual[axis] * self._pid_setpoint_rates[axis] * dt
+                        delta = manual_after_gain[axis] * self._pid_setpoint_rates[axis] * dt
                         if abs(delta) < 0.000001:
                             continue
                         self._pid_setpoints[axis] = _clamp_setpoint(axis, self._pid_setpoints[axis] + delta)
                         changed = True
                     if changed:
                         setpoints_to_send = dict(self._pid_setpoints)
-                self._last_manual_command = dict(manual)
+                self._last_manual_command = dict(manual_after_gain)
                 self._last_output_command = dict(output)
                 self._last_runtime_source = source
 

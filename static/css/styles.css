@@ -392,6 +392,45 @@ body {
     color: #0dcaf0;
 }
 
+.controller-gain-master {
+    padding: 14px;
+    background: #2d3238;
+    border: 1px solid #495057;
+    border-radius: 8px;
+}
+
+.controller-gain-item {
+    padding: 12px;
+    background: #1e2124;
+    border: 1px solid #3a4148;
+    border-radius: 8px;
+}
+
+.controller-gain-slider {
+    margin: 0;
+}
+
+.controller-gain-slider::-webkit-slider-thumb {
+    background: #0dcaf0;
+}
+
+.controller-gain-slider::-moz-range-thumb {
+    background: #0dcaf0;
+    border: 0;
+}
+
+.gain-value {
+    min-width: 48px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(13, 202, 240, 0.12);
+    color: #0dcaf0;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: right;
+}
+
 @media (max-width: 768px) {
     .resource-gauge-svg {
         max-width: 120px;

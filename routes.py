@@ -46,6 +46,7 @@ CONTROL_AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
 TRANSLATIONAL_AXES = ("surge", "sway", "heave")
 ATTITUDE_AXES = ("roll", "pitch", "yaw")
 DEFAULT_PID_SETPOINT_RATES = {axis: 90.0 for axis in ATTITUDE_AXES}
+DEFAULT_CONTROLLER_GAINS = {"master": 1.0, "axes": {axis: 1.0 for axis in CONTROL_AXES}}
 DEFAULT_IP_CAMERA_IP = "10.77.0.4"
 
 
@@ -107,8 +108,39 @@ def _clean_pid_rates(data):
     return rates
 
 
+def _clean_controller_gains(data):
+    gains = {"master": 1.0, "axes": {axis: 1.0 for axis in CONTROL_AXES}}
+    if not isinstance(data, dict):
+        return gains
+
+    try:
+        value = float(data.get("master", DEFAULT_CONTROLLER_GAINS["master"]))
+    except (TypeError, ValueError):
+        value = DEFAULT_CONTROLLER_GAINS["master"]
+    if not math.isfinite(value):
+        value = DEFAULT_CONTROLLER_GAINS["master"]
+    gains["master"] = _clamp(value, 0.0, 1.0)
+
+    axes = data.get("axes", {})
+    if not isinstance(axes, dict):
+        axes = data
+    for axis in CONTROL_AXES:
+        try:
+            value = float(axes.get(axis, DEFAULT_CONTROLLER_GAINS["axes"][axis]))
+        except (AttributeError, TypeError, ValueError):
+            value = DEFAULT_CONTROLLER_GAINS["axes"][axis]
+        if not math.isfinite(value):
+            value = DEFAULT_CONTROLLER_GAINS["axes"][axis]
+        gains["axes"][axis] = _clamp(value, 0.0, 1.0)
+    return gains
+
+
 def _load_pid_rates():
     return _clean_pid_rates(config_handler.get_section("pid_setpoint_rates") or {})
+
+
+def _load_controller_gains():
+    return _clean_controller_gains(config_handler.get_section("controller_gains") or {})
 
 
 def _save_pid_rates(rates):
@@ -117,6 +149,15 @@ def _save_pid_rates(rates):
     ctrl = current_app.config.get("CONTROLLER")
     if ctrl and hasattr(ctrl, "set_pid_rates"):
         ctrl.set_pid_rates(cleaned)
+    return cleaned
+
+
+def _save_controller_gains(gains):
+    cleaned = _clean_controller_gains(gains)
+    config_handler.update_data({"controller_gains": cleaned})
+    ctrl = current_app.config.get("CONTROLLER")
+    if ctrl and hasattr(ctrl, "set_controller_gains"):
+        ctrl.set_controller_gains(cleaned)
     return cleaned
 
 
@@ -720,6 +761,20 @@ def register_routes(app):
         if not ctrl or not hasattr(ctrl, "get_control_state"):
             return jsonify({"ok": False, "error": "Controller not available"}), 503
         return jsonify({"ok": True, "state": ctrl.get_control_state()})
+
+    @app.route("/api/controller/gains", methods=["GET", "POST"])
+    def controller_gains():
+        """Get or update controller input gain multipliers."""
+        if request.method == "GET":
+            gains = _load_controller_gains()
+            ctrl = current_app.config.get("CONTROLLER")
+            if ctrl and hasattr(ctrl, "set_controller_gains"):
+                ctrl.set_controller_gains(gains)
+            return jsonify({"ok": True, "gains": gains})
+
+        data = request.get_json(force=True, silent=True) or {}
+        gains = _save_controller_gains(data)
+        return jsonify({"ok": True, "gains": gains})
 
     @app.route("/api/control/killswitch", methods=["POST"])
     def control_killswitch():

@@ -10,6 +10,7 @@ class FakeController:
         self.pid_enabled = False
         self.setpoints = {}
         self.rates = {"roll": 90.0, "pitch": 90.0, "yaw": 90.0}
+        self.gains = {"master": 1.0, "axes": {axis: 1.0 for axis in routes.CONTROL_AXES}}
 
     def get_control_state(self):
         return {
@@ -21,6 +22,7 @@ class FakeController:
             "override_active": False,
             "manual_command_before_pid": {},
             "topside_command": {},
+            "controller_gains": self.gains,
         }
 
     def get_input_status(self):
@@ -83,6 +85,13 @@ class FakeController:
     def set_pid_rates(self, rates):
         self.rates.update(rates)
         return dict(self.rates)
+
+    def set_controller_gains(self, gains):
+        self.gains = {"master": gains["master"], "axes": dict(gains["axes"])}
+        return {"master": self.gains["master"], "axes": dict(self.gains["axes"])}
+
+    def get_controller_gains(self):
+        return {"master": self.gains["master"], "axes": dict(self.gains["axes"])}
 
 
 class FakeSetpointOverride:
@@ -275,3 +284,18 @@ def test_pid_gains_force_translation_axes_to_zero(monkeypatch):
     assert captured["gains"]["heave"] == {"kp": 0.0, "ki": 0.0, "kd": 0.0}
     assert captured["gains"]["roll"] == {"kp": 1.0, "ki": 2.0, "kd": 3.0}
     assert set(res.get_json()["gains"].keys()) == {"roll", "pitch", "yaw"}
+
+
+def test_controller_gains_api_clamps_and_updates_controller(monkeypatch, tmp_path):
+    config_handler = routes.JSONDataHandler(file_path=tmp_path / "config.json")
+    monkeypatch.setattr(routes, "config_handler", config_handler)
+    client, ctrl, _override = make_client()
+
+    res = client.post("/api/controller/gains", json={"master": 1.4, "axes": {"surge": 0.25, "yaw": -1}})
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["gains"]["master"] == 1.0
+    assert data["gains"]["axes"]["surge"] == 0.25
+    assert data["gains"]["axes"]["yaw"] == 0.0
+    assert ctrl.gains == data["gains"]

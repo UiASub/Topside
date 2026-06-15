@@ -27,5 +27,16 @@
         "roll": 45.0,
         "pitch": 45.0,
         "yaw": 60.0
+    },
+    "controller_gains": {
+        "master": 1.0,
+        "axes": {
+            "surge": 0.25,
+            "sway": 1.0,
+            "heave": 1.0,
+            "roll": 1.0,
+            "pitch": 1.0,
+            "yaw": 1.0
+        }
     }
 }
