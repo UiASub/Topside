@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import socket
+import struct
 import threading
 import time
 from typing import Any
 
+from lib.crc import crc32_ieee
 from lib.json_data_handler import JSONDataHandler
 from lib.runtime_paths import log_path, logs_dir
 
@@ -52,6 +54,7 @@ class IMUReceiver:
         # Stats
         self._lock = threading.Lock()
         self._packet_count = 0
+        self._crc_errors = 0
         self._last_data = {}
         self._last_recv_time = None
 
@@ -122,6 +125,7 @@ class IMUReceiver:
                 age_ms = round((time.monotonic() - self._last_recv_time) * 1000)
             return {
                 "packet_count": self._packet_count,
+                "crc_errors": self._crc_errors,
                 "last_data": self._last_data.copy(),
                 "age_ms": age_ms,
                 "tare_offset": self._tare_offset.copy(),
@@ -162,12 +166,10 @@ class IMUReceiver:
 
     def _process_packet(self, data: bytes, addr: tuple):
         """Process incoming UDP packet with IMU data."""
-        try:
-            text = data.decode("utf-8", errors="strict")
-            msg = json.loads(text)
-        except Exception as e:
-            print(f"IMU: Bad JSON from {addr}: {e}")
+        decoded = self._decode_packet(data, addr)
+        if decoded is None:
             return
+        text, msg = decoded
 
         self._log_raw_packet(text)
 
@@ -242,6 +244,45 @@ class IMUReceiver:
             )
         except Exception as e:
             print(f"IMU: Error updating data: {e}")
+
+    def _decode_packet(self, data: bytes, addr: tuple) -> tuple[str, dict] | None:
+        """Decode legacy JSON or JSON followed by a big-endian CRC32."""
+        json_error = None
+        try:
+            text = data.decode("utf-8", errors="strict")
+            try:
+                return text, json.loads(text)
+            except Exception as exc:
+                json_error = exc
+        except UnicodeDecodeError as exc:
+            json_error = exc
+
+        if len(data) <= 4:
+            print(f"IMU: Bad JSON from {addr}: {json_error}")
+            return None
+
+        body = data[:-4]
+        try:
+            text = body.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            print(f"IMU: Bad JSON from {addr}: {json_error}")
+            return None
+
+        try:
+            msg = json.loads(text)
+        except Exception as exc:
+            print(f"IMU: Bad JSON from {addr}: {exc}")
+            return None
+
+        recv_crc = struct.unpack("!I", data[-4:])[0]
+        calc_crc = crc32_ieee(body)
+        if calc_crc != recv_crc:
+            with self._lock:
+                self._crc_errors += 1
+            print(f"IMU: CRC mismatch from {addr}: calc=0x{calc_crc:08X}, recv=0x{recv_crc:08X}")
+            return None
+
+        return text, msg
 
     def _log_raw_packet(self, text: str) -> None:
         try:
