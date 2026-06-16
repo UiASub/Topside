@@ -77,6 +77,10 @@ def build_controller(controller=None, joystick=None):
     ctrl.delay_ms = 16
     ctrl.controller = controller
     ctrl.joystick = joystick or FakeJoystick()
+    ctrl._raw_profile = "ps4"
+    ctrl._farm_prev_buttons = {}
+    ctrl._farm_last_gain = None
+    ctrl._farm_toggle_until = 0.0
     ctrl.axis_offsets = {}
     ctrl.light = 0.0
     ctrl._prev_dpad_up = False
@@ -204,6 +208,69 @@ def test_raw_joystick_mapping_remains_available_for_unsupported_devices(monkeypa
     status = ctrl.get_input_status()
     assert status["source"] == "raw_joystick"
     assert status["buttons"][7] == 1.0
+
+
+def test_farmstick_profile_maps_axes_and_gain(monkeypatch):
+    monkeypatch.setattr(pygame.event, "get", lambda: [])
+    joystick = FakeJoystick(
+        axes={0: 0.5, 1: -0.4, 2: 1.0, 4: 0.6, 5: -0.3},
+        buttons=set(),
+    )
+    ctrl = build_controller(joystick=joystick)
+    ctrl._raw_profile = "farmstick"
+
+    ctrl.update()
+
+    command = ctrl.bm.calls[-1]
+    assert command["sway"] == pytest.approx(0.5)
+    assert command["surge"] == pytest.approx(0.4)  # axis 1 inverted
+    assert command["heave"] == pytest.approx(-0.6)  # axis 4 inverted
+    assert command["yaw"] == pytest.approx(-0.3)
+    assert command["pitch"] == 0.0
+    assert command["roll"] == 0.0
+    # Gain lever fully up -> master gain 1.0 (no scaling of the axes above).
+    assert ctrl.get_controller_gains()["master"] == pytest.approx(1.0)
+    status = ctrl.get_input_status()
+    assert status["source"] == "raw_joystick"
+
+
+def test_farmstick_toggle_switches_left_axes_to_pitch_and_roll(monkeypatch):
+    monkeypatch.setattr(pygame.event, "get", lambda: [])
+    joystick = FakeJoystick(axes={0: 0.5, 1: -0.4, 2: 1.0}, buttons={30})
+    ctrl = build_controller(joystick=joystick)
+    ctrl._raw_profile = "farmstick"
+
+    ctrl.update()
+
+    command = ctrl.bm.calls[-1]
+    assert command["roll"] == pytest.approx(0.5)
+    assert command["pitch"] == pytest.approx(0.4)
+    assert command["sway"] == 0.0
+    assert command["surge"] == 0.0
+
+
+def test_farmstick_buttons_drive_light_manip_kill_and_rearm(monkeypatch):
+    monkeypatch.setattr(pygame.event, "get", lambda: [])
+    monkeypatch.setattr(pygame.event, "pump", lambda: None)
+    joystick = FakeJoystick(axes={2: 1.0}, buttons={28, 27})
+    ctrl = build_controller(joystick=joystick)
+    ctrl._raw_profile = "farmstick"
+
+    ctrl.update()  # rising edge: light up + manipulator clockwise
+    assert ctrl.get_light() == pytest.approx(0.1)
+    assert ctrl.get_manipulator()["setpoint_deg"] == pytest.approx(5.0)
+
+    ctrl.update()  # still held -> edge detection blocks repeats
+    assert ctrl.get_light() == pytest.approx(0.1)
+    assert ctrl.get_manipulator()["setpoint_deg"] == pytest.approx(5.0)
+
+    joystick.buttons = {23}  # killswitch
+    ctrl.update()
+    assert ctrl.is_killed() is True
+
+    joystick.buttons = {22}  # rearm works even while killed
+    ctrl.update()
+    assert ctrl.is_killed() is False
 
 
 def test_set_light_clamps_and_pushes_to_bitmask():

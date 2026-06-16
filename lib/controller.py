@@ -110,6 +110,33 @@ class Controller:
     MANIP_MAX_DEG = 50.0
     MANIP_NUDGE_DEG_PER_SEC = 45.0
 
+    # --- Raw-joystick device profiles ---
+    # Windows exposes no SDL game-controller mapping, so a PS4 pad and the farm
+    # stick both arrive as "raw" joysticks. We pick the axis/button layout from
+    # the device name: a farm-stick name uses the FARM_* mapping below, anything
+    # else (including a PS4 pad on Windows) keeps the original PS4 raw mapping.
+    FARMSTICK_NAME_HINTS = ("farmstick", "farm stick", "simtask")
+
+    # --- Thrustmaster SimTask Farmstick mapping ---
+    # Axis/button indices captured with tools/probe_joystick.py. Flip a sign
+    # below if an axis moves the ROV the wrong way; change an index if you
+    # remap the panel in the Thrustmaster driver.
+    FARM_AXIS_SWAY = 0    # left/right   (roll while toggle held)
+    FARM_AXIS_SURGE = 1   # forward/back (pitch while toggle held)
+    FARM_AXIS_GAIN = 2    # master controller-gain lever
+    FARM_AXIS_HEAVE = 4   # up/down lever
+    FARM_AXIS_YAW = 5     # rotate
+    FARM_BTN_REARM = 22
+    FARM_BTN_KILL = 23
+    FARM_BTN_MANIP_CCW = 26
+    FARM_BTN_MANIP_CW = 27
+    FARM_BTN_LIGHT_UP = 28
+    FARM_BTN_LIGHT_DOWN = 29
+    FARM_BTN_TOGGLE = 30  # hold to switch axis 0/1 from sway/surge to roll/pitch
+    FARM_LIGHT_STEP = 0.1  # brightness change per light button click
+    FARM_MANIP_STEP_DEG = 5.0  # servo nudge per manipulator button click
+    FARM_TOGGLE_HOLD_SEC = 0.15  # debounce: the toggle button spams on/off while held
+
     def __init__(self, bitmask_client: BitmaskClient = None, rate_hz: float = 60.0):
         self.bm = bitmask_client  # Use injected bitmask client from app.py
         self.delay_ms = int(1000 / rate_hz) if rate_hz > 0 else 16  # ~60 Hz default
@@ -119,6 +146,10 @@ class Controller:
             sdl_controller.init()
         self.joystick = None
         self.controller = None
+        self._raw_profile = "ps4"  # "ps4" or "farmstick"; set on connect by device name
+        self._farm_prev_buttons = {}  # edge detection for farm-stick buttons
+        self._farm_last_gain = None  # last master gain pushed from the gain lever
+        self._farm_toggle_until = 0.0  # debounce window for the pitch/roll toggle
         self.axis_offsets = {}  # Calibration offsets for stuck axes
         self.light = 0  # Initial light value
         self._prev_dpad_up = False  # For edge detection of light increase (D-pad up)
@@ -168,12 +199,14 @@ class Controller:
                 if is_controller:
                     self.controller = sdl_controller.Controller(index)
                     self.joystick = self.controller.as_joystick()
+                    self._raw_profile = "ps4"
                     print(f"Controller connected: {self.controller.name} (SDL game controller mapping)")
                 else:
                     self.controller = None
                     self.joystick = pygame.joystick.Joystick(index)
                     self.joystick.init()
-                    print(f"Controller connected: {self.joystick.get_name()} (raw joystick mapping)")
+                    self._raw_profile = self._detect_raw_profile(self.joystick.get_name())
+                    print(f"Controller connected: {self.joystick.get_name()} (raw joystick mapping, profile={self._raw_profile})")
 
                 print(f"  Buttons: {self.joystick.get_numbuttons()}")
                 print(f"  Axes: {self.joystick.get_numaxes()}")
@@ -188,6 +221,13 @@ class Controller:
                 self.controller = None
                 self.joystick = None
         return False
+
+    def _detect_raw_profile(self, name):
+        """Pick a raw-joystick mapping from the device name."""
+        lowered = (name or "").lower()
+        if any(hint in lowered for hint in self.FARMSTICK_NAME_HINTS):
+            return "farmstick"
+        return "ps4"
 
     def _disconnect_controller(self):
         """Forget the active input device and stop movement."""
@@ -659,9 +699,124 @@ class Controller:
             self._debug_override = None
         self._reset_command()
 
+    # --- Farm stick (Thrustmaster SimTask Farmstick) input ---
+    def _is_farmstick(self):
+        return self.controller is None and self.joystick is not None and self._raw_profile == "farmstick"
+
+    def _farm_axis(self, axis_id):
+        """Read a farm-stick axis as -1.0..1.0 with the shared deadzone applied."""
+        if axis_id >= self.joystick.get_numaxes():
+            return 0.0
+        value = max(-1.0, min(1.0, self.joystick.get_axis(axis_id)))
+        if abs(value) < self.DEADZONE:
+            return 0.0
+        return value
+
+    def _farm_axis_raw(self, axis_id):
+        """Read a farm-stick axis as -1.0..1.0 without a deadzone (for levers)."""
+        if axis_id >= self.joystick.get_numaxes():
+            return 0.0
+        return max(-1.0, min(1.0, self.joystick.get_axis(axis_id)))
+
+    def _farm_button_down(self, button_id):
+        if button_id >= self.joystick.get_numbuttons():
+            return False
+        return bool(self.joystick.get_button(button_id))
+
+    def _farm_rising_edge(self, button_id):
+        """True only on the frame a button goes from released to pressed."""
+        pressed = self._farm_button_down(button_id)
+        prev = self._farm_prev_buttons.get(button_id, False)
+        self._farm_prev_buttons[button_id] = pressed
+        return pressed and not prev
+
+    def _farm_apply_gain(self):
+        """Map the gain lever travel (-1..1) onto master controller gain (0..1)."""
+        gain = (self._farm_axis_raw(self.FARM_AXIS_GAIN) + 1.0) / 2.0
+        if self._farm_last_gain is not None and abs(gain - self._farm_last_gain) < 0.02:
+            return
+        self._farm_last_gain = gain
+        gains = self.get_controller_gains()
+        gains["master"] = gain
+        self.set_controller_gains(gains)
+
+    def _farm_nudge_manip(self, direction):
+        current = self.get_manipulator()["setpoint_deg"]
+        self.set_manipulator(current + direction * self.FARM_MANIP_STEP_DEG, source="controller")
+
+    def _farm_poll_while_killed(self):
+        """While killed, still watch the rearm button (and keep edge state fresh)."""
+        pygame.event.pump()
+        rearm = self._farm_rising_edge(self.FARM_BTN_REARM)
+        for button in (
+            self.FARM_BTN_KILL,
+            self.FARM_BTN_LIGHT_UP,
+            self.FARM_BTN_LIGHT_DOWN,
+            self.FARM_BTN_MANIP_CW,
+            self.FARM_BTN_MANIP_CCW,
+        ):
+            self._farm_rising_edge(button)
+        if rearm:
+            self.rearm()
+
+    def _update_farmstick(self):
+        now = time.monotonic()
+
+        # Kill / rearm first so they win over any movement this frame.
+        if self._farm_rising_edge(self.FARM_BTN_KILL):
+            self.kill()
+            return
+        if self._farm_rising_edge(self.FARM_BTN_REARM):
+            self.rearm()
+
+        # Hold-to-activate toggle. The panel button spams on/off while held, so
+        # latch it for a short window after each press we see.
+        if self._farm_button_down(self.FARM_BTN_TOGGLE):
+            self._farm_toggle_until = now + self.FARM_TOGGLE_HOLD_SEC
+        toggle = now < self._farm_toggle_until
+
+        sway = self._farm_axis(self.FARM_AXIS_SWAY)
+        surge = -self._farm_axis(self.FARM_AXIS_SURGE)  # push forward -> +surge
+        yaw = self._farm_axis(self.FARM_AXIS_YAW)
+        heave = -self._farm_axis(self.FARM_AXIS_HEAVE)  # lever up -> +heave
+        if toggle:
+            roll = sway
+            pitch = surge
+            sway = 0.0
+            surge = 0.0
+        else:
+            roll = 0.0
+            pitch = 0.0
+
+        self._farm_apply_gain()
+
+        # Light: one step per click; a spamming button repeats while held.
+        if self._farm_rising_edge(self.FARM_BTN_LIGHT_UP):
+            self.set_light(self.light + self.FARM_LIGHT_STEP)
+        if self._farm_rising_edge(self.FARM_BTN_LIGHT_DOWN):
+            self.set_light(self.light - self.FARM_LIGHT_STEP)
+
+        # Manipulator: one fixed nudge per click.
+        if self._farm_rising_edge(self.FARM_BTN_MANIP_CW):
+            self._farm_nudge_manip(+1)
+        if self._farm_rising_edge(self.FARM_BTN_MANIP_CCW):
+            self._farm_nudge_manip(-1)
+
+        self._update_input_status(self._read_visualizer_buttons())
+        self._dispatch_manual_axes(
+            {"surge": surge, "sway": sway, "heave": heave, "roll": roll, "pitch": pitch, "yaw": yaw},
+            source="FARMSTICK",
+        )
+
     def update(self):
         with self._runtime_lock:
             killed = self._killed
+        if killed:
+            # Farm stick can rearm from a panel button even while killed.
+            if self._is_farmstick():
+                self._farm_poll_while_killed()
+                with self._runtime_lock:
+                    killed = self._killed
         if killed:
             self._reset_command()
             self._set_input_status(
@@ -731,6 +886,10 @@ class Controller:
             print("Controller disconnected!")
             self._reconnect_delay = 0
             self._disconnect_controller()
+            return
+
+        if self._is_farmstick():
+            self._update_farmstick()
             return
 
         # --- BITMASK OUTPUT ----
