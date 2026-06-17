@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from lib.aruco_logger import ArucoPipelineLogger
-from lib.camera import DefaultCameraReceiver, IPCameraReceiver
+from lib.camera import ARUCO_DICTIONARY_NAME, ArUcoMarkerDetector, DefaultCameraReceiver, IPCameraReceiver
 
 
 class FakeClosedCapture:
@@ -58,8 +58,8 @@ class FakeArucoDetector:
         return frame
 
 
-def test_ip_camera_frame_updates_aruco_logger():
-    logger = ArucoPipelineLogger()
+def test_ip_camera_frame_updates_aruco_logger(tmp_path):
+    logger = ArucoPipelineLogger(log_file=tmp_path / "aruco_markers.ndjson", confirmation_hits=1)
     logger.start()
     camera = IPCameraReceiver("rtsp://example.invalid/stream", marker_logger=logger)
     camera._detector = FakeArucoDetector()
@@ -70,3 +70,10 @@ def test_ip_camera_frame_updates_aruco_logger():
     assert [entry["id"] for entry in snapshot["entries"]] == [2, 3]
     assert snapshot["visible_ids"] == [2, 3]
     assert camera.get_latest_jpeg() is not None
+
+
+def test_aruco_detector_uses_original_dictionary_by_default():
+    detector = ArUcoMarkerDetector()
+
+    assert ARUCO_DICTIONARY_NAME == "DICT_ARUCO_ORIGINAL"
+    assert detector.dictionary_name == "DICT_ARUCO_ORIGINAL"

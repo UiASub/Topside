@@ -6,9 +6,11 @@ import time
 import cv2
 import numpy as np
 
+ARUCO_DICTIONARY_NAME = "DICT_ARUCO_ORIGINAL"
+
 
 class ArUcoMarkerDetector:
-    def __init__(self, dictionary_name="DICT_4X4_50", camera_matrix=None, dist_coeffs=None):
+    def __init__(self, dictionary_name=ARUCO_DICTIONARY_NAME, camera_matrix=None, dist_coeffs=None):
         aruco = cv2.aruco
         self.dictionary_name = dictionary_name
         self.camera_matrix = camera_matrix
@@ -284,7 +286,7 @@ class RPiCameraReceiver:
         with self._frame_cond:
             if self._frame_seq == last_seq:
                 self._frame_cond.wait(timeout=timeout)
-            return self._latest_jpeg, self._frame_seq
+            return self._latest_jpeg, self._frame_seq0
 
     def get_placeholder_jpeg(self):
         return self._placeholder_jpeg

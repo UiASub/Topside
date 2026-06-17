@@ -33,7 +33,12 @@ app.config["CONTROLLER"].start()
 app.config["IMU"] = init_imu_receiver(port=5002)
 
 # Tracks ordered ARUCO markers for the pipeline challenge.
-app.config["ARUCO_LOGGER"] = ArucoPipelineLogger()
+aruco_confirmation_hits = int(os.getenv("ARUCO_CONFIRMATION_HITS", "3"))
+aruco_confirmation_window_sec = float(os.getenv("ARUCO_CONFIRMATION_WINDOW_SEC", "2.0"))
+app.config["ARUCO_LOGGER"] = ArucoPipelineLogger(
+    confirmation_hits=aruco_confirmation_hits,
+    confirmation_window_sec=aruco_confirmation_window_sec,
+)
 
 # Load saved IMU axis mapping from config
 _config = JSONDataHandler(file_path=data_path("config.json"))

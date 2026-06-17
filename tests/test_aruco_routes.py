@@ -11,15 +11,16 @@ def _client_with_logger(logger=None):
     return app.test_client()
 
 
-def test_aruco_log_routes_control_logger():
-    logger = ArucoPipelineLogger()
+def test_aruco_log_routes_control_logger(tmp_path):
+    logger = ArucoPipelineLogger(log_file=tmp_path / "aruco_markers.ndjson")
     client = _client_with_logger(logger)
 
     res = client.post("/api/aruco-log/start")
     assert res.status_code == 200
     assert res.get_json()["log"]["enabled"] is True
 
-    logger.record_visible([{"id": 5, "center": (10, 10)}])
+    for _ in range(3):
+        logger.record_visible([{"id": 5, "center": (10, 10)}])
     res = client.get("/api/aruco-log")
     data = res.get_json()
     assert data["ok"] is True
