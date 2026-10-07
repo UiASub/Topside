@@ -6,6 +6,32 @@ import time
 import cv2
 import numpy as np
 
+from gated_aruco.topside_adapter import GatedArUcoMarkerDetector
+from lib.json_data_handler import JSONDataHandler
+from lib.runtime_paths import data_path
+
+
+def _aruco_config():
+    return JSONDataHandler(file_path=data_path("config.json")).get_section("aruco") or {}
+
+
+def make_detector(camera_matrix=None, dist_coeffs=None):
+    """Single construction point for the ArUco detector on all three receivers.
+
+    Mission and grayscale channel decide whether markers are found at all, so they
+    come from the "aruco" section of config.json rather than being set per receiver.
+    Set "gating_enabled": false to fall back to ungated detection without a redeploy.
+    """
+    cfg = _aruco_config()
+    return GatedArUcoMarkerDetector(
+        mission=cfg.get("mission", "visual"),
+        gray_mode=cfg.get("gray_mode", "bgr2gray"),
+        clahe=float(cfg.get("clahe", 2.0)),
+        enabled=bool(cfg.get("gating_enabled", True)),
+        camera_matrix=camera_matrix,
+        dist_coeffs=dist_coeffs,
+    )
+
 
 class ArUcoMarkerDetector:
     def __init__(self, dictionary_name="DICT_4X4_50", camera_matrix=None, dist_coeffs=None):
@@ -71,7 +97,7 @@ class DefaultCameraReceiver:
         self._placeholder_jpeg = self._build_placeholder_jpeg()
         camera_matrix = np.array([[900, 0, 640], [0, 900, 360], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((5, 1), dtype=np.float32)
-        self._detector = ArUcoMarkerDetector(camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+        self._detector = make_detector(camera_matrix, dist_coeffs)
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -256,7 +282,7 @@ class RPiCameraReceiver:
         self._frame_seq = 0
         self._last_frame_ts = 0.0
         self._placeholder_jpeg = self._build_placeholder_jpeg()
-        self._detector = ArUcoMarkerDetector()
+        self._detector = make_detector()
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -643,7 +669,7 @@ class IPCameraReceiver:
         self._frame_seq = 0
         self._last_frame_ts = 0.0
         self._placeholder_jpeg = self._build_placeholder_jpeg()
-        self._detector = ArUcoMarkerDetector()
+        self._detector = make_detector()
 
     def start(self):
         if self._thread and self._thread.is_alive():

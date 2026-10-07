@@ -38,5 +38,11 @@
             "pitch": 0.5,
             "yaw": 1.0
         }
+    },
+    "aruco": {
+        "mission": "visual",
+        "gray_mode": "bgr2gray",
+        "clahe": 2.0,
+        "gating_enabled": true
     }
 }
